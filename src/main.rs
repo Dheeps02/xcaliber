@@ -1,5 +1,6 @@
 mod config;
 mod http;
+mod session;
 mod xcp;
 
 use std::sync::Arc;

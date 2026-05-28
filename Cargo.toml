@@ -26,6 +26,10 @@ toml = "0.8"
 # ---- Database ----
 rusqlite = { version = "0.32", features = ["bundled"] }
 
+# ---- Transport ----
+async-trait = "0.1"
+bytes = "1"
+
 # ---- Error handling ----
 thiserror = "2"
 

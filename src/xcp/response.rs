@@ -1,1 +1,226 @@
-// XcpResponse enum + decode — placeholder for feature/xcp-protocol
+use serde::Serialize;
+use crate::xcp::error::{XcpError, XcpErrorCode};
+
+/// Decoded XCP response.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", content = "data")]
+pub enum XcpResponse {
+    Connect(ConnectResponse),
+    Disconnect,
+    GetStatus(GetStatusResponse),
+    GetCommModeInfo(GetCommModeInfoResponse),
+    GetId(GetIdResponse),
+    SetMta,
+    Upload(UploadResponse),
+    Download,
+    Error(ErrorResponse),
+    /// Raw positive response with unknown payload.
+    PositiveRaw { payload: Vec<u8> },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConnectResponse {
+    pub resource: u8,
+    pub comm_mode_basic: u8,
+    pub max_cto: u8,
+    pub max_dto: u16,
+    pub protocol_version: u8,
+    pub transport_version: u8,
+    /// Derived from resource byte.
+    pub cal_pag: bool,
+    pub daq: bool,
+    pub stim: bool,
+    pub pgm: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GetStatusResponse {
+    pub session_status: u8,
+    pub resource_protection: u8,
+    pub session_config_id: u16,
+    pub daq_running: bool,
+    pub resume: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GetCommModeInfoResponse {
+    pub comm_mode_optional: u8,
+    pub max_bs: u8,
+    pub min_st: u8,
+    pub queue_size: u8,
+    pub driver_version: u8,
+    pub interleaved: bool,
+    pub master_block: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GetIdResponse {
+    pub id_type: u8,
+    pub length: u32,
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UploadResponse {
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ErrorResponse {
+    pub code: u8,
+    pub name: String,
+}
+
+impl XcpResponse {
+    /// Decode a raw payload.
+    ///
+    /// `last_cmd_pid` is used to disambiguate which positive response this is.
+    pub fn decode(payload: &[u8], last_cmd_pid: Option<u8>) -> Result<Self, XcpError> {
+        if payload.is_empty() {
+            return Err(XcpError::FrameTooShort(0));
+        }
+        match payload[0] {
+            0xFF => Self::decode_positive(payload, last_cmd_pid),
+            0xFE => {
+                let code = payload.get(1).copied().unwrap_or(0xFF);
+                let ec = XcpErrorCode::from_byte(code);
+                Ok(Self::Error(ErrorResponse {
+                    code,
+                    name: ec.name().to_string(),
+                }))
+            }
+            pid => Err(XcpError::UnexpectedPid(pid)),
+        }
+    }
+
+    fn decode_positive(payload: &[u8], last_cmd_pid: Option<u8>) -> Result<Self, XcpError> {
+        match last_cmd_pid {
+            Some(0xFF) => {
+                // CONNECT response: FF resource comm_mode_basic reserved max_cto max_dto(2) proto transport
+                if payload.len() < 8 {
+                    return Err(XcpError::FrameTooShort(payload.len()));
+                }
+                let resource = payload[1];
+                let max_dto = u16::from_le_bytes([payload[5], payload[6]]);
+                Ok(Self::Connect(ConnectResponse {
+                    resource,
+                    comm_mode_basic: payload[2],
+                    max_cto: payload[4],
+                    max_dto,
+                    protocol_version: payload[7],
+                    transport_version: payload[7], // same byte on XCP 1.0
+                    cal_pag: resource & 0x01 != 0,
+                    daq:     resource & 0x04 != 0,
+                    stim:    resource & 0x08 != 0,
+                    pgm:     resource & 0x10 != 0,
+                }))
+            }
+            Some(0xFE) => Ok(Self::Disconnect),
+            Some(0xFD) => {
+                if payload.len() < 6 {
+                    return Err(XcpError::FrameTooShort(payload.len()));
+                }
+                let ss = payload[1];
+                Ok(Self::GetStatus(GetStatusResponse {
+                    session_status: ss,
+                    resource_protection: payload[2],
+                    session_config_id: u16::from_le_bytes([payload[4], payload[5]]),
+                    daq_running: ss & 0x04 != 0,
+                    resume:      ss & 0x80 != 0,
+                }))
+            }
+            Some(0xFB) => {
+                if payload.len() < 8 {
+                    return Err(XcpError::FrameTooShort(payload.len()));
+                }
+                let cm = payload[2];
+                Ok(Self::GetCommModeInfo(GetCommModeInfoResponse {
+                    comm_mode_optional: cm,
+                    max_bs: payload[4],
+                    min_st: payload[5],
+                    queue_size: payload[6],
+                    driver_version: payload[7],
+                    interleaved:   cm & 0x02 != 0,
+                    master_block:  cm & 0x01 != 0,
+                }))
+            }
+            Some(0xFA) => {
+                if payload.len() < 8 {
+                    return Err(XcpError::FrameTooShort(payload.len()));
+                }
+                let length = u32::from_le_bytes([payload[4], payload[5], payload[6], payload[7]]);
+                Ok(Self::GetId(GetIdResponse {
+                    id_type: payload[1],
+                    length,
+                    value: None, // filled in after UPLOAD
+                }))
+            }
+            Some(0xF6) => Ok(Self::SetMta),
+            Some(0xF5) => {
+                Ok(Self::Upload(UploadResponse { data: payload[1..].to_vec() }))
+            }
+            Some(0xF0) => Ok(Self::Download),
+            _ => Ok(Self::PositiveRaw { payload: payload.to_vec() }),
+        }
+    }
+
+    /// Short human-readable decoded summary for the trace.
+    pub fn summary(&self) -> String {
+        match self {
+            Self::Connect(r) => format!(
+                "+OK CONNECT — cal_pag={} daq={} max_cto={} max_dto={} proto={}.{}",
+                r.cal_pag, r.daq, r.max_cto, r.max_dto, r.protocol_version, r.transport_version
+            ),
+            Self::Disconnect => "+OK DISCONNECT".into(),
+            Self::GetStatus(r) => format!(
+                "+OK GET_STATUS — daq_running={} resume={} session_id={}",
+                r.daq_running, r.resume, r.session_config_id
+            ),
+            Self::GetCommModeInfo(r) => format!(
+                "+OK GET_COMM_MODE_INFO — max_bs={} min_st={} driver_version={}",
+                r.max_bs, r.min_st, r.driver_version
+            ),
+            Self::GetId(r) => format!(
+                "+OK GET_ID — {} bytes{}",
+                r.length,
+                r.value.as_ref().map(|v| format!(" \"{v}\"")).unwrap_or_default()
+            ),
+            Self::SetMta => "+OK SET_MTA".into(),
+            Self::Upload(r) => format!("+OK UPLOAD — {} bytes", r.data.len()),
+            Self::Download => "+OK DOWNLOAD".into(),
+            Self::Error(e) => format!("-ERR {} (0x{:02X})", e.name, e.code),
+            Self::PositiveRaw { payload } => format!("+OK raw {} bytes", payload.len()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_connect_response() {
+        // FF 01 00 00 FF FF 05 01 01
+        let payload = vec![0xFF, 0x01, 0x00, 0x00, 0xFF, 0xFF, 0x05, 0x01, 0x01];
+        let resp = XcpResponse::decode(&payload, Some(0xFF)).unwrap();
+        match resp {
+            XcpResponse::Connect(r) => {
+                assert!(r.cal_pag);
+                assert!(!r.daq);
+                assert_eq!(r.max_cto, 255);
+                assert_eq!(r.max_dto, 0x05FF);
+            }
+            _ => panic!("expected Connect"),
+        }
+    }
+
+    #[test]
+    fn decode_error_response() {
+        let payload = vec![0xFE, 0x20];
+        let resp = XcpResponse::decode(&payload, Some(0xFF)).unwrap();
+        match resp {
+            XcpResponse::Error(e) => assert_eq!(e.name, "ERR_CMD_UNKNOWN"),
+            _ => panic!("expected Error"),
+        }
+    }
+}
