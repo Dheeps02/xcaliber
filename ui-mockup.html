@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XCP Client — UI Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Inter', -apple-system, sans-serif; }
+  .hex-tx { color: #60a5fa; }
+  .hex-rx { color: #34d399; }
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+  tr.selected > td { background: #1a2f4a; }
+  .badge-tx { background:#1e3a8a; color:#93c5fd; border:1px solid #3b82f6; }
+  .badge-rx { background:#064e3b; color:#6ee7b7; border:1px solid #10b981; }
+  @keyframes blink-pulse {
+    0%,100% { opacity:1; box-shadow:0 0 5px 1px #4ade80; }
+    50%     { opacity:0.3; box-shadow:none; }
+  }
+  .blinker-on { animation:blink-pulse 1.6s ease-in-out infinite; background:#4ade80; }
+  .expand-row { display:none; }
+  .expand-row.open { display:table-row; }
+
+  /* X button — top-right inside cell, CSS hover reveal */
+  .byte-wrap .clear-btn {
+    display: none;
+    position: absolute; top: 2px; right: 2px;
+    width: 13px; height: 13px; font-size: 8px;
+    align-items: center; justify-content: center;
+    background: #111827; color: #6b7280;
+    border: none; border-radius: 2px;
+    cursor: pointer; line-height: 1; z-index: 2;
+  }
+  .byte-wrap:hover .clear-btn { display: flex; }
+  .byte-wrap .clear-btn:hover { color: #f87171; background: #1f2937; }
+
+  /* Sidebar collapse */
+  #sidebar { transition: width 150ms ease; overflow: hidden; min-width: 28px; }
+  #sidebar.collapsed { width: 28px !important; }
+  #sidebar.collapsed .sidebar-content { display: none; }
+</style>
+</head>
+<body class="bg-gray-950 text-gray-100 h-screen flex flex-col overflow-hidden">
+
+<!-- Global tooltip — fixed, JS-positioned, fades in/out -->
+<div id="g-tip"
+     class="fixed bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1.5 max-w-[220px] z-[9999] pointer-events-none text-[10px] leading-relaxed"
+     style="display:none; opacity:0; transition:opacity 130ms ease;"></div>
+
+<!-- PID filter popover — fixed, JS-positioned -->
+<div id="pid-popover"
+     class="fixed bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-[9998] hidden"
+     style="width:192px;">
+  <div class="p-2 border-b border-gray-800">
+    <input id="pid-search" placeholder="Search PID…" maxlength="2"
+           oninput="buildPidList()"
+           class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500"/>
+  </div>
+  <div id="pid-list" class="p-1 max-h-44 overflow-y-auto scrollbar-thin"></div>
+  <div class="p-1.5 border-t border-gray-800 flex gap-1">
+    <button onclick="selectAllPids()" class="flex-1 py-0.5 rounded text-[10px] text-gray-400 hover:text-gray-200 hover:bg-gray-700 border border-gray-700 transition-colors">All</button>
+    <button onclick="clearPids()"     class="flex-1 py-0.5 rounded text-[10px] text-gray-400 hover:text-gray-200 hover:bg-gray-700 border border-gray-700 transition-colors">Clear</button>
+  </div>
+</div>
+
+<!-- ── Header ──────────────────────────────────────────────────── -->
+<header class="flex items-center justify-between px-4 h-11 border-b border-gray-800 bg-gray-900 shrink-0">
+  <div class="flex items-center gap-3">
+    <span class="font-semibold text-sm tracking-tight">XCP Client</span>
+    <span class="text-gray-600 text-xs">v0.1.0</span>
+  </div>
+  <div class="flex items-center gap-3">
+    <button class="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-800 hover:bg-gray-700 text-gray-400 border border-gray-700 transition-colors">
+      GET_STATUS
+    </button>
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full blinker-on shrink-0"></span>
+      <button class="px-3 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition-colors">
+        Disconnect
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ── Body ────────────────────────────────────────────────────── -->
+<div class="flex flex-1 overflow-hidden">
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="w-52 border-r border-gray-800 bg-gray-900 flex flex-col shrink-0">
+    <div class="flex items-center justify-end px-1 pt-2 pb-1 shrink-0">
+      <button onclick="toggleSidebar()" id="sb-btn"
+              class="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 text-xs transition-colors">‹</button>
+    </div>
+    <div class="sidebar-content flex flex-col flex-1 overflow-y-auto scrollbar-thin">
+      <div class="px-3 pb-3 border-b border-gray-800">
+        <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">Session</p>
+        <button onclick="selectCmd('get-comm-mode-info',this)"
+                class="cmd-btn w-full px-2 py-1.5 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-left transition-colors flex items-center justify-between">
+          <span>GET_COMM_MODE_INFO</span>
+          <span class="text-gray-600 font-mono text-[10px]">0xFB</span>
+        </button>
+      </div>
+      <div class="px-3 py-3">
+        <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">Identification</p>
+        <div class="space-y-1.5">
+          <button onclick="selectCmd('get-id-ascii',this)"
+                  class="cmd-btn w-full px-2 py-1.5 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-left transition-colors flex items-center justify-between">
+            <span>GET_ID (ASCII)</span>
+            <span class="text-gray-600 font-mono text-[10px]">0xFA</span>
+          </button>
+          <button onclick="selectCmd('get-id-file',this)"
+                  class="cmd-btn w-full px-2 py-1.5 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-left transition-colors flex items-center justify-between">
+            <span>GET_ID (Filename)</span>
+            <span class="text-gray-600 font-mono text-[10px]">0xFA</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 flex flex-col overflow-hidden min-w-0">
+
+    <!-- MTA / SIZE bar -->
+    <div class="flex items-center gap-4 px-4 h-10 border-b border-gray-800 bg-gray-900 shrink-0">
+      <div class="flex items-center gap-2">
+        <label class="text-[10px] text-gray-500 shrink-0">MTA</label>
+        <input value="0x00000000" class="w-28 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"/>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-[10px] text-gray-500 shrink-0">SIZE</label>
+        <input value="8" type="number" min="1" class="w-16 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"/>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button class="px-3 py-1 rounded text-xs font-medium bg-green-600/15 text-green-400 border border-green-500/30 hover:bg-green-600/25 transition-colors">Upload</button>
+        <button class="px-3 py-1 rounded text-xs font-medium bg-orange-600/15 text-orange-400 border border-orange-500/30 hover:bg-orange-600/25 transition-colors">Download</button>
+      </div>
+      <span class="text-[10px] text-gray-600">SET_MTA fires automatically</span>
+    </div>
+
+    <!-- ── Byte bar ──────────────────────────────────────────── -->
+    <div class="px-4 pt-2.5 pb-2 border-b border-gray-800 bg-gray-900 shrink-0">
+      <div id="byte-bar" class="flex gap-2 w-full"></div>
+      <button onclick="sendRaw()"
+              class="w-full mt-2 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">
+        Send
+      </button>
+    </div>
+
+    <!-- Trace section -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- Trace toolbar -->
+      <div class="flex items-center justify-between px-4 h-9 border-b border-gray-800 bg-gray-900 shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-medium text-gray-400">Packet Trace</span>
+          <div class="flex items-center gap-1">
+            <button onclick="setDirFilter('all',this)" class="df-all px-2 py-0.5 rounded text-[10px] bg-blue-600 text-white">All</button>
+            <button onclick="setDirFilter('tx',this)"  class="df-tx  px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800">TX</button>
+            <button onclick="setDirFilter('rx',this)"  class="df-rx  px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800">RX</button>
+          </div>
+          <!-- PID filter icon -->
+          <button id="pid-filter-btn" onclick="togglePidPopover(this)"
+                  class="relative w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+                  title="Filter by PID">
+            <!-- funnel icon -->
+            <svg viewBox="0 0 16 16" fill="currentColor" class="w-3.5 h-3.5">
+              <path d="M1 2.5A.5.5 0 0 1 1.5 2h13a.5.5 0 0 1 .35.854L10 7.707V13.5a.5.5 0 0 1-.223.416l-3 2A.5.5 0 0 1 6 15.5V7.707L1.15 2.854A.5.5 0 0 1 1 2.5z"/>
+            </svg>
+            <span id="pid-filter-badge"
+                  class="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full text-[7px] text-white items-center justify-center hidden">
+            </span>
+          </button>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 text-[10px] font-mono">
+            <span class="text-blue-400">TX: 14</span>
+            <span class="text-gray-700">|</span>
+            <span class="text-green-400">RX: 14</span>
+          </div>
+          <label class="flex items-center gap-1.5 text-[10px] text-gray-500 cursor-pointer">
+            <input type="checkbox" checked class="accent-blue-500"/> Auto-scroll
+          </label>
+          <button class="px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700">Clear</button>
+          <button onclick="toggleTrace()" id="trace-btn"
+                  class="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 text-xs transition-colors">▼</button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="flex-1 overflow-y-auto scrollbar-thin font-mono text-xs" id="trace-table">
+        <table class="w-full border-collapse">
+          <thead class="sticky top-0 bg-gray-900 z-10">
+            <tr class="text-left text-[10px] text-gray-500 uppercase tracking-wider">
+              <th class="px-3 py-2 w-10">Dir</th>
+              <th class="px-3 py-2 w-12">Ctr</th>
+              <th class="px-3 py-2 w-32">Time</th>
+              <th class="px-3 py-2">Hex</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+
+            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors"
+                data-dir="tx" data-pid="FF" onclick="toggleRow(this,'e0')">
+              <td class="px-3 py-2"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></td>
+              <td class="px-3 py-2 text-gray-500">0</td>
+              <td class="px-3 py-2 text-gray-500">12:01:00.000</td>
+              <td class="px-3 py-2"><span class="hex-tx">FF</span> <span class="hex-tx">00</span></td>
+            </tr>
+            <tr id="e0" class="expand-row bg-gray-900/60">
+              <td colspan="4" class="px-6 pb-3 pt-1">
+                <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">CONNECT (mode=Normal)</div>
+                <div class="space-y-0.5 text-xs">
+                  <div><span class="tc text-gray-500 w-32 inline-block">command</span><span class="text-blue-400">CONNECT</span></div>
+                  <div><span class="tc text-gray-500 w-32 inline-block">mode</span><span class="text-blue-400">0x00</span> <span class="text-gray-600">(Normal)</span></div>
+                </div>
+              </td>
+            </tr>
+
+            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors selected"
+                data-dir="rx" data-pid="FF" onclick="toggleRow(this,'e1')">
+              <td class="px-3 py-2"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></td>
+              <td class="px-3 py-2 text-gray-500">0</td>
+              <td class="px-3 py-2 text-gray-500">12:01:00.003</td>
+              <td class="px-3 py-2">
+                <span class="hex-rx">FF</span> <span class="hex-rx">01</span> <span class="hex-rx">00</span>
+                <span class="hex-rx">FF</span> <span class="hex-rx">FF</span> <span class="hex-rx">05</span>
+                <span class="hex-rx">01</span> <span class="hex-rx">01</span>
+              </td>
+            </tr>
+            <tr id="e1" class="expand-row open bg-gray-900/60">
+              <td colspan="4" class="px-6 pb-3 pt-1">
+                <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">+OK CONNECT Response</div>
+                <div class="space-y-0.5 text-xs">
+                  <div><span class="tc text-gray-500 w-32 inline-block">pid</span><span class="text-green-400">0xFF</span> <span class="text-gray-600">(positive response)</span></div>
+                  <div><span class="tc text-gray-500 w-32 inline-block">resource</span><span class="text-green-400">0x01</span> <span class="text-gray-600">cal_pag=true  daq=false</span></div>
+                  <div><span class="tc text-gray-500 w-32 inline-block">comm_mode_basic</span><span class="text-green-400">0x00</span></div>
+                  <div><span class="tc text-gray-500 w-32 inline-block">max_cto</span><span class="text-green-400">255</span></div>
+                  <div><span class="tc text-gray-500 w-32 inline-block">max_dto</span><span class="text-green-400">1535</span></div>
+                  <div><span class="tc text-gray-500 w-32 inline-block">proto_version</span><span class="text-green-400">1.1</span></div>
+                </div>
+              </td>
+            </tr>
+
+            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors"
+                data-dir="tx" data-pid="FD" onclick="toggleRow(this,'e2')">
+              <td class="px-3 py-2"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></td>
+              <td class="px-3 py-2 text-gray-500">1</td>
+              <td class="px-3 py-2 text-gray-500">12:01:01.120</td>
+              <td class="px-3 py-2"><span class="hex-tx">FD</span></td>
+            </tr>
+            <tr id="e2" class="expand-row bg-gray-900/60">
+              <td colspan="4" class="px-6 pb-3 pt-1">
+                <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">GET_STATUS</div>
+                <div class="space-y-0.5 text-xs">
+                  <div><span class="tc text-gray-500 w-32 inline-block">command</span><span class="text-blue-400">GET_STATUS</span></div>
+                </div>
+              </td>
+            </tr>
+
+            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors"
+                data-dir="rx" data-pid="FF" onclick="toggleRow(this,'e3')">
+              <td class="px-3 py-2"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></td>
+              <td class="px-3 py-2 text-gray-500">1</td>
+              <td class="px-3 py-2 text-gray-500">12:01:01.124</td>
+              <td class="px-3 py-2">
+                <span class="hex-rx">FF</span> <span class="hex-rx">00</span> <span class="hex-rx">00</span>
+                <span class="hex-rx">00</span> <span class="hex-rx">00</span> <span class="hex-rx">00</span>
+              </td>
+            </tr>
+            <tr id="e3" class="expand-row bg-gray-900/60">
+              <td colspan="4" class="px-6 pb-3 pt-1">
+                <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">+OK GET_STATUS Response</div>
+                <div class="space-y-0.5 text-xs">
+                  <div><span class="tc text-gray-500 w-32 inline-block">daq_running</span><span class="text-green-400">false</span></div>
+                  <div><span class="tc text-gray-500 w-32 inline-block">resume</span><span class="text-green-400">false</span></div>
+                  <div><span class="tc text-gray-500 w-32 inline-block">session_id</span><span class="text-green-400">0</span></div>
+                </div>
+              </td>
+            </tr>
+
+            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors"
+                data-dir="tx" data-pid="FA" onclick="toggleRow(this,'e4')">
+              <td class="px-3 py-2"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></td>
+              <td class="px-3 py-2 text-gray-500">2</td>
+              <td class="px-3 py-2 text-gray-500">12:01:02.310</td>
+              <td class="px-3 py-2"><span class="hex-tx">FA</span> <span class="hex-tx">00</span></td>
+            </tr>
+            <tr id="e4" class="expand-row bg-gray-900/60">
+              <td colspan="4" class="px-6 pb-3 pt-1">
+                <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">GET_ID (type=AsciiText)</div>
+                <div class="space-y-0.5 text-xs">
+                  <div><span class="tc text-gray-500 w-32 inline-block">type</span><span class="text-blue-400">0x00</span> <span class="text-gray-600">(ASCII text)</span></div>
+                </div>
+              </td>
+            </tr>
+
+            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors"
+                data-dir="rx" data-pid="FE" onclick="toggleRow(this,'e5')">
+              <td class="px-3 py-2"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></td>
+              <td class="px-3 py-2 text-gray-500">2</td>
+              <td class="px-3 py-2 text-gray-500">12:01:04.010</td>
+              <td class="px-3 py-2">
+                <span style="color:#f87171">FE</span> <span style="color:#f87171">20</span>
+              </td>
+            </tr>
+            <tr id="e5" class="expand-row bg-gray-900/60">
+              <td colspan="4" class="px-6 pb-3 pt-1">
+                <div class="text-[10px] text-red-500 mb-1.5 uppercase tracking-wider">-ERR Response</div>
+                <div class="space-y-0.5 text-xs">
+                  <div><span class="tc text-gray-500 w-32 inline-block">error_code</span><span class="text-red-400">0x20</span></div>
+                  <div><span class="tc text-gray-500 w-32 inline-block">meaning</span><span class="text-red-400">ERR_CMD_UNKNOWN</span></div>
+                </div>
+              </td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── Status bar ──────────────────────────────────────────────── -->
+<footer class="flex items-center justify-between px-4 h-6 border-t border-gray-800 bg-gray-900 shrink-0 text-[10px] text-gray-600">
+  <span>127.0.0.1:5555 · UDP</span>
+  <span>6 packets · 3 ms avg RTT</span>
+  <span class="font-mono text-gray-500">max_cto=255 · max_dto=1535 · proto=1.1</span>
+</footer>
+
+<script>
+// ── String formatting ────────────────────────────────────────────
+// Applied when displaying — config/TOML stays lowercase snake_case
+function toTitleCase(str) {
+  return str.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Apply title case to all .tc elements (hardcoded trace labels)
+document.querySelectorAll('.tc').forEach(el => {
+  el.textContent = toTitleCase(el.textContent);
+});
+
+// ── Command definitions ──────────────────────────────────────────
+const CMD_DEFS = {
+  'get-comm-mode-info': {
+    pid: 'FB',
+    fields: [
+      { label: 'pid', tip: 'GET_COMM_MODE_INFO (0xFB) — reads slave communication mode info block' },
+    ],
+  },
+  'get-id-ascii': {
+    pid: 'FA',
+    prefill: { 0:'FA', 1:'00' },
+    fields: [
+      { label: 'pid',  tip: 'GET_ID command (0xFA)' },
+      { label: 'type', tip: 'Identification type (byte 1)', options: [
+        { val:'00', label:'ASCII text' },
+        { val:'01', label:'Filename' },
+        { val:'02', label:'ASAP2 file' },
+        { val:'03', label:'CAN ID list' },
+      ]},
+    ],
+  },
+  'get-id-file': {
+    pid: 'FA',
+    prefill: { 0:'FA', 1:'01' },
+    fields: [
+      { label: 'pid',  tip: 'GET_ID command (0xFA)' },
+      { label: 'type', tip: 'Identification type (byte 1)', options: [
+        { val:'00', label:'ASCII text' },
+        { val:'01', label:'Filename' },
+        { val:'02', label:'ASAP2 file' },
+        { val:'03', label:'CAN ID list' },
+      ]},
+    ],
+  },
+};
+
+const NUM_CELLS = 8;
+let activeCmd = null;
+
+// ── Build byte bar ───────────────────────────────────────────────
+function buildByteBar() {
+  const bar = document.getElementById('byte-bar');
+  bar.innerHTML = '';
+
+  for (let i = 0; i < NUM_CELLS; i++) {
+    const def        = activeCmd ? CMD_DEFS[activeCmd] : null;
+    const field      = def ? def.fields[i] : null;
+    const isPid      = i === 0 && !!def;
+    const prefillVal = (def?.prefill?.[i] != null) ? def.prefill[i] : '';
+
+    const col = document.createElement('div');
+    col.className = 'flex-1 flex flex-col min-w-0';
+
+    // label row
+    const lblRow = document.createElement('div');
+    lblRow.className = 'flex items-center justify-between mb-1 h-4';
+
+    const nameSpan = document.createElement('span');
+    // toTitleCase applied here — config label stays lowercase, display is formatted
+    nameSpan.className = 'text-[10px] truncate ' + (field ? 'text-gray-400' : 'text-gray-700');
+    nameSpan.textContent = field ? toTitleCase(field.label) : '';
+    lblRow.appendChild(nameSpan);
+
+    if (field) {
+      const btnGrp = document.createElement('div');
+      btnGrp.className = 'flex items-center gap-0.5 shrink-0';
+
+      if (field.options) {
+        const ddBtn = document.createElement('button');
+        ddBtn.className = 'text-[10px] text-gray-500 hover:text-blue-400 px-0.5 leading-none transition-colors';
+        ddBtn.textContent = '▾';
+        ddBtn.onclick = (e) => { e.stopPropagation(); openDropdown(i, field.options); };
+        btnGrp.appendChild(ddBtn);
+      }
+
+      const infoBtn = document.createElement('button');
+      infoBtn.className = 'text-[10px] text-gray-600 hover:text-gray-400 px-0.5 leading-none transition-colors';
+      infoBtn.textContent = 'ℹ';
+      infoBtn.onmouseenter = () => showTip(infoBtn, field.tip);
+      infoBtn.onmouseleave = () => hideTip();
+      btnGrp.appendChild(infoBtn);
+      lblRow.appendChild(btnGrp);
+    }
+
+    col.appendChild(lblRow);
+
+    // input wrapper
+    const wrap = document.createElement('div');
+    wrap.className = 'byte-wrap relative';
+
+    const input = document.createElement('input');
+    input.id = 'byte-' + i;
+    input.maxLength = 2;
+    input.value = prefillVal;
+    input.placeholder = '--';
+    input.className = [
+      'w-full px-1 py-1.5 rounded text-xs font-mono text-center focus:outline-none transition-colors border',
+      isPid
+        ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
+        : 'bg-gray-900 border-gray-700 text-gray-200 focus:border-blue-500',
+    ].join(' ');
+    if (isPid) input.disabled = true;
+
+    const xBtn = document.createElement('button');
+    xBtn.className = 'clear-btn';
+    xBtn.textContent = '✕';
+    xBtn.onclick = () => { isPid ? clearCmd() : (input.value = '', input.focus()); };
+
+    wrap.appendChild(input);
+    wrap.appendChild(xBtn);
+    col.appendChild(wrap);
+    bar.appendChild(col);
+  }
+}
+
+function selectCmd(id, btn) {
+  activeCmd = id;
+  document.querySelectorAll('.cmd-btn').forEach(b => {
+    b.classList.remove('border-blue-500','text-blue-300','bg-blue-900/20');
+    b.classList.add('border-gray-700','text-gray-300','bg-gray-800');
+  });
+  btn.classList.add('border-blue-500','text-blue-300','bg-blue-900/20');
+  btn.classList.remove('border-gray-700','text-gray-300','bg-gray-800');
+  buildByteBar();
+}
+
+function clearCmd() {
+  activeCmd = null;
+  document.querySelectorAll('.cmd-btn').forEach(b => {
+    b.classList.remove('border-blue-500','text-blue-300','bg-blue-900/20');
+    b.classList.add('border-gray-700','text-gray-300','bg-gray-800');
+  });
+  buildByteBar();
+}
+
+function sendRaw() {
+  const bytes = [];
+  for (let i = 0; i < NUM_CELLS; i++) {
+    const v = (document.getElementById('byte-'+i).value || '').trim();
+    if (v) bytes.push(v.toUpperCase().padStart(2,'0'));
+  }
+  console.log('Send:', bytes.join(' '));
+}
+
+// ── Dropdown (fixed-positioned, appended to body) ────────────────
+let activeDd = null;
+
+function openDropdown(cellIdx, options) {
+  closeDropdown();
+  const input = document.getElementById('byte-' + cellIdx);
+  const rect  = input.getBoundingClientRect();
+
+  const dd = document.createElement('div');
+  dd.id = 'active-dd';
+  dd.className = 'fixed bg-gray-800 border border-gray-700 rounded-md shadow-2xl z-[9999] py-0.5';
+  dd.style.minWidth = Math.max(rect.width, 130) + 'px';
+  dd.style.top  = (rect.bottom + 3) + 'px';
+  dd.style.left = rect.left + 'px';
+
+  options.forEach(opt => {
+    const item = document.createElement('div');
+    item.className = 'px-2.5 py-1 text-xs font-mono hover:bg-gray-700 cursor-pointer flex items-center gap-2 transition-colors';
+    item.innerHTML = `<span class="text-blue-400 shrink-0">${opt.val}</span><span class="text-gray-400">${opt.label}</span>`;
+    item.onclick = () => { input.value = opt.val; closeDropdown(); };
+    dd.appendChild(item);
+  });
+
+  document.body.appendChild(dd);
+  activeDd = dd;
+
+  requestAnimationFrame(() => {
+    const r = dd.getBoundingClientRect();
+    if (r.right  > window.innerWidth  - 8) dd.style.left = (rect.right  - r.width) + 'px';
+    if (r.bottom > window.innerHeight - 8) dd.style.top  = (rect.top - r.height - 3) + 'px';
+  });
+}
+
+function closeDropdown() {
+  if (activeDd) { activeDd.remove(); activeDd = null; }
+}
+
+// ── Tooltip (fixed, JS-positioned, fades) ───────────────────────
+const tipEl = document.getElementById('g-tip');
+let tipTimer;
+
+function showTip(el, text) {
+  clearTimeout(tipTimer);
+  const rect = el.getBoundingClientRect();
+  tipEl.textContent = text;
+  tipEl.style.display = 'block';
+  tipEl.style.top  = (rect.bottom + 5) + 'px';
+  tipEl.style.left = rect.left + 'px';
+  requestAnimationFrame(() => {
+    const tr = tipEl.getBoundingClientRect();
+    if (tr.right  > window.innerWidth  - 8) tipEl.style.left = (window.innerWidth  - tr.width - 8) + 'px';
+    if (tr.bottom > window.innerHeight - 8) tipEl.style.top  = (rect.top - tr.height - 5) + 'px';
+    tipEl.style.opacity = '1';
+  });
+}
+
+function hideTip() {
+  tipEl.style.opacity = '0';
+  tipTimer = setTimeout(() => { tipEl.style.display = 'none'; }, 140);
+}
+
+// ── PID filter popover ───────────────────────────────────────────
+const selectedPids = new Set();
+let pidPopoverOpen = false;
+
+function togglePidPopover(btn) {
+  const pop = document.getElementById('pid-popover');
+  pidPopoverOpen = !pidPopoverOpen;
+  if (pidPopoverOpen) {
+    const rect = btn.getBoundingClientRect();
+    pop.style.top  = (rect.bottom + 4) + 'px';
+    pop.style.left = rect.left + 'px';
+    pop.classList.remove('hidden');
+    document.getElementById('pid-search').value = '';
+    buildPidList();
+    // keep on screen
+    requestAnimationFrame(() => {
+      const pr = pop.getBoundingClientRect();
+      if (pr.right > window.innerWidth - 8) pop.style.left = (window.innerWidth - pr.width - 8) + 'px';
+    });
+  } else {
+    pop.classList.add('hidden');
+  }
+}
+
+function buildPidList() {
+  const search  = (document.getElementById('pid-search').value || '').toUpperCase().trim();
+  const listEl  = document.getElementById('pid-list');
+  listEl.innerHTML = '';
+
+  const allPids = [...new Set(
+    [...document.querySelectorAll('.pkt-row')].map(r => r.dataset.pid).filter(Boolean)
+  )].sort();
+
+  allPids.filter(p => !search || p.includes(search)).forEach(pid => {
+    const active = selectedPids.has(pid);
+    const item = document.createElement('div');
+    item.className = 'flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-gray-800 transition-colors';
+    item.innerHTML = `
+      <span class="w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 text-[8px]
+                   ${active ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-600 text-transparent'}">✓</span>
+      <span class="font-mono text-xs ${active ? 'text-blue-300' : 'text-gray-400'}">0x${pid}</span>`;
+    item.onclick = () => {
+      selectedPids.has(pid) ? selectedPids.delete(pid) : selectedPids.add(pid);
+      updatePidFilterBadge();
+      buildPidList();
+      applyFilters();
+    };
+    listEl.appendChild(item);
+  });
+}
+
+function selectAllPids() { selectedPids.clear(); updatePidFilterBadge(); buildPidList(); applyFilters(); }
+function clearPids()     { selectedPids.clear(); updatePidFilterBadge(); buildPidList(); applyFilters(); }
+
+function updatePidFilterBadge() {
+  const badge = document.getElementById('pid-filter-badge');
+  const btn   = document.getElementById('pid-filter-btn');
+  if (selectedPids.size > 0) {
+    badge.textContent = selectedPids.size;
+    badge.classList.remove('hidden');
+    badge.classList.add('flex');
+    btn.classList.add('text-blue-400');
+    btn.classList.remove('text-gray-500');
+  } else {
+    badge.classList.add('hidden');
+    badge.classList.remove('flex');
+    btn.classList.remove('text-blue-400');
+    btn.classList.add('text-gray-500');
+  }
+}
+
+// ── Trace filters ────────────────────────────────────────────────
+let dirFilter = 'all';
+
+function setDirFilter(dir, btn) {
+  dirFilter = dir;
+  ['all','tx','rx'].forEach(d => {
+    const b = document.querySelector('.df-' + d);
+    if (!b) return;
+    b.className = b.className.replace(/bg-blue-600 text-white|text-gray-500 hover:text-gray-300 hover:bg-gray-800/g, '').trim();
+    b.className += d === dir ? ' bg-blue-600 text-white' : ' text-gray-500 hover:text-gray-300 hover:bg-gray-800';
+  });
+  applyFilters();
+}
+
+function applyFilters() {
+  document.querySelectorAll('.pkt-row').forEach(row => {
+    const dirOk = dirFilter === 'all' || row.dataset.dir === dirFilter;
+    const pidOk = selectedPids.size === 0 || selectedPids.has(row.dataset.pid);
+    const show  = dirOk && pidOk;
+    row.style.display = show ? '' : 'none';
+    const m = row.getAttribute('onclick')?.match(/'(e\d+)'/);
+    if (m) {
+      const exp = document.getElementById(m[1]);
+      if (exp) exp.style.display = show ? '' : 'none';
+    }
+  });
+}
+
+// ── Sidebar / trace collapse ─────────────────────────────────────
+function toggleSidebar() {
+  const sb  = document.getElementById('sidebar');
+  const btn = document.getElementById('sb-btn');
+  sb.classList.toggle('collapsed');
+  btn.textContent = sb.classList.contains('collapsed') ? '›' : '‹';
+}
+
+function toggleTrace() {
+  const tbl = document.getElementById('trace-table');
+  const btn = document.getElementById('trace-btn');
+  tbl.classList.toggle('hidden');
+  btn.textContent = tbl.classList.contains('hidden') ? '▲' : '▼';
+}
+
+// ── Row expand ───────────────────────────────────────────────────
+function toggleRow(headerRow, expandId) {
+  const exp    = document.getElementById(expandId);
+  const isOpen = exp.classList.contains('open');
+  document.querySelectorAll('.expand-row').forEach(r => r.classList.remove('open'));
+  document.querySelectorAll('.pkt-row').forEach(r => r.classList.remove('selected'));
+  if (!isOpen) { exp.classList.add('open'); headerRow.classList.add('selected'); }
+}
+
+// ── Close overlays on outside click ─────────────────────────────
+document.addEventListener('click', (e) => {
+  if (activeDd && !e.target.closest('#active-dd') && !e.target.closest('#byte-bar')) closeDropdown();
+  const pop = document.getElementById('pid-popover');
+  if (pidPopoverOpen && !pop.contains(e.target) && !document.getElementById('pid-filter-btn').contains(e.target)) {
+    pop.classList.add('hidden');
+    pidPopoverOpen = false;
+  }
+});
+
+// ── Init ─────────────────────────────────────────────────────────
+buildByteBar();
+</script>
+</body>
+</html>
