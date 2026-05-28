@@ -16,19 +16,18 @@ export function useSSE() {
       const es = new EventSource('http://localhost:8080/events');
       esRef.current = es;
 
-      es.addEventListener('packet_tx', (e) => {
-        addPacket(JSON.parse((e as MessageEvent).data) as PacketEntry);
-      });
-      es.addEventListener('packet_rx', (e) => {
-        addPacket(JSON.parse((e as MessageEvent).data) as PacketEntry);
-      });
-      es.addEventListener('state_changed', (e) => {
-        const d = JSON.parse((e as MessageEvent).data) as {
-          state: string;
-          slave?: ConnectResponse;
+      es.onmessage = (e: MessageEvent) => {
+        const msg = JSON.parse(e.data as string) as {
+          event: string;
+          data: unknown;
         };
-        setConnected(d.state === 'connected', d.slave);
-      });
+        if (msg.event === 'packet_tx' || msg.event === 'packet_rx') {
+          addPacket(msg.data as PacketEntry);
+        } else if (msg.event === 'state_changed') {
+          const d = msg.data as { state: string; slave?: ConnectResponse };
+          setConnected(d.state === 'connected', d.slave);
+        }
+      };
       es.onerror = () => {
         es.close();
         setTimeout(connect, 2000);
