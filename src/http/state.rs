@@ -50,7 +50,7 @@ impl AppState {
         }
     }
 
-    pub fn insert_packet(&self, entry: &PacketEntry) {
+    pub fn insert_packet(&self, entry: &PacketEntry) -> i64 {
         let db = self.db.lock().unwrap();
         db.execute(
             "INSERT INTO packets (direction, counter, timestamp_ms, hex, pid, decoded)
@@ -64,6 +64,7 @@ impl AppState {
                 entry.decoded.to_string(),
             ],
         ).ok();
+        db.last_insert_rowid()
     }
 
     pub fn query_packets(&self, since_id: Option<i64>, limit: usize) -> Vec<PacketEntry> {
