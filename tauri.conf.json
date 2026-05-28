@@ -1,0 +1,35 @@
+{
+  "productName": "xcp-client",
+  "version": "0.1.0",
+  "identifier": "com.xcp-client.dev",
+  "build": {
+    "beforeDevCommand": {
+      "script": "npm run dev",
+      "cwd": "frontend"
+    },
+    "beforeBuildCommand": {
+      "script": "npm run build",
+      "cwd": "frontend"
+    },
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "frontend/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "XCP Client",
+        "width": 1440,
+        "height": 860,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.ico"]
+  }
+}
