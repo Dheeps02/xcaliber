@@ -1,0 +1,52 @@
+export interface ConnectResponse {
+  resource: number;
+  cal_pag: boolean;
+  daq: boolean;
+  stim: boolean;
+  pgm: boolean;
+  comm_mode_basic: number;
+  max_cto: number;
+  max_dto: number;
+  proto_layer_version: number;
+  transport_layer_version: number;
+  proto_version: string;
+}
+
+export interface PacketEntry {
+  id: number;
+  direction: 'tx' | 'rx';
+  counter: number;
+  timestamp_ms: number;
+  hex: string;
+  pid: string;
+  decoded: Record<string, unknown>;
+}
+
+export interface FieldOption {
+  val: string;
+  label: string;
+}
+
+export interface FieldDef {
+  label: string;
+  tip: string;
+  options?: FieldOption[];
+}
+
+export interface CmdDef {
+  pid: string;
+  prefill?: Record<number, string>;
+  fields: FieldDef[];
+}
+
+export interface AppConfig {
+  connection: {
+    server_ip: string;
+    server_port: number;
+    protocol: string;
+    timeout_ms: number;
+  };
+  server: {
+    listen_port: number;
+  };
+}

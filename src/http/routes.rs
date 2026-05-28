@@ -206,6 +206,37 @@ pub async fn get_packets(
     Json(json!({ "packets": packets }))
 }
 
+#[derive(Deserialize)]
+pub struct SetMtaBody {
+    pub addr_ext: u8,
+    pub addr: u32,
+}
+
+pub async fn cmd_set_mta(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<SetMtaBody>,
+) -> impl IntoResponse {
+    match run_cmd(&state, XcpCommand::SetMta { addr_ext: body.addr_ext, addr: body.addr }).await {
+        Ok(r) => Json(json!({ "ok": true, "response": r })).into_response(),
+        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UploadBody {
+    pub size: u8,
+}
+
+pub async fn cmd_upload(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<UploadBody>,
+) -> impl IntoResponse {
+    match run_cmd(&state, XcpCommand::Upload { size: body.size }).await {
+        Ok(r) => Json(json!({ "ok": true, "response": r })).into_response(),
+        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
 pub async fn get_config(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     Json(serde_json::to_value(&state.config).unwrap())
 }

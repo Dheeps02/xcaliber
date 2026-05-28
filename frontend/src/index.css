@@ -16,3 +16,13 @@ body { margin: 0; font-family: 'Inter', -apple-system, sans-serif; background: r
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+
+/* Connected blinker */
+@keyframes blink-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 5px 1px #4ade80; }
+  50%       { opacity: 0.3; box-shadow: none; }
+}
+.blinker-on {
+  animation: blink-pulse 1.6s ease-in-out infinite;
+  background: #4ade80;
+}

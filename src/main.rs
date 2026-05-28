@@ -25,6 +25,8 @@ fn main() {
                     .route("/api/command/get-comm-mode-info",axum::routing::post(http::routes::cmd_get_comm_mode_info))
                     .route("/api/command/get-id",            axum::routing::post(http::routes::cmd_get_id))
                     .route("/api/command/raw",               axum::routing::post(http::routes::cmd_raw))
+                    .route("/api/command/set-mta",          axum::routing::post(http::routes::cmd_set_mta))
+                    .route("/api/command/upload",            axum::routing::post(http::routes::cmd_upload))
                     .route("/api/packets",    get(http::routes::get_packets))
                     .route("/api/config",     get(http::routes::get_config))
                     .layer(CorsLayer::permissive())
