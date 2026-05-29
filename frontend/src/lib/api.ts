@@ -1,4 +1,4 @@
-import type { ConnectResponse, PacketEntry, AppConfig } from './types';
+import type { ConnectResponse, PacketEntry, AppConfig, NetworkInterface } from './types';
 
 const BASE = 'http://localhost:8080';
 
@@ -34,11 +34,25 @@ export const api = {
     post<{ ok: boolean; response: unknown }>('/api/command/set-mta', { addr_ext, addr }),
   upload: (size: number) =>
     post<{ ok: boolean; response: unknown }>('/api/command/upload', { size }),
+  download: (data: number[]) =>
+    post<{ ok: boolean; response: unknown }>('/api/command/download', { data }),
   raw: (bytes: number[]) =>
     post<{ ok: boolean; response: unknown }>('/api/command/raw', { bytes }),
+  userCmd: (name: string, sub_cmd: number, data: number[]) =>
+    post<{ ok: boolean; response: unknown }>('/api/command/user', { name, sub_cmd, data }),
   packets: (since?: number) =>
     get<{ packets: PacketEntry[] }>(
       `/api/packets${since != null ? `?since=${since}` : ''}`
     ),
   config: () => get<AppConfig>('/api/config'),
+  updateConfig: (body: {
+    server_ip: string;
+    server_port: number;
+    protocol: string;
+    timeout_ms: number;
+    listen_port: number;
+    bind_ip?: string;
+  }) => post<{ ok: boolean }>('/api/config', body),
+  getNetworkInterfaces: () =>
+    get<{ interfaces: NetworkInterface[] }>('/api/network-interfaces'),
 };
