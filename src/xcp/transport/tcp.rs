@@ -9,8 +9,19 @@ pub struct TcpTransport {
 }
 
 impl TcpTransport {
-    pub async fn connect(ip: &str, port: u16) -> Result<Self, XcpError> {
-        let stream = TcpStream::connect(format!("{ip}:{port}"))
+    pub async fn connect(ip: &str, port: u16, bind_ip: Option<&str>) -> Result<Self, XcpError> {
+        use tokio::net::TcpSocket;
+        let remote: std::net::SocketAddr = format!("{ip}:{port}")
+            .parse()
+            .map_err(|e: std::net::AddrParseError| XcpError::Transport(e.to_string()))?;
+        let socket = TcpSocket::new_v4().map_err(|e| XcpError::Transport(e.to_string()))?;
+        if let Some(bind) = bind_ip.filter(|s| !s.is_empty()) {
+            let local: std::net::SocketAddr = format!("{bind}:0")
+                .parse()
+                .map_err(|e: std::net::AddrParseError| XcpError::Transport(e.to_string()))?;
+            socket.bind(local).map_err(|e| XcpError::Transport(e.to_string()))?;
+        }
+        let stream = socket.connect(remote)
             .await
             .map_err(|e| XcpError::Transport(e.to_string()))?;
         Ok(Self { stream: Mutex::new(stream) })
