@@ -8,6 +8,7 @@ export function useSSE() {
   const prependPackets = useAppStore((s) => s.prependPackets);
   const setConnected = useAppStore((s) => s.setConnected);
   const setConfig = useAppStore((s) => s.setConfig);
+  const setAnimationWatermark = useAppStore((s) => s.setAnimationWatermark);
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -36,15 +37,23 @@ export function useSSE() {
 
     connect();
 
-    api.status()
-      .then((r) => setConnected(r.connected, r.slave))
-      .catch(() => {});
     api.config()
       .then((c) => setConfig(c))
       .catch(() => {});
+
     api.packets()
-      .then((r) => prependPackets(r.packets))
-      .catch(() => {});
+      .then((r) => {
+        prependPackets(r.packets);
+        // Mark the backfill ceiling — new packets above this ID will animate
+        const watermark = r.packets.length > 0
+          ? Math.max(...r.packets.map((p: PacketEntry) => p.id))
+          : -1;
+        setAnimationWatermark(watermark);
+      })
+      .catch(() => {
+        // No backfill — animate all new packets
+        setAnimationWatermark(-1);
+      });
 
     return () => {
       esRef.current?.close();
