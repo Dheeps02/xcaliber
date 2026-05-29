@@ -13,7 +13,9 @@ import { api } from '../lib/api';
 import type { FieldOption } from '../lib/types';
 import { toTitleCase } from '../lib/utils';
 
-const NUM_CELLS = 8;
+const BASE_CELLS = 8;
+const EXIT_MS = 160;
+const STAGGER_MS = 28;
 
 interface Dropdown {
   cellIdx: number;
@@ -23,16 +25,58 @@ interface Dropdown {
   width: number;
 }
 
+function NavBtn({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`w-5 h-[30px] flex items-center justify-center rounded text-[11px] border transition-colors shrink-0 ${
+        disabled
+          ? 'border-gray-800 text-gray-700 cursor-not-allowed'
+          : 'border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-600'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function ByteBar() {
   const activeCmd = useAppStore((s) => s.activeCmd);
   const byteValues = useAppStore((s) => s.byteValues);
   const setByteValue = useAppStore((s) => s.setByteValue);
   const setActiveCmd = useAppStore((s) => s.setActiveCmd);
+  const customCmdDefs = useAppStore((s) => s.customCmdDefs);
   const { showTip, hideTip } = useTooltip();
   const [dropdown, setDropdown] = useState<Dropdown | null>(null);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const def = activeCmd ? CMD_DEFS[activeCmd] : null;
+  const def = activeCmd ? (CMD_DEFS[activeCmd] ?? customCmdDefs[activeCmd]) : null;
+
+  // Flat array of ALL bytes across all sections; local state only
+  const [allBytes, setAllBytes] = useState<string[]>(() => [...byteValues]);
+  const [section, setSection] = useState(0);
+
+  // labelKey increments on section or cmd change → triggers label fade animation
+  const [labelKey, setLabelKey] = useState(0);
+
+  // Animation state for value overlays
+  const [shownValues, setShownValues] = useState<string[]>(() => [...byteValues]);
+  const [spanPhase, setSpanPhase] = useState<'idle' | 'exit' | 'enter'>('idle');
+  const [phaseKey, setPhaseKey] = useState(0);
+  const [typeKeys, setTypeKeys] = useState<number[]>(Array(BASE_CELLS).fill(0));
+
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  // Always-fresh reference to shownValues, avoids stale closure in useEffect
+  const shownValuesRef = useRef(shownValues);
+  shownValuesRef.current = shownValues;
 
   useEffect(() => {
     if (!dropdown) return;
@@ -43,11 +87,81 @@ export function ByteBar() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [dropdown]);
 
-  function openDropdown(
-    cellIdx: number,
-    options: FieldOption[],
-    e: MouseEvent<HTMLButtonElement>
-  ) {
+  // Get/set a cell value within the current section
+  function getCellValue(i: number): string {
+    return allBytes[section * BASE_CELLS + i] ?? '';
+  }
+
+  function setCellValue(i: number, v: string) {
+    setAllBytes((prev) => {
+      const next = [...prev];
+      const idx = section * BASE_CELLS + i;
+      while (next.length <= idx) next.push('');
+      next[idx] = v;
+      return next;
+    });
+  }
+
+  // Shared animation driver — called for both cmd changes and section navigation
+  function animate(newShown: string[], oldShown: string[]) {
+    const hasOld = oldShown.some((v) => v !== '');
+    if (!hasOld) {
+      setShownValues(newShown);
+      setSpanPhase('enter');
+      setPhaseKey((k) => k + 1);
+      setTimeout(() => setSpanPhase('idle'), 350);
+      return;
+    }
+    setSpanPhase('exit');
+    setPhaseKey((k) => k + 1);
+    const exitTotal = EXIT_MS + STAGGER_MS * (BASE_CELLS - 1);
+    setTimeout(() => {
+      setShownValues(newShown);
+      setSpanPhase('enter');
+      setPhaseKey((k) => k + 1);
+      setTimeout(() => setSpanPhase('idle'), 350);
+    }, exitTotal);
+  }
+
+  // Detect cmd change: store's byteValues changed → new cmd selected
+  useEffect(() => {
+    const isDifferent = byteValues.some((v, i) => v !== (allBytes[i] ?? ''));
+    if (!isDifferent && section === 0) return;
+
+    const newShown = [...byteValues];
+    animate(newShown, shownValuesRef.current);
+    setAllBytes([...byteValues]);
+    setSection(0);
+    setLabelKey((k) => k + 1);
+    setTypeKeys(Array(BASE_CELLS).fill(0));
+  }, [byteValues]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function goBack() {
+    if (section === 0) return;
+    const newSec = section - 1;
+    const newShown = Array.from(
+      { length: BASE_CELLS },
+      (_, i) => allBytes[newSec * BASE_CELLS + i] ?? ''
+    );
+    animate(newShown, shownValuesRef.current);
+    setSection(newSec);
+    setLabelKey((k) => k + 1);
+    setTypeKeys(Array(BASE_CELLS).fill(0));
+  }
+
+  function goForward() {
+    const newSec = section + 1;
+    const newShown = Array.from(
+      { length: BASE_CELLS },
+      (_, i) => allBytes[newSec * BASE_CELLS + i] ?? ''
+    );
+    animate(newShown, shownValuesRef.current);
+    setSection(newSec);
+    setLabelKey((k) => k + 1);
+    setTypeKeys(Array(BASE_CELLS).fill(0));
+  }
+
+  function openDropdown(cellIdx: number, options: FieldOption[], e: MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
     const input = inputRefs.current[cellIdx];
     if (!input) return;
@@ -59,94 +173,221 @@ export function ByteBar() {
   }
 
   async function handleSend() {
-    const bytes: number[] = [];
-    for (let i = 0; i < NUM_CELLS; i++) {
-      const v = byteValues[i].trim();
-      if (v) {
-        const n = parseInt(v, 16);
-        if (!isNaN(n)) bytes.push(n & 0xff);
-      }
+    if (def?.directAction === 'connect') {
+      await api.connect().catch(() => {});
+      return;
     }
-    if (bytes.length === 0) return;
-    await api.raw(bytes).catch(() => {});
+    if (def?.directAction === 'disconnect') {
+      await api.disconnect().catch(() => {});
+      return;
+    }
+
+    // Find the last non-empty byte across all sections
+    let lastNonEmpty = -1;
+    for (let i = allBytes.length - 1; i >= 0; i--) {
+      if (allBytes[i]?.trim()) { lastNonEmpty = i; break; }
+    }
+    if (lastNonEmpty < 0) return;
+
+    // Build payload: bytes 0..lastNonEmpty, empties become 0x00
+    const bytes: number[] = [];
+    for (let i = 0; i <= lastNonEmpty; i++) {
+      const v = allBytes[i]?.trim();
+      const n = v ? parseInt(v, 16) : 0;
+      bytes.push(isNaN(n) ? 0 : n & 0xff);
+    }
+
+    if (def?.isUserCmd && def.userCmdName) {
+      await api.userCmd(def.userCmdName, bytes[1] ?? 0, bytes.slice(2)).catch(() => {});
+    } else {
+      await api.raw(bytes).catch(() => {});
+    }
   }
 
+  const startByte = section * BASE_CELLS;
+  const endByte = startByte + BASE_CELLS - 1;
+
   return (
-    <div className="px-4 pt-2.5 pb-2 border-b border-gray-800 bg-gray-900 shrink-0">
-      <div className="flex gap-2 w-full">
-        {Array.from({ length: NUM_CELLS }, (_, i) => {
-          const field = def?.fields[i];
-          const isPid = i === 0 && !!def;
+    <div className="px-4 pt-2 pb-2 border-b border-gray-800 bg-gray-900 shrink-0">
+      {/* Section indicator row */}
+      <div className="flex items-center justify-center gap-1.5 mb-3">
+        <button
+          onClick={goBack}
+          disabled={section === 0}
+          className={`text-[10px] px-1 rounded transition-colors ${
+            section === 0
+              ? 'text-gray-700 cursor-not-allowed'
+              : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          ‹
+        </button>
+        <span
+          key={`sec-label-${labelKey}`}
+          className="text-[10px] text-gray-600 font-mono label-fade select-none min-w-[72px] text-center"
+        >
+          Bytes {startByte}–{endByte}
+        </span>
+        <button
+          onClick={goForward}
+          className="text-[10px] px-1 rounded text-gray-500 hover:text-gray-300 transition-colors"
+        >
+          ›
+        </button>
+      </div>
 
-          return (
-            <div key={i} className="flex-1 flex flex-col min-w-0">
-              {/* Label row */}
-              <div className="flex items-center justify-between mb-1 h-4">
-                <span
-                  className={`text-[10px] truncate ${
-                    field ? 'text-gray-400' : 'text-gray-700'
-                  }`}
-                >
-                  {field ? toTitleCase(field.label) : ''}
-                </span>
-                {field && (
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    {field.options && (
-                      <button
-                        className="text-[10px] text-gray-500 hover:text-blue-400 px-0.5 leading-none transition-colors"
-                        onClick={(e) => openDropdown(i, field.options!, e)}
-                      >
-                        ▾
-                      </button>
-                    )}
-                    <button
-                      className="text-[10px] text-gray-600 hover:text-gray-400 px-0.5 leading-none transition-colors"
-                      onMouseEnter={(e) => showTip(e.currentTarget, field.tip)}
-                      onMouseLeave={hideTip}
+      {/* Cells row with flanking nav buttons */}
+      <div className="flex items-end gap-1.5">
+        <NavBtn onClick={goBack} disabled={section === 0}>‹</NavBtn>
+
+        <div className="flex-1 flex gap-2 min-w-0">
+          {Array.from({ length: BASE_CELLS }, (_, i) => {
+            const absIdx = startByte + i;
+            const field = def?.fields[absIdx] ?? def?.fields[i]; // fields[i] for non-paginated cmds
+            // Only first section uses prefilled fields from def; higher sections are free-form
+            const fieldDef = section === 0 ? def?.fields[i] : undefined;
+            const isLocked = !!def && section === 0 && (i === 0 || (i === 1 && !!def.isUserCmd));
+
+            const cellValue = getCellValue(i);
+            const cellShown = shownValues[i] ?? '';
+
+            const spanAnimClass =
+              spanPhase === 'exit'  ? 'count-exit' :
+              spanPhase === 'enter' ? 'count-tick' :
+              typeKeys[i] > 0       ? 'type-fade'  : '';
+            const spanAnimStyle =
+              spanPhase !== 'idle'
+                ? { animationDelay: `${i * STAGGER_MS}ms` }
+                : undefined;
+
+            return (
+              <div key={i} className="flex-1 flex flex-col min-w-0">
+                {/* Label row: absolute byte index + field name */}
+                <div className="flex items-baseline justify-between mb-1 h-4 overflow-hidden pr-0.5">
+                  <div className="flex items-baseline gap-2 min-w-0 overflow-hidden">
+                    <span
+                      key={`idx-${labelKey}-${i}`}
+                      className="text-[9px] text-gray-600 font-mono shrink-0 label-fade"
                     >
-                      ℹ
-                    </button>
+                      {absIdx}
+                    </span>
+                    <span
+                      key={`lbl-${labelKey}-${i}`}
+                      className={`text-[10px] truncate label-fade ${
+                        fieldDef ? 'text-gray-400' : 'text-gray-700'
+                      }`}
+                    >
+                      {fieldDef ? toTitleCase(fieldDef.label) : ''}
+                    </span>
                   </div>
-                )}
-              </div>
+                  {fieldDef && (
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {fieldDef.options && (
+                        <button
+                          className="text-[10px] text-gray-500 hover:text-blue-400 px-0.5 leading-none transition-colors"
+                          onClick={(e) => openDropdown(i, fieldDef.options!, e)}
+                        >
+                          ▾
+                        </button>
+                      )}
+                      <button
+                        className="text-[10px] text-gray-600 hover:text-gray-400 px-0.5 leading-none transition-colors"
+                        onMouseEnter={(e) => showTip(e.currentTarget, fieldDef.tip)}
+                        onMouseLeave={hideTip}
+                      >
+                        ℹ
+                      </button>
+                    </div>
+                  )}
+                </div>
 
-              {/* Input wrapper */}
-              <div className="relative group">
-                <input
-                  ref={(el) => {
-                    inputRefs.current[i] = el;
-                  }}
-                  maxLength={2}
-                  value={byteValues[i]}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                    if (!isPid)
-                      setByteValue(i, e.target.value.toUpperCase().slice(0, 2));
-                  }}
-                  placeholder="--"
-                  disabled={isPid}
-                  className={`w-full px-1 py-1.5 rounded text-xs font-mono text-center focus:outline-none transition-colors border ${
-                    isPid
-                      ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-900 border-gray-700 text-gray-200 focus:border-blue-500'
+                {/* Input cell */}
+                <div
+                  className={`relative group rounded border transition-colors ${
+                    isLocked
+                      ? 'bg-gray-800 border-gray-700'
+                      : 'bg-gray-900 border-gray-700 focus-within:border-blue-500'
                   }`}
-                />
-                <button
-                  className="absolute top-0.5 right-0.5 w-[13px] h-[13px] text-[8px] flex items-center justify-center bg-gray-900/90 text-gray-600 hover:text-red-400 rounded cursor-pointer z-10 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => {
-                    if (isPid) {
-                      setActiveCmd(null);
-                    } else {
-                      setByteValue(i, '');
-                      inputRefs.current[i]?.focus();
-                    }
-                  }}
                 >
-                  ✕
-                </button>
+                  <input
+                    ref={(el) => { inputRefs.current[i] = el; }}
+                    maxLength={2}
+                    value={cellValue}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                      if (!isLocked) {
+                        const v = e.target.value
+                          .replace(/[^0-9a-fA-F]/g, '')
+                          .toUpperCase()
+                          .slice(0, 2);
+                        setCellValue(i, v);
+                        // Keep shownValues in sync (typing, not a cmd/section change)
+                        if (section === 0) {
+                          setByteValue(i, v);
+                          setShownValues((prev) => {
+                            const n = [...prev];
+                            n[i] = v;
+                            return n;
+                          });
+                          setTypeKeys((prev) => {
+                            const n = [...prev];
+                            n[i]++;
+                            return n;
+                          });
+                        }
+                      }
+                    }}
+                    placeholder=""
+                    disabled={isLocked}
+                    className={`w-full px-1 py-1.5 rounded text-xs font-mono text-center focus:outline-none bg-transparent border-0 ${
+                      isLocked ? 'cursor-not-allowed' : ''
+                    }`}
+                    style={{
+                      color: 'transparent',
+                      caretColor: isLocked ? 'transparent' : '#9ca3af',
+                    }}
+                  />
+                  {/* Animated value overlay */}
+                  <span
+                    key={`${spanPhase}-${phaseKey}-${typeKeys[i]}-${i}`}
+                    className={`absolute inset-0 flex items-center justify-center text-xs font-mono pointer-events-none ${
+                      isLocked
+                        ? 'text-gray-500'
+                        : cellShown
+                        ? 'text-gray-200'
+                        : 'text-gray-600'
+                    } ${spanAnimClass}`}
+                    style={spanAnimStyle}
+                  >
+                    {cellShown || '00'}
+                  </span>
+                  <button
+                    className="absolute top-0.5 right-0.5 w-[13px] h-[13px] text-[8px] flex items-center justify-center bg-gray-900/90 text-gray-600 hover:text-red-400 rounded cursor-pointer z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => {
+                      if (isLocked) {
+                        setActiveCmd(null);
+                      } else {
+                        setCellValue(i, '');
+                        if (section === 0) {
+                          setByteValue(i, '');
+                          setShownValues((prev) => {
+                            const n = [...prev];
+                            n[i] = '';
+                            return n;
+                          });
+                        }
+                        inputRefs.current[i]?.focus();
+                      }
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+
+        <NavBtn onClick={goForward}>›</NavBtn>
       </div>
 
       <button
@@ -168,7 +409,16 @@ export function ByteBar() {
                 key={opt.val}
                 className="px-2.5 py-1 text-xs font-mono hover:bg-gray-700 cursor-pointer flex items-center gap-2 transition-colors"
                 onClick={() => {
-                  setByteValue(dropdown.cellIdx, opt.val);
+                  const i = dropdown.cellIdx;
+                  setCellValue(i, opt.val);
+                  if (section === 0) {
+                    setByteValue(i, opt.val);
+                    setShownValues((prev) => {
+                      const n = [...prev];
+                      n[i] = opt.val;
+                      return n;
+                    });
+                  }
                   setDropdown(null);
                 }}
               >
