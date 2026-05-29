@@ -1,0 +1,27 @@
+[connection]
+server_ip   = "127.0.0.1"
+server_port = 5555
+protocol    = "udp"   # "udp" | "tcp"
+timeout_ms  = 1000
+
+[server]
+listen_port = 8080
+
+# ── Custom commands ───────────────────────────────────────────────
+# Define fields per byte offset for decoding and the byte-bar UI.
+# Standard XCP commands (FF, FD, FA …) are decoded by the built-in decoder;
+# entries here only apply to user-defined command codes (0x00–0xEF range).
+#
+# Example:
+# [[custom_commands]]
+# code = 0xF1
+# name = "read_sensor"
+# fields = [
+#   { name = "sensor_id", offset = 1, size = 2, type = "u16" },
+#   { name = "mode",      offset = 3, size = 1, type = "u8",
+#     options = [
+#       { value = 0x01, label = "fast" },
+#       { value = 0x02, label = "slow" },
+#     ]
+#   },
+# ]
