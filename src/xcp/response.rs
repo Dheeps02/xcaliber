@@ -13,6 +13,7 @@ pub enum XcpResponse {
     SetMta,
     Upload(UploadResponse),
     Download,
+    BuildChecksum(BuildChecksumResponse),
     Error(ErrorResponse),
     /// Raw positive response with unknown payload.
     PositiveRaw { payload: Vec<u8> },
@@ -63,6 +64,12 @@ pub struct GetIdResponse {
 #[derive(Debug, Clone, Serialize)]
 pub struct UploadResponse {
     pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BuildChecksumResponse {
+    pub checksum_type: u8,
+    pub checksum: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -159,8 +166,55 @@ impl XcpResponse {
             Some(0xF5) => {
                 Ok(Self::Upload(UploadResponse { data: payload[1..].to_vec() }))
             }
+            Some(0xF4) => {
+                // SHORT_UPLOAD — same response layout as UPLOAD
+                Ok(Self::Upload(UploadResponse { data: payload[1..].to_vec() }))
+            }
+            Some(0xF3) => {
+                if payload.len() < 8 {
+                    return Err(XcpError::FrameTooShort(payload.len()));
+                }
+                let checksum_type = payload[1];
+                let checksum = u32::from_le_bytes([payload[4], payload[5], payload[6], payload[7]]);
+                Ok(Self::BuildChecksum(BuildChecksumResponse { checksum_type, checksum }))
+            }
             Some(0xF0) => Ok(Self::Download),
             _ => Ok(Self::PositiveRaw { payload: payload.to_vec() }),
+        }
+    }
+
+    /// Reconstruct the raw payload bytes for display in the packet trace.
+    pub fn encode(&self) -> Vec<u8> {
+        match self {
+            Self::Connect(r) => {
+                let [dto_lo, dto_hi] = r.max_dto.to_le_bytes();
+                vec![0xFF, r.resource, r.comm_mode_basic, 0x00, r.max_cto, dto_lo, dto_hi, r.protocol_version]
+            }
+            Self::Disconnect => vec![0xFF],
+            Self::GetStatus(r) => {
+                let [id_lo, id_hi] = r.session_config_id.to_le_bytes();
+                vec![0xFF, r.session_status, r.resource_protection, 0x00, id_lo, id_hi]
+            }
+            Self::GetCommModeInfo(r) => {
+                vec![0xFF, 0x00, r.comm_mode_optional, 0x00, r.max_bs, r.min_st, r.queue_size, r.driver_version]
+            }
+            Self::GetId(r) => {
+                let len = r.length.to_le_bytes();
+                vec![0xFF, r.id_type, 0x00, 0x00, len[0], len[1], len[2], len[3]]
+            }
+            Self::SetMta => vec![0xFF],
+            Self::Upload(r) => {
+                let mut v = vec![0xFF];
+                v.extend_from_slice(&r.data);
+                v
+            }
+            Self::Download => vec![0xFF],
+            Self::BuildChecksum(r) => {
+                let cs = r.checksum.to_le_bytes();
+                vec![0xFF, r.checksum_type, 0x00, 0x00, cs[0], cs[1], cs[2], cs[3]]
+            }
+            Self::Error(e) => vec![0xFE, e.code],
+            Self::PositiveRaw { payload } => payload.clone(),
         }
     }
 
@@ -188,6 +242,10 @@ impl XcpResponse {
             Self::SetMta => "+OK SET_MTA".into(),
             Self::Upload(r) => format!("+OK UPLOAD — {} bytes", r.data.len()),
             Self::Download => "+OK DOWNLOAD".into(),
+            Self::BuildChecksum(r) => format!(
+                "+OK BUILD_CHECKSUM — type=0x{:02X} checksum=0x{:08X}",
+                r.checksum_type, r.checksum
+            ),
             Self::Error(e) => format!("-ERR {} (0x{:02X})", e.name, e.code),
             Self::PositiveRaw { payload } => format!("+OK raw {} bytes", payload.len()),
         }

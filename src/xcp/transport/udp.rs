@@ -10,11 +10,14 @@ pub struct UdpTransport {
 }
 
 impl UdpTransport {
-    pub async fn connect(ip: &str, port: u16) -> Result<Self, XcpError> {
+    pub async fn connect(ip: &str, port: u16, bind_ip: Option<&str>) -> Result<Self, XcpError> {
         let remote: SocketAddr = format!("{ip}:{port}")
             .parse()
             .map_err(|e: std::net::AddrParseError| XcpError::Transport(e.to_string()))?;
-        let local: SocketAddr = "0.0.0.0:0".parse().unwrap();
+        let local_host = bind_ip.filter(|s| !s.is_empty()).unwrap_or("0.0.0.0");
+        let local: SocketAddr = format!("{local_host}:0")
+            .parse()
+            .map_err(|e: std::net::AddrParseError| XcpError::Transport(e.to_string()))?;
         let socket = UdpSocket::bind(local)
             .await
             .map_err(|e| XcpError::Transport(e.to_string()))?;

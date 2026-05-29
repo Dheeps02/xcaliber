@@ -5,7 +5,8 @@ use serde::Serialize;
 use crate::{config::Config, session::XcpSession};
 
 pub struct AppState {
-    pub config: Config,
+    pub config: Mutex<Config>,
+    pub config_path: String,
     /// XCP session — None when disconnected.
     pub session: AsyncMutex<Option<XcpSession>>,
     /// SQLite for packet history — every TX/RX is INSERTed immediately.
@@ -27,7 +28,7 @@ pub struct PacketEntry {
 }
 
 impl AppState {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, config_path: String) -> Self {
         let db = Connection::open_in_memory().expect("sqlite open failed");
         db.execute_batch(
             "CREATE TABLE IF NOT EXISTS packets (
@@ -43,7 +44,8 @@ impl AppState {
 
         let (tx, _) = broadcast::channel(1024);
         Self {
-            config,
+            config: Mutex::new(config),
+            config_path,
             session: AsyncMutex::new(None),
             db: Mutex::new(db),
             tx,

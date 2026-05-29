@@ -12,9 +12,9 @@ fn main() {
     tauri::Builder::default()
         .setup(|_app| {
             tauri::async_runtime::spawn(async {
-                let cfg = config::Config::load("config.toml")
+                let (cfg, config_path) = config::Config::load_with_path("config.toml")
                     .expect("failed to load config.toml");
-                let state = Arc::new(http::state::AppState::new(cfg));
+                let state = Arc::new(http::state::AppState::new(cfg, config_path));
 
                 let router = Router::new()
                     .route("/events", get(http::sse::sse_handler))
@@ -27,8 +27,11 @@ fn main() {
                     .route("/api/command/raw",               axum::routing::post(http::routes::cmd_raw))
                     .route("/api/command/set-mta",          axum::routing::post(http::routes::cmd_set_mta))
                     .route("/api/command/upload",            axum::routing::post(http::routes::cmd_upload))
+                    .route("/api/command/download",          axum::routing::post(http::routes::cmd_download))
+                    .route("/api/command/user",              axum::routing::post(http::routes::cmd_user))
                     .route("/api/packets",    get(http::routes::get_packets))
-                    .route("/api/config",     get(http::routes::get_config))
+                    .route("/api/config",     get(http::routes::get_config).post(http::routes::update_config))
+                    .route("/api/network-interfaces", get(http::routes::get_network_interfaces))
                     .layer(CorsLayer::permissive())
                     .with_state(state);
 

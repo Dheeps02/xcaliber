@@ -29,9 +29,10 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # ---- Transport ----
 async-trait = "0.1"
 bytes = "1"
+network-interface = "2"
 
 # ---- Error handling ----
 thiserror = "2"
 
 [build-dependencies]
-tauri-build = { version = "2" }
+tauri-build = { version = "2", features = [] }
