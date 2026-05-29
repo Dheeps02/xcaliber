@@ -37,6 +37,24 @@ export interface CmdDef {
   pid: string;
   prefill?: Record<number, string>;
   fields: FieldDef[];
+  isUserCmd?: boolean;
+  userCmdName?: string;
+  directAction?: 'connect' | 'disconnect';
+  group?: string;
+}
+
+export interface CustomFieldDef {
+  name: string;
+  offset: number;
+  size: number;
+  type: string;
+}
+
+export interface CustomCommandConfig {
+  code: number;
+  name: string;
+  group?: string;
+  fields?: CustomFieldDef[];
 }
 
 export interface AppConfig {
@@ -45,8 +63,15 @@ export interface AppConfig {
     server_port: number;
     protocol: string;
     timeout_ms: number;
+    bind_ip?: string;
   };
   server: {
     listen_port: number;
   };
+  custom_commands?: CustomCommandConfig[];
+}
+
+export interface NetworkInterface {
+  name: string;
+  ips: string[];
 }
