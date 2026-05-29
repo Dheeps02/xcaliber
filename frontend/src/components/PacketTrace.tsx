@@ -8,10 +8,42 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppStore } from '../stores/app-store';
-import { toTitleCase, formatTime } from '../lib/utils';
+import { formatLabel, toTitleCase, formatTime } from '../lib/utils';
 import type { PacketEntry } from '../lib/types';
 
 type DirFilter = 'all' | 'tx' | 'rx';
+
+type PairGroup = { kind: 'pair'; tx: PacketEntry; rx: PacketEntry | null; key: number };
+type SoloGroup = { kind: 'solo'; packet: PacketEntry; key: number };
+type Group = PairGroup | SoloGroup;
+
+function buildGroups(packets: PacketEntry[]): Group[] {
+  const groups: Group[] = [];
+  let i = 0;
+  while (i < packets.length) {
+    const p = packets[i];
+    if (p.direction === 'tx') {
+      const next = packets[i + 1];
+      if (next && next.direction === 'rx') {
+        groups.push({ kind: 'pair', tx: p, rx: next, key: p.id });
+        i += 2;
+      } else {
+        groups.push({ kind: 'pair', tx: p, rx: null, key: p.id });
+        i += 1;
+      }
+    } else {
+      groups.push({ kind: 'solo', packet: p, key: p.id });
+      i += 1;
+    }
+  }
+  return groups;
+}
+
+function getCommandLabel(p: PacketEntry): string {
+  const d = p.decoded as Record<string, unknown>;
+  if (typeof d.command === 'string') return formatLabel(d.command);
+  return `0x${p.pid}`;
+}
 
 function flattenDecoded(decoded: Record<string, unknown>): [string, unknown][] {
   if (!decoded || typeof decoded !== 'object') return [];
@@ -31,6 +63,8 @@ function formatValue(v: unknown): string {
       ? `0x${v.toString(16).toUpperCase().padStart(2, '0')} (${v})`
       : String(v);
   if (typeof v === 'string') return v;
+  if (Array.isArray(v))
+    return v.map((b) => (typeof b === 'number' ? b.toString(16).toUpperCase().padStart(2, '0') : String(b))).join(' ');
   return JSON.stringify(v);
 }
 
@@ -40,11 +74,119 @@ function HexCell({ hex, dir }: { hex: string; dir: 'tx' | 'rx' }) {
   return (
     <>
       {hex.split(' ').map((b, i) => (
-        <span key={i} className={cls}>
-          {b}{' '}
-        </span>
+        <span key={i} className={cls}>{b} </span>
       ))}
     </>
+  );
+}
+
+function ExpandDetail({ p, colSpan, open }: { p: PacketEntry; colSpan: number; open: boolean }) {
+  const isErr = p.pid === 'FE';
+  const valueCls = isErr
+    ? 'text-red-400'
+    : p.direction === 'tx'
+    ? 'text-blue-400'
+    : 'text-green-400';
+  const allFields = flattenDecoded(p.decoded);
+  const rows = p.direction === 'tx'
+    ? allFields.filter(([k]) => k !== 'command')
+    : allFields;
+
+  return (
+    <tr className="bg-gray-900/60">
+      <td colSpan={colSpan} className="overflow-hidden p-0">
+        <div className={`expand-content ${open ? 'px-6 pb-3 pt-1' : 'closed'}`} style={{ maxHeight: open ? '300px' : undefined }}>
+          <div className={`text-[10px] mb-1.5 uppercase tracking-wider ${isErr ? 'text-red-500' : 'text-gray-500'}`}>
+            {p.direction === 'tx' ? `→ TX · PID 0x${p.pid}` : isErr ? `✕ ERR · PID 0x${p.pid}` : `← RX · PID 0x${p.pid}`}
+          </div>
+          <div className="space-y-0.5 text-xs">
+            {rows.length > 0 ? (
+              rows.map(([k, v]) => (
+                <div key={k}>
+                  <span className="w-36 inline-block text-gray-500">{toTitleCase(k)}</span>
+                  <span className={valueCls}>{formatValue(v)}</span>
+                </div>
+              ))
+            ) : (
+              <span className="text-gray-700 italic">no field data</span>
+            )}
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function ExpandDetailFlat({ p, open }: { p: PacketEntry; open: boolean }) {
+  const isErr = p.pid === 'FE';
+  const valueCls = isErr
+    ? 'text-red-400'
+    : p.direction === 'tx'
+    ? 'text-blue-400'
+    : 'text-green-400';
+  const allFields = flattenDecoded(p.decoded);
+  const rows = p.direction === 'tx'
+    ? allFields.filter(([k]) => k !== 'command')
+    : allFields;
+
+  return (
+    <div className="bg-gray-900/60 overflow-hidden">
+      <div className={`expand-content ${open ? 'px-6 pb-3 pt-1' : 'closed'}`} style={{ maxHeight: open ? '300px' : undefined }}>
+        <div className={`text-[10px] mb-1.5 uppercase tracking-wider ${isErr ? 'text-red-500' : 'text-gray-500'}`}>
+          {p.direction === 'tx' ? `→ TX · PID 0x${p.pid}` : isErr ? `✕ ERR · PID 0x${p.pid}` : `← RX · PID 0x${p.pid}`}
+        </div>
+        <div className="space-y-0.5 text-xs">
+          {rows.length > 0 ? (
+            rows.map(([k, v]) => (
+              <div key={k}>
+                <span className="w-36 inline-block text-gray-500">{toTitleCase(k)}</span>
+                <span className={valueCls}>{formatValue(v)}</span>
+              </div>
+            ))
+          ) : (
+            <span className="text-gray-700 italic">no field data</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function dirBadgeCls(p: PacketEntry) {
+  const isErr = p.pid === 'FE';
+  return p.direction === 'tx'
+    ? 'bg-[#1e3a8a] text-[#93c5fd] border border-[#3b82f6]'
+    : isErr
+    ? 'bg-red-900/30 text-red-400 border border-red-500/50'
+    : 'bg-[#064e3b] text-[#6ee7b7] border border-[#10b981]';
+}
+
+// ── Animated counter ──────────────────────────────────────────────
+
+function AnimatedCount({ value, label, colorCls }: { value: number; label: string; colorCls: string }) {
+  const prevRef = useRef(value);
+  const [animKey, setAnimKey] = useState(0);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    if (prevRef.current !== value) {
+      setClearing(value === 0 && prevRef.current > 0);
+      prevRef.current = value;
+      setAnimKey((k) => k + 1);
+    }
+  }, [value]);
+
+  return (
+    <span className={`${colorCls} inline-flex items-baseline gap-0.5 font-mono text-[10px] overflow-hidden`}>
+      <span className="opacity-60">{label}:</span>
+      <span
+        key={animKey}
+        className={clearing ? 'count-clear' : animKey > 0 ? 'count-tick' : ''}
+        style={{ display: 'inline-block' }}
+      >
+        {value}
+      </span>
+    </span>
   );
 }
 
@@ -69,16 +211,13 @@ function PidPopover({ anchor, pids, selected, onToggle, onAll, onClose }: PidPop
   useEffect(() => {
     function onDown(e: globalThis.MouseEvent) {
       const t = e.target as Node;
-      if (popRef.current && !popRef.current.contains(t) && !anchor.contains(t))
-        onClose();
+      if (popRef.current && !popRef.current.contains(t) && !anchor.contains(t)) onClose();
     }
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [anchor, onClose]);
 
-  const visible = pids.filter(
-    (p) => !search || p.toUpperCase().includes(search.toUpperCase())
-  );
+  const visible = pids.filter((p) => !search || p.toUpperCase().includes(search.toUpperCase()));
 
   return createPortal(
     <div
@@ -105,20 +244,10 @@ function PidPopover({ anchor, pids, selected, onToggle, onAll, onClose }: PidPop
               className="flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-gray-800 transition-colors"
               onClick={() => onToggle(pid)}
             >
-              <span
-                className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 text-[8px] ${
-                  active
-                    ? 'bg-blue-500 border-blue-500 text-white'
-                    : 'border-gray-600 text-transparent'
-                }`}
-              >
+              <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 text-[8px] ${active ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-600 text-transparent'}`}>
                 ✓
               </span>
-              <span
-                className={`font-mono text-xs ${
-                  active ? 'text-blue-300' : 'text-gray-400'
-                }`}
-              >
+              <span className={`font-mono text-xs ${active ? 'text-blue-300' : 'text-gray-400'}`}>
                 0x{pid}
               </span>
             </div>
@@ -126,16 +255,10 @@ function PidPopover({ anchor, pids, selected, onToggle, onAll, onClose }: PidPop
         })}
       </div>
       <div className="p-1.5 border-t border-gray-800 flex gap-1">
-        <button
-          onClick={onAll}
-          className="flex-1 py-0.5 rounded text-[10px] text-gray-400 hover:text-gray-200 hover:bg-gray-700 border border-gray-700 transition-colors"
-        >
+        <button onClick={onAll} className="flex-1 py-0.5 rounded text-[10px] text-gray-400 hover:text-gray-200 hover:bg-gray-700 border border-gray-700 transition-colors">
           All
         </button>
-        <button
-          onClick={() => { onAll(); }}
-          className="flex-1 py-0.5 rounded text-[10px] text-gray-400 hover:text-gray-200 hover:bg-gray-700 border border-gray-700 transition-colors"
-        >
+        <button onClick={onAll} className="flex-1 py-0.5 rounded text-[10px] text-gray-400 hover:text-gray-200 hover:bg-gray-700 border border-gray-700 transition-colors">
           Clear
         </button>
       </div>
@@ -146,6 +269,9 @@ function PidPopover({ anchor, pids, selected, onToggle, onAll, onClose }: PidPop
 
 // ── Main component ────────────────────────────────────────────────
 
+const COL_SPAN = 5;
+const ALT_BG = ['', 'bg-gray-800/15'] as const;
+
 export function PacketTrace() {
   const packets = useAppStore((s) => s.packets);
   const txCount = useAppStore((s) => s.txCount);
@@ -153,22 +279,67 @@ export function PacketTrace() {
   const autoScroll = useAppStore((s) => s.autoScroll);
   const setAutoScroll = useAppStore((s) => s.setAutoScroll);
   const clearPackets = useAppStore((s) => s.clearPackets);
+  const displayTimeoutMs = useAppStore((s) => s.displayTimeoutMs);
+  const animationWatermark = useAppStore((s) => s.animationWatermark);
 
   const [dirFilter, setDirFilter] = useState<DirFilter>('all');
   const [selectedPids, setSelectedPids] = useState<Set<string>>(new Set());
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
+  const [isClearing, setIsClearing] = useState(false);
+  const [, setVersion] = useState(0);
+  const [colWidths, setColWidths] = useState([160, 60, 52, 120]);
   const [traceVisible, setTraceVisible] = useState(true);
   const [pidAnchor, setPidAnchor] = useState<HTMLElement | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Track which packet IDs have already started their entry animation to prevent double-fire
+  const seenForAnimation = useRef<Set<number>>(new Set());
+  const [animatingIds, setAnimatingIds] = useState<Set<number>>(new Set());
+  // Stagger delay (ms) per group key, computed once at arrival time
+  const groupStaggerDelays = useRef<Map<number, number>>(new Map());
+  // All pending-cleanup IDs across batches so timer cancellation doesn't leak them
+  const pendingCleanupIds = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [packets, autoScroll]);
 
-  const allPids = useMemo(
-    () => [...new Set(packets.map((p) => p.pid))].sort(),
-    [packets]
-  );
+  // Determine newly-arrived packets and schedule their entry animation
+  useEffect(() => {
+    if (animationWatermark === null) return;
+    const newIds = packets
+      .filter((p) => p.id > animationWatermark && !seenForAnimation.current.has(p.id))
+      .map((p) => p.id);
+    if (newIds.length === 0) return;
+    newIds.forEach((id) => seenForAnimation.current.add(id));
+
+    // Assign per-group stagger delays once, at arrival time
+    const newIdSet = new Set(newIds);
+    let staggerIdx = 0;
+    for (const g of groups) {
+      const isNew = g.kind === 'pair' ? newIdSet.has(g.tx.id) : newIdSet.has(g.packet.id);
+      if (isNew) {
+        groupStaggerDelays.current.set(g.key, staggerIdx * 150);
+        staggerIdx++;
+      }
+    }
+
+    // Accumulate IDs for cleanup — so canceling an earlier timer doesn't strand old IDs
+    newIds.forEach((id) => pendingCleanupIds.current.add(id));
+    setAnimatingIds((prev) => new Set([...prev, ...newIds]));
+    const t = setTimeout(() => {
+      setAnimatingIds((prev) => {
+        const s = new Set(prev);
+        pendingCleanupIds.current.forEach((id) => s.delete(id));
+        pendingCleanupIds.current.clear();
+        return s;
+      });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [packets, animationWatermark]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const allPids = useMemo(() => [...new Set(packets.map((p) => p.pid))].sort(), [packets]);
 
   const filtered = useMemo(
     () =>
@@ -180,8 +351,66 @@ export function PacketTrace() {
     [packets, dirFilter, selectedPids]
   );
 
+  const groups = useMemo(() => buildGroups(filtered), [filtered]);
+
+  // Collapse/Expand All toggle state
+  const allPairKeys = useMemo(
+    () => groups.filter((g): g is PairGroup => g.kind === 'pair').map((g) => g.key),
+    [groups]
+  );
+  const allCollapsed = allPairKeys.length > 0 && allPairKeys.every((k) => collapsedGroups.has(k));
+
+  useEffect(() => {
+    const now = Date.now();
+    const pendingTimes = groups
+      .filter((g): g is PairGroup => g.kind === 'pair' && g.rx === null)
+      .map((g) => g.tx.timestamp_ms)
+      .filter((t) => now - t < displayTimeoutMs);
+    if (pendingTimes.length === 0) return;
+    const delay = displayTimeoutMs - (now - Math.min(...pendingTimes)) + 50;
+    const id = setTimeout(() => setVersion((v) => v + 1), delay);
+    return () => clearTimeout(id);
+  }, [groups, displayTimeoutMs]);
+
   function toggleRow(p: PacketEntry) {
-    setExpandedId((prev) => (prev === p.id ? null : p.id));
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(p.id)) next.delete(p.id);
+      else next.add(p.id);
+      return next;
+    });
+  }
+
+  function toggleGroup(key: number, e: React.MouseEvent) {
+    e.stopPropagation();
+    setCollapsedGroups((prev) => {
+      const s = new Set(prev);
+      if (s.has(key)) s.delete(key); else s.add(key);
+      return s;
+    });
+  }
+
+  function collapseAll() {
+    setCollapsedGroups(new Set(allPairKeys));
+  }
+
+  function expandAll() {
+    setCollapsedGroups(new Set());
+  }
+
+  function handleClear() {
+    if (packets.length === 0) return;
+    setIsClearing(true);
+    setTimeout(() => {
+      clearPackets();
+      setIsClearing(false);
+      setCollapsedGroups(new Set());
+      setExpandedIds(new Set());
+      setAnimatingIds(new Set());
+      seenForAnimation.current.clear();
+      groupStaggerDelays.current.clear();
+      pendingCleanupIds.current.clear();
+    }, 220);
   }
 
   function togglePid(pid: string) {
@@ -193,67 +422,83 @@ export function PacketTrace() {
     });
   }
 
-  const pidActive = selectedPids.size > 0;
+  function startResize(colIdx: number, e: React.MouseEvent) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = colWidths[colIdx];
+    function onMove(ev: globalThis.MouseEvent) {
+      const delta = ev.clientX - startX;
+      setColWidths(prev => {
+        const next = [...prev];
+        next[colIdx] = Math.max(40, startWidth + delta);
+        return next;
+      });
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 h-9 border-b border-gray-800 bg-gray-900 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-400">Packet Trace</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-medium text-gray-400 shrink-0">Packet Trace</span>
           <div className="flex items-center gap-1">
             {(['all', 'tx', 'rx'] as DirFilter[]).map((d) => (
               <button
                 key={d}
                 onClick={() => setDirFilter(d)}
                 className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
-                  dirFilter === d
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                  dirFilter === d ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
                 }`}
               >
                 {d === 'all' ? 'All' : d.toUpperCase()}
               </button>
             ))}
           </div>
-          {/* PID filter button */}
           <button
             onClick={(e: MouseEvent<HTMLButtonElement>) =>
               setPidAnchor((prev) => (prev ? null : e.currentTarget))
             }
             className={`relative w-6 h-6 rounded flex items-center justify-center transition-colors hover:bg-gray-800 ${
-              pidActive ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'
+              selectedPids.size > 0 ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'
             }`}
             title="Filter by PID"
           >
             <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
               <path d="M1 2.5A.5.5 0 0 1 1.5 2h13a.5.5 0 0 1 .35.854L10 7.707V13.5a.5.5 0 0 1-.223.416l-3 2A.5.5 0 0 1 6 15.5V7.707L1.15 2.854A.5.5 0 0 1 1 2.5z" />
             </svg>
-            {pidActive && (
+            {selectedPids.size > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full text-[7px] text-white flex items-center justify-center">
                 {selectedPids.size}
               </span>
             )}
           </button>
+          <button
+            onClick={allCollapsed ? expandAll : collapseAll}
+            className="px-1.5 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors shrink-0"
+          >
+            {allCollapsed ? '⊞ Expand All' : '⊟ Collapse All'}
+          </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-[10px] font-mono">
-            <span className="text-blue-400">TX: {txCount}</span>
-            <span className="text-gray-700">|</span>
-            <span className="text-green-400">RX: {rxCount}</span>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <AnimatedCount value={txCount} label="TX" colorCls="text-blue-400" />
+            <span className="text-gray-700 text-[10px]">|</span>
+            <AnimatedCount value={rxCount} label="RX" colorCls="text-green-400" />
           </div>
           <label className="flex items-center gap-1.5 text-[10px] text-gray-500 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={autoScroll}
-              onChange={(e) => setAutoScroll(e.target.checked)}
-              className="accent-blue-500"
-            />
+            <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} className="accent-blue-500" />
             Auto-scroll
           </label>
           <button
-            onClick={clearPackets}
+            onClick={handleClear}
             className="px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors"
           >
             Clear
@@ -269,90 +514,176 @@ export function PacketTrace() {
 
       {/* Table */}
       {traceVisible && (
-        <div className="flex-1 overflow-y-auto font-mono text-xs">
-          <table className="w-full border-collapse">
+        <div className="flex-1 overflow-y-auto trace-mono text-xs" style={{ transform: 'translateZ(0)' }}>
+          <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: colWidths[0] }} />
+              <col style={{ width: colWidths[1] }} />
+              <col style={{ width: colWidths[2] }} />
+              <col style={{ width: colWidths[3] }} />
+              <col />
+            </colgroup>
             <thead className="sticky top-0 bg-gray-900 z-10">
-              <tr className="text-left text-[10px] text-gray-500 uppercase tracking-wider">
-                <th className="px-3 py-2 w-10">Dir</th>
-                <th className="px-3 py-2 w-12">Ctr</th>
-                <th className="px-3 py-2 w-32">Time</th>
+              <tr className="text-left text-[10px] text-gray-500 uppercase tracking-wider select-none">
+                <th className="px-3 py-2 relative overflow-hidden">Command
+                  <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(0, e)} />
+                </th>
+                <th className="px-3 py-2 relative overflow-hidden">DIR
+                  <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(1, e)} />
+                </th>
+                <th className="px-3 py-2 relative overflow-hidden">CTR
+                  <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(2, e)} />
+                </th>
+                <th className="px-3 py-2 relative overflow-hidden">Time
+                  <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(3, e)} />
+                </th>
                 <th className="px-3 py-2">Hex</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => {
-                const isExpanded = expandedId === p.id;
-                const isErr = p.pid === 'FE';
-                const badgeCls =
-                  p.direction === 'tx'
-                    ? 'bg-[#1e3a8a] text-[#93c5fd] border border-[#3b82f6]'
-                    : isErr
-                    ? 'bg-red-900/30 text-red-400 border border-red-500/50'
-                    : 'bg-[#064e3b] text-[#6ee7b7] border border-[#10b981]';
-                const valueCls = isErr
-                  ? 'text-red-400'
-                  : p.direction === 'tx'
-                  ? 'text-blue-400'
-                  : 'text-green-400';
-                const decoded = flattenDecoded(p.decoded);
+              {groups.map((g, gi) => {
+                const altBg = ALT_BG[gi % 2];
 
-                return (
-                  <Fragment key={p.id}>
-                    <tr
-                      className={`border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors ${
-                        isExpanded ? 'bg-gray-800/20' : ''
-                      }`}
-                      onClick={() => toggleRow(p)}
-                    >
-                      <td className="px-3 py-2">
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badgeCls}`}
-                        >
-                          {p.direction.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-gray-500">{p.counter}</td>
-                      <td className="px-3 py-2 text-gray-500">
-                        {formatTime(p.timestamp_ms)}
-                      </td>
-                      <td className="px-3 py-2">
-                        <HexCell hex={p.hex} dir={p.direction} />
-                      </td>
-                    </tr>
+                if (g.kind === 'pair') {
+                  const isGroupCollapsed = collapsedGroups.has(g.key);
+                  const { tx, rx } = g;
+                  const hasPair = rx !== null;
+                  const cmdLabel = getCommandLabel(tx);
+                  const isTimedOut = !hasPair && Date.now() - tx.timestamp_ms > displayTimeoutMs;
+                  const newTx = animatingIds.has(tx.id);
+                  const newRx = rx !== null && animatingIds.has(rx.id);
+                  const groupDelay = groupStaggerDelays.current.get(g.key) ?? 0;
 
-                    {isExpanded && (
-                      <tr className="bg-gray-900/60">
-                        <td colSpan={4} className="px-6 pb-3 pt-1">
-                          <div
-                            className={`text-[10px] mb-1.5 uppercase tracking-wider ${
-                              isErr ? 'text-red-500' : 'text-gray-500'
-                            }`}
-                          >
-                            {p.direction === 'tx'
-                              ? `→ TX · PID 0x${p.pid}`
-                              : isErr
-                              ? `✕ ERR · PID 0x${p.pid}`
-                              : `← RX · PID 0x${p.pid}`}
+                  return (
+                    <Fragment key={g.key}>
+                      {/* ── Group title row ──────────────────────── */}
+                      <tr
+                        className={`border-t border-gray-800/60 cursor-pointer select-none ${altBg} ${newTx ? 'packet-new' : ''} ${isClearing ? 'row-out' : ''}`}
+                        style={newTx ? { animationDelay: `${groupDelay}ms` } : undefined}
+                        onClick={(e) => toggleGroup(g.key, e)}
+                      >
+                        <td className="px-2 py-1">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              className="text-gray-500 hover:text-gray-300 text-[10px] w-3 shrink-0 leading-none transition-colors"
+                              onClick={(e) => toggleGroup(g.key, e)}
+                              title={isGroupCollapsed ? 'Expand' : 'Collapse'}
+                            >
+                              {isGroupCollapsed ? '▸' : '▾'}
+                            </button>
+                            <span className="text-gray-300 font-medium text-[11px]">{cmdLabel}</span>
+                            {!isGroupCollapsed && <div className="flex-1 h-px bg-gray-800/60 ml-1" />}
                           </div>
-                          <div className="space-y-0.5 text-xs">
-                            {decoded.length > 0 ? (
-                              decoded.map(([k, v]) => (
-                                <div key={k}>
-                                  <span className="w-36 inline-block text-gray-500">
-                                    {toTitleCase(k)}
-                                  </span>
-                                  <span className={valueCls}>{formatValue(v)}</span>
+                        </td>
+                        <td className="px-3 py-1">
+                          {isGroupCollapsed && (
+                            <div className="flex items-center gap-1">
+                              <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${dirBadgeCls(tx)}`}>TX</span>
+                              {rx && <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${dirBadgeCls(rx)}`}>RX</span>}
+                              {isTimedOut && <span className="px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-500/50">TO</span>}
+                            </div>
+                          )}
+                        </td>
+                        <td /><td /><td />
+                      </tr>
+
+                      {/* ── Sub-rows — single TR/TD with grid wrapper for smooth height animation ── */}
+                      <tr className={altBg}>
+                        <td colSpan={COL_SPAN} className="p-0 border-0">
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateRows: isGroupCollapsed ? '0fr' : '1fr',
+                            opacity: (isGroupCollapsed || isClearing) ? 0 : 1,
+                            transition: 'grid-template-rows 180ms ease, opacity 120ms ease',
+                          }}>
+                            <div style={{ minHeight: 0, overflow: 'hidden' }}>
+                              {/* Request row */}
+                              <div
+                                className={`flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors ${expandedIds.has(tx.id) ? 'bg-gray-800/30' : ''} ${newTx ? 'packet-new' : ''}`}
+                                style={newTx ? { animationDelay: `${groupDelay}ms` } : undefined}
+                                onClick={() => toggleRow(tx)}
+                              >
+                                <div className="px-2 py-1.5 pl-7 shrink-0 overflow-hidden" style={{ width: colWidths[0] }}>
+                                  <span className="text-gray-500 text-[10px]">Request</span>
                                 </div>
-                              ))
-                            ) : (
-                              <span className="text-gray-700 italic">
-                                no decoded data
-                              </span>
-                            )}
+                                <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(tx)}`}>TX</span>
+                                </div>
+                                <div className="px-3 py-1.5 text-gray-500 shrink-0" style={{ width: colWidths[2] }}>{tx.counter}</div>
+                                <div className="px-3 py-1.5 text-gray-500 shrink-0" style={{ width: colWidths[3] }}>{formatTime(tx.timestamp_ms)}</div>
+                                <div className="px-3 py-1.5 flex-1 min-w-0"><HexCell hex={tx.hex} dir="tx" /></div>
+                              </div>
+                              <ExpandDetailFlat p={tx} open={expandedIds.has(tx.id)} />
+
+                              {/* Timeout indicator */}
+                              {isTimedOut && (
+                                <div className="flex items-center border-b border-amber-900/30 bg-amber-950/20">
+                                  <div className="px-2 py-1.5 pl-7 shrink-0" style={{ width: colWidths[0] }}>
+                                    <span className="text-amber-500 text-[10px]">⏱ Timeout</span>
+                                  </div>
+                                  <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-500/50">TO</span>
+                                  </div>
+                                  <div className="px-3 py-1.5 text-gray-700 shrink-0" style={{ width: colWidths[2] }}>—</div>
+                                  <div className="px-3 py-1.5 text-amber-700 text-[10px] shrink-0" style={{ width: colWidths[3] }}>after {displayTimeoutMs}ms</div>
+                                  <div className="px-3 py-1.5 flex-1 text-gray-700">—</div>
+                                </div>
+                              )}
+
+                              {/* Response row */}
+                              {hasPair && rx && (
+                                <>
+                                  <div
+                                    className={`flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors ${expandedIds.has(rx.id) ? 'bg-gray-800/30' : ''} ${newRx ? 'packet-new' : ''}`}
+                                    style={newRx ? { animationDelay: `${groupDelay + 100}ms` } : undefined}
+                                    onClick={() => toggleRow(rx)}
+                                  >
+                                    <div className="px-2 py-1.5 pl-7 shrink-0 overflow-hidden" style={{ width: colWidths[0] }}>
+                                      <span className="text-gray-500 text-[10px]">Response</span>
+                                    </div>
+                                    <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
+                                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(rx)}`}>RX</span>
+                                    </div>
+                                    <div className="px-3 py-1.5 text-gray-500 shrink-0" style={{ width: colWidths[2] }}>{rx.counter}</div>
+                                    <div className="px-3 py-1.5 text-gray-500 shrink-0" style={{ width: colWidths[3] }}>{formatTime(rx.timestamp_ms)}</div>
+                                    <div className="px-3 py-1.5 flex-1 min-w-0"><HexCell hex={rx.hex} dir="rx" /></div>
+                                  </div>
+                                  <ExpandDetailFlat p={rx} open={expandedIds.has(rx.id)} />
+                                </>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>
-                    )}
+                    </Fragment>
+                  );
+                }
+
+                // ── Solo packet ──────────────────────────────────
+                const p = g.packet;
+                return (
+                  <Fragment key={g.key}>
+                    <tr
+                      className={`border-b border-gray-800/40 hover:bg-gray-700/20 cursor-pointer transition-colors ${altBg} ${expandedIds.has(p.id) ? 'bg-gray-800/30' : ''} ${animatingIds.has(p.id) ? 'packet-new' : ''} ${isClearing ? 'row-out' : ''}`}
+                      style={animatingIds.has(p.id) ? { animationDelay: `${groupStaggerDelays.current.get(g.key) ?? 0}ms` } : undefined}
+                      onClick={() => toggleRow(p)}
+                    >
+                      <td className="px-2 py-1.5">
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="w-3 shrink-0" />
+                          <span className="text-gray-500 truncate">{getCommandLabel(p)}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(p)}`}>
+                          {p.direction.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-3 py-1.5 text-gray-500">{p.counter}</td>
+                      <td className="px-3 py-1.5 text-gray-500">{formatTime(p.timestamp_ms)}</td>
+                      <td className="px-3 py-1.5"><HexCell hex={p.hex} dir={p.direction} /></td>
+                    </tr>
+                    <ExpandDetail p={p} colSpan={COL_SPAN} open={expandedIds.has(p.id)} />
                   </Fragment>
                 );
               })}
