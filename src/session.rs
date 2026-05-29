@@ -33,6 +33,10 @@ impl XcpSession {
         }
     }
 
+    pub fn peek_next_ctr(&self) -> u16 {
+        self.counter.load(Ordering::Relaxed)
+    }
+
     /// Send a command and return the decoded response.
     pub async fn execute(&self, cmd: &XcpCommand) -> Result<XcpResponse, XcpError> {
         let ctr = self.counter.fetch_add(1, Ordering::Relaxed);
