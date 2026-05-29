@@ -4,12 +4,13 @@ import { api } from '../lib/api';
 export function MtaBar() {
   const [mta, setMta] = useState('0x00000000');
   const [size, setSize] = useState(8);
+  const [autoMta, setAutoMta] = useState(true);
 
   async function handleUpload() {
     const addr = parseInt(mta.replace(/^0x/i, ''), 16);
     if (isNaN(addr)) return;
     try {
-      await api.setMta(0, addr);
+      if (autoMta) await api.setMta(0, addr);
       await api.upload(size);
     } catch (e) {
       console.error('Upload failed:', e);
@@ -33,7 +34,7 @@ export function MtaBar() {
           min={1}
           value={size}
           onChange={(e) => setSize(Math.max(1, Number(e.target.value)))}
-          className="w-16 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"
+          className="no-spinner w-10 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"
         />
       </div>
       <div className="flex items-center gap-1.5">
@@ -51,7 +52,25 @@ export function MtaBar() {
           Download
         </button>
       </div>
-      <span className="text-[10px] text-gray-600">SET_MTA fires automatically</span>
+
+      {/* Auto MTA toggle */}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <div
+          className={`w-7 h-3.5 rounded-full relative transition-colors ${
+            autoMta ? 'bg-blue-600' : 'bg-gray-700'
+          }`}
+          onClick={() => setAutoMta(!autoMta)}
+        >
+          <div
+            className={`w-2.5 h-2.5 bg-white rounded-full absolute top-0.5 transition-transform ${
+              autoMta ? 'translate-x-4' : 'translate-x-0.5'
+            }`}
+          />
+        </div>
+        <span className={`text-[10px] ${autoMta ? 'text-gray-400' : 'text-gray-600'}`}>
+          Auto SET_MTA
+        </span>
+      </label>
     </div>
   );
 }
