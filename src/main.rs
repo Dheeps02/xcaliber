@@ -42,6 +42,7 @@ fn main() {
                     .route("/api/daq/lists/:id/odts/:odt_id/entries/:idx/delete",
                         axum::routing::post(http::routes::daq_delete_entry))
                     .route("/api/daq/lists/:id/event",   axum::routing::post(http::routes::daq_set_event))
+                    .route("/api/daq/lists/replace", axum::routing::post(http::routes::daq_replace_lists))
                     .route("/api/daq/configure", axum::routing::post(http::routes::daq_configure))
                     .route("/api/daq/start",     axum::routing::post(http::routes::daq_start))
                     .route("/api/daq/stop",      axum::routing::post(http::routes::daq_stop))

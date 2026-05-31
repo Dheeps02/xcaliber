@@ -71,6 +71,8 @@ export const api = {
     post<{ ok: boolean }>(`/api/daq/lists/${listId}/odts/${odtId}/entries/${entryIdx}/delete`),
   daqSetEvent: (listId: number, event_channel: number) =>
     post<{ ok: boolean }>(`/api/daq/lists/${listId}/event`, { event_channel }),
+  daqReplaceLists: (lists: DaqList[]) =>
+    post<{ ok: boolean }>('/api/daq/lists/replace', { lists }),
   daqConfigure: () =>
     post<{ ok: boolean }>('/api/daq/configure'),
   daqStart: () =>

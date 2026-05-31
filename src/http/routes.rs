@@ -622,6 +622,17 @@ pub async fn daq_set_event(
     Json(json!({ "ok": true })).into_response()
 }
 
+#[derive(Deserialize)]
+pub struct ReplaceListsBody { pub lists: Vec<DaqListDef> }
+
+pub async fn daq_replace_lists(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<ReplaceListsBody>,
+) -> impl IntoResponse {
+    *state.daq_lists.lock().unwrap() = body.lists;
+    Json(json!({ "ok": true }))
+}
+
 async fn daq_configure_inner(state: &Arc<AppState>) -> Result<(), crate::xcp::error::XcpError> {
     let lists = state.daq_lists.lock().unwrap().clone();
 

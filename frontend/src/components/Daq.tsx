@@ -603,60 +603,57 @@ export function Daq() {
     setTreePaneWidth(prev => Math.max(160, Math.min(520, prev + dx)));
   }, []);
 
-  // ── Tree mutation handlers (call backend, then sync store) ──────
+  // ── Tree mutation handlers (local store only — synced to backend at Configure) ──
 
-  async function handleAddList() {
-    try {
-      const result = await api.daqAddList(1);
-      setDaqLists([...daqLists, result.list]);
-    } catch (e) { showToast((e as Error).message, 'error'); }
+  function handleAddList() {
+    const id = daqLists.length > 0 ? Math.max(...daqLists.map(l => l.id)) + 1 : 0;
+    setDaqLists([...daqLists, { id, event_channel: 1, odts: [{ id: 0, entries: [] }] }]);
   }
 
-  async function handleDeleteList(listId: number) {
-    try {
-      await api.daqDeleteList(listId);
-      setDaqLists(daqLists.filter(l => l.id !== listId));
-    } catch (e) { showToast((e as Error).message, 'error'); }
+  function handleDeleteList(listId: number) {
+    setDaqLists(daqLists.filter(l => l.id !== listId));
   }
 
-  async function handleSetEvent(listId: number, ch: number) {
-    try {
-      await api.daqSetEvent(listId, ch);
-      setDaqLists(daqLists.map(l => l.id === listId ? { ...l, event_channel: ch } : l));
-    } catch (e) { showToast((e as Error).message, 'error'); }
+  function handleSetEvent(listId: number, ch: number) {
+    setDaqLists(daqLists.map(l => l.id === listId ? { ...l, event_channel: ch } : l));
   }
 
-  async function handleAddOdt(listId: number) {
-    try {
-      const result = await api.daqAddOdt(listId);
-      setDaqLists(daqLists.map(l => {
-        if (l.id !== listId) return l;
-        return { ...l, odts: [...l.odts, { id: result.odt_id, entries: [] }] };
-      }));
-    } catch (e) { showToast((e as Error).message, 'error'); }
+  function handleAddOdt(listId: number) {
+    setDaqLists(daqLists.map(l => {
+      if (l.id !== listId) return l;
+      const nextId = l.odts.length > 0 ? Math.max(...l.odts.map(o => o.id)) + 1 : 0;
+      return { ...l, odts: [...l.odts, { id: nextId, entries: [] }] };
+    }));
   }
 
-  async function handleSaveEntry(entry: DaqEntry, listId: number, odtId: number, entryIdx: number | null) {
-    try {
-      if (entryIdx !== null) await api.daqDeleteEntry(listId, odtId, entryIdx);
-      await api.daqAddEntry(listId, odtId, entry);
-      const result = await api.daqGetLists();
-      setDaqLists(result.lists);
-    } catch (e) { showToast((e as Error).message, 'error'); }
+  function handleSaveEntry(entry: DaqEntry, listId: number, odtId: number, entryIdx: number | null) {
+    setDaqLists(daqLists.map(l => {
+      if (l.id !== listId) return l;
+      return {
+        ...l,
+        odts: l.odts.map(o => {
+          if (o.id !== odtId) return o;
+          const entries = entryIdx === null
+            ? [...o.entries, entry]
+            : o.entries.map((e, i) => i === entryIdx ? entry : e);
+          return { ...o, entries };
+        }),
+      };
+    }));
   }
 
-  async function handleDeleteEntry(listId: number, odtId: number, entryIdx: number) {
-    try {
-      await api.daqDeleteEntry(listId, odtId, entryIdx);
-      const result = await api.daqGetLists();
-      setDaqLists(result.lists);
-    } catch (e) { showToast((e as Error).message, 'error'); }
+  function handleDeleteEntry(listId: number, odtId: number, entryIdx: number) {
+    setDaqLists(daqLists.map(l => {
+      if (l.id !== listId) return l;
+      return { ...l, odts: l.odts.map(o => o.id !== odtId ? o : { ...o, entries: o.entries.filter((_, i) => i !== entryIdx) }) };
+    }));
   }
 
   // ── DAQ lifecycle handlers ──────────────────────────────────────
 
   async function handleConfigure() {
     try {
+      await api.daqReplaceLists(daqLists);
       await api.daqConfigure();
       setDaqStatus('configured');
     } catch (e) { showToast((e as Error).message, 'error'); }

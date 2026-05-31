@@ -57,6 +57,7 @@ export function ByteBar() {
   const customCmdDefs = useAppStore((s) => s.customCmdDefs);
   const { showTip, hideTip } = useTooltip();
   const [dropdown, setDropdown] = useState<Dropdown | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
 
   const def = activeCmd ? (CMD_DEFS[activeCmd] ?? customCmdDefs[activeCmd]) : null;
 
@@ -207,8 +208,36 @@ export function ByteBar() {
   const startByte = section * BASE_CELLS;
   const endByte = startByte + BASE_CELLS - 1;
 
+  const cmdLabel = !activeCmd
+    ? 'Custom Bytes'
+    : (def?.userCmdName?.toUpperCase() ?? activeCmd.replace(/-/g, ' ').toUpperCase());
+
   return (
-    <div className="px-4 pt-2 pb-2 border-b border-gray-800 bg-gray-900 shrink-0">
+    <div className="border-b border-gray-800 bg-gray-900 shrink-0">
+      {/* Command name header + collapse toggle */}
+      <div className="flex items-center justify-between px-4 h-8">
+        <span className="text-[11px] font-semibold tracking-widest text-gray-500 uppercase select-none">
+          {cmdLabel}
+        </span>
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="text-gray-600 hover:text-gray-400 transition-colors text-[11px] leading-none"
+          title={collapsed ? 'Expand command builder' : 'Collapse command builder'}
+        >
+          {collapsed ? '▾' : '▴'}
+        </button>
+      </div>
+
+      {/* Collapsible content — grid trick for smooth height animation */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateRows: collapsed ? '0fr' : '1fr',
+          transition: 'grid-template-rows 180ms ease',
+        }}
+      >
+        <div style={{ overflow: 'hidden' }}>
+          <div className="px-4 pb-2">
       {/* Section indicator row */}
       <div className="flex items-center justify-center gap-1.5 mb-3">
         <button
@@ -396,6 +425,10 @@ export function ByteBar() {
       >
         Send
       </button>
+
+          </div>{/* /px-4 pb-2 */}
+        </div>{/* /overflow-hidden */}
+      </div>{/* /grid */}
 
       {dropdown &&
         createPortal(

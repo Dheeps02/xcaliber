@@ -66,7 +66,15 @@ function AppInner() {
             </button>
           </div>
 
-          {activeMainTab === 'trace' ? <PacketTrace /> : <Daq />}
+          {/* Tab content — both always mounted; CSS controls active/inactive */}
+          <div className="flex-1 relative overflow-hidden">
+            <div className={`tab-panel ${activeMainTab === 'trace' ? 'tab-panel-active' : 'tab-panel-inactive'}`}>
+              <PacketTrace />
+            </div>
+            <div className={`tab-panel ${activeMainTab === 'daq' ? 'tab-panel-active' : 'tab-panel-inactive'}`}>
+              <Daq />
+            </div>
+          </div>
         </main>
       </div>
       <Footer />
