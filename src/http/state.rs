@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 use tokio::sync::{broadcast, Mutex as AsyncMutex};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -50,6 +50,10 @@ pub struct AppState {
     /// DAQ configuration state.
     pub daq_status: Mutex<DaqStatus>,
     pub daq_lists: Mutex<Vec<DaqListDef>>,
+    /// PID → (list_id, odt_id, entries) map, built at configure time.
+    pub daq_dto_map: Mutex<HashMap<u8, (u32, u32, Vec<DaqEntryDef>)>>,
+    /// Handle to the running DTO receive task (Some while DAQ is running).
+    pub daq_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 /// A packet log entry (mirrors the DB row).
@@ -88,6 +92,8 @@ impl AppState {
             tx,
             daq_status: Mutex::new(DaqStatus::Idle),
             daq_lists: Mutex::new(Vec::new()),
+            daq_dto_map: Mutex::new(HashMap::new()),
+            daq_task: Mutex::new(None),
         }
     }
 

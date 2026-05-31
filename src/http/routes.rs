@@ -5,7 +5,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::json;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
@@ -450,6 +450,83 @@ pub async fn get_network_interfaces() -> impl IntoResponse {
 
 // ── DAQ routes ────────────────────────────────────────────────────
 
+/// Parse a fixed-endian XCP DAQ measurement value to f64.
+fn parse_daq_value(bytes: &[u8], type_name: &str) -> f64 {
+    match type_name {
+        "u8"  => bytes.first().copied().unwrap_or(0) as f64,
+        "i8"  => bytes.first().copied().unwrap_or(0) as i8 as f64,
+        "u16" if bytes.len() >= 2 => u16::from_le_bytes([bytes[0], bytes[1]]) as f64,
+        "i16" if bytes.len() >= 2 => i16::from_le_bytes([bytes[0], bytes[1]]) as f64,
+        "u32" if bytes.len() >= 4 => u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as f64,
+        "i32" if bytes.len() >= 4 => i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as f64,
+        "f32" if bytes.len() >= 4 => f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as f64,
+        "f64" if bytes.len() >= 8 => f64::from_le_bytes(bytes[..8].try_into().unwrap()),
+        _ => 0.0,
+    }
+}
+
+/// Build a PID → (list_id, odt_id, entries) map from the current daq_lists.
+/// PIDs are assigned sequentially across all lists in order (absolute ODT numbering).
+fn build_dto_map(lists: &[DaqListDef]) -> HashMap<u8, (u32, u32, Vec<DaqEntryDef>)> {
+    let mut map = HashMap::new();
+    let mut pid: u8 = 0;
+    for list in lists {
+        for odt in &list.odts {
+            if !odt.entries.is_empty() {
+                map.insert(pid, (list.id, odt.id, odt.entries.clone()));
+            }
+            pid = pid.wrapping_add(1);
+        }
+    }
+    map
+}
+
+/// Background task: read all incoming broadcast packets, filter for DAQ DTOs
+/// (PID < 0xFC), decode measurement values, and push `daq_dto` SSE events.
+async fn daq_receive_task(
+    state: Arc<AppState>,
+    mut sub: tokio::sync::broadcast::Receiver<std::sync::Arc<crate::xcp::packet::XcpPacket>>,
+) {
+    loop {
+        let pkt = match sub.recv().await {
+            Ok(p)  => p,
+            Err(_) => break,
+        };
+        let pid = match pkt.payload.first().copied() {
+            Some(p) if p < 0xFC => p,
+            _                   => continue,
+        };
+
+        let map = state.daq_dto_map.lock().unwrap();
+        let Some((list_id, odt_id, entries)) = map.get(&pid) else { continue };
+        let (list_id, odt_id) = (*list_id, *odt_id);
+        let entries = entries.clone();
+        drop(map);
+
+        let data = &pkt.payload[1..]; // skip PID byte
+        let mut values = serde_json::Map::new();
+        let mut offset = 0usize;
+        for entry in &entries {
+            let sz = entry.size as usize;
+            if offset + sz > data.len() { break; }
+            let v = parse_daq_value(&data[offset..offset + sz], &entry.type_name);
+            values.insert(entry.name.clone(), serde_json::json!(v));
+            offset += sz;
+        }
+
+        let event = json!({
+            "event": "daq_dto",
+            "data": {
+                "list_id": list_id,
+                "odt_id":  odt_id,
+                "timestamp_ms": now_ms(),
+                "values": values,
+            }
+        });
+        let _ = state.tx.send(serde_json::to_string(&event).unwrap());
+    }
+}
+
 pub async fn daq_get_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let status = state.daq_status.lock().unwrap().clone();
     let lists  = state.daq_lists.lock().unwrap().clone();
@@ -610,6 +687,9 @@ async fn daq_configure_inner(state: &Arc<AppState>) -> Result<(), crate::xcp::er
 pub async fn daq_configure(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match daq_configure_inner(&state).await {
         Ok(()) => {
+            // Build PID→entry map from the configured lists.
+            let lists = state.daq_lists.lock().unwrap().clone();
+            *state.daq_dto_map.lock().unwrap() = build_dto_map(&lists);
             *state.daq_status.lock().unwrap() = DaqStatus::Configured;
             let _ = state.tx.send(serde_json::to_string(&json!({
                 "event": "daq_state_changed", "data": { "state": "configured" }
@@ -623,6 +703,15 @@ pub async fn daq_configure(State(state): State<Arc<AppState>>) -> impl IntoRespo
 pub async fn daq_start(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match run_cmd(&state, XcpCommand::StartStopSynch { mode: 0x01 }).await {
         Ok(_) => {
+            // Subscribe to raw transport broadcast, then spawn the DTO receive task.
+            let sub = {
+                let guard = state.session.lock().await;
+                guard.as_ref().map(|s| s.subscribe())
+            };
+            if let Some(sub) = sub {
+                let task = tokio::spawn(daq_receive_task(Arc::clone(&state), sub));
+                *state.daq_task.lock().unwrap() = Some(task);
+            }
             *state.daq_status.lock().unwrap() = DaqStatus::Running;
             let _ = state.tx.send(serde_json::to_string(&json!({
                 "event": "daq_state_changed", "data": { "state": "running" }
@@ -636,6 +725,7 @@ pub async fn daq_start(State(state): State<Arc<AppState>>) -> impl IntoResponse 
 pub async fn daq_stop(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match run_cmd(&state, XcpCommand::StartStopSynch { mode: 0x00 }).await {
         Ok(_) => {
+            if let Some(task) = state.daq_task.lock().unwrap().take() { task.abort(); }
             *state.daq_status.lock().unwrap() = DaqStatus::Configured;
             let _ = state.tx.send(serde_json::to_string(&json!({
                 "event": "daq_state_changed", "data": { "state": "configured" }
@@ -649,6 +739,8 @@ pub async fn daq_stop(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 pub async fn daq_free(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match run_cmd(&state, XcpCommand::FreeDaq).await {
         Ok(_) => {
+            if let Some(task) = state.daq_task.lock().unwrap().take() { task.abort(); }
+            state.daq_dto_map.lock().unwrap().clear();
             *state.daq_status.lock().unwrap() = DaqStatus::Idle;
             let _ = state.tx.send(serde_json::to_string(&json!({
                 "event": "daq_state_changed", "data": { "state": "idle" }
