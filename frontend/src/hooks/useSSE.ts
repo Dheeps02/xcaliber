@@ -20,7 +20,7 @@ export function useSSE() {
   useEffect(() => {
     function connect() {
       esRef.current?.close();
-      const es = new EventSource('http://localhost:8080/events');
+      const es = new EventSource(import.meta.env.DEV ? '/events' : 'http://localhost:8080/events');
       esRef.current = es;
 
       es.onmessage = (e: MessageEvent) => {

@@ -1,6 +1,6 @@
 import type { ConnectResponse, PacketEntry, AppConfig, NetworkInterface, DaqList, DaqEntry, DaqStatus } from './types';
 
-const BASE = 'http://localhost:8080';
+const BASE = import.meta.env.DEV ? '' : 'http://localhost:8080';
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
   let res: Response;
