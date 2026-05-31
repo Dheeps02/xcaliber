@@ -1,4 +1,4 @@
-import type { ConnectResponse, PacketEntry, AppConfig, NetworkInterface } from './types';
+import type { ConnectResponse, PacketEntry, AppConfig, NetworkInterface, DaqList, DaqEntry, DaqStatus } from './types';
 
 const BASE = 'http://localhost:8080';
 
@@ -55,4 +55,30 @@ export const api = {
   }) => post<{ ok: boolean }>('/api/config', body),
   getNetworkInterfaces: () =>
     get<{ interfaces: NetworkInterface[] }>('/api/network-interfaces'),
+
+  // ── DAQ ───────────────────────────────────────────────────────────
+  daqGetLists: () =>
+    get<{ lists: DaqList[] }>('/api/daq/lists'),
+  daqAddList: (event_channel: number) =>
+    post<{ list: DaqList }>('/api/daq/lists', { event_channel }),
+  daqDeleteList: (id: number) =>
+    post<{ ok: boolean }>(`/api/daq/lists/${id}/delete`),
+  daqAddOdt: (listId: number) =>
+    post<{ odt_id: number }>(`/api/daq/lists/${listId}/odts`),
+  daqAddEntry: (listId: number, odtId: number, entry: DaqEntry) =>
+    post<{ ok: boolean }>(`/api/daq/lists/${listId}/odts/${odtId}/entries`, entry),
+  daqDeleteEntry: (listId: number, odtId: number, entryIdx: number) =>
+    post<{ ok: boolean }>(`/api/daq/lists/${listId}/odts/${odtId}/entries/${entryIdx}/delete`),
+  daqSetEvent: (listId: number, event_channel: number) =>
+    post<{ ok: boolean }>(`/api/daq/lists/${listId}/event`, { event_channel }),
+  daqConfigure: () =>
+    post<{ ok: boolean }>('/api/daq/configure'),
+  daqStart: () =>
+    post<{ ok: boolean }>('/api/daq/start'),
+  daqStop: () =>
+    post<{ ok: boolean }>('/api/daq/stop'),
+  daqFree: () =>
+    post<{ ok: boolean }>('/api/daq/free'),
+  daqStatus: () =>
+    get<{ state: DaqStatus; lists: DaqList[] }>('/api/daq/status'),
 };

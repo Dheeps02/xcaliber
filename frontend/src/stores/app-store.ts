@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef } from '../lib/types';
+import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef, DaqList, DaqStatus, DaqLiveValue, DaqEntryType } from '../lib/types';
 import { CMD_DEFS } from '../lib/cmd-defs';
 
 const NUM_CELLS = 8;
@@ -46,6 +46,17 @@ interface AppStore {
   setAnimationWatermark: (v: number) => void;
   activeMainTab: 'trace' | 'daq';
   setActiveMainTab: (tab: 'trace' | 'daq') => void;
+
+  // ── DAQ ──────────────────────────────────────────────────────────
+  daqStatus: DaqStatus;
+  daqLists: DaqList[];
+  daqLiveValues: Map<string, DaqLiveValue>;
+  daqDtoRate: number;
+  setDaqStatus: (s: DaqStatus) => void;
+  setDaqLists: (lists: DaqList[]) => void;
+  updateDaqLiveValue: (listId: number, odtId: number, name: string, addr: number, type: DaqEntryType, value: number) => void;
+  setDaqDtoRate: (n: number) => void;
+  clearDaqLiveValues: () => void;
 }
 
 function buildCustomCmdDefs(config: AppConfig): Record<string, CmdDef> {
@@ -88,6 +99,10 @@ export const useAppStore = create<AppStore>((set) => ({
   toasts: [],
   animationWatermark: null,
   activeMainTab: 'trace',
+  daqStatus: 'idle',
+  daqLists: [],
+  daqLiveValues: new Map(),
+  daqDtoRate: 0,
 
   setConnected: (connected, slave) =>
     set((s) => ({
@@ -151,4 +166,20 @@ export const useAppStore = create<AppStore>((set) => ({
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setAnimationWatermark: (v) => set({ animationWatermark: v }),
   setActiveMainTab: (tab) => set({ activeMainTab: tab }),
+
+  setDaqStatus: (daqStatus) => set({ daqStatus }),
+  setDaqLists: (daqLists) => set({ daqLists }),
+  setDaqDtoRate: (daqDtoRate) => set({ daqDtoRate }),
+  clearDaqLiveValues: () => set({ daqLiveValues: new Map() }),
+  updateDaqLiveValue: (listId, odtId, name, addr, type, value) =>
+    set((s) => {
+      const key = `${listId}:${odtId}:${name}`;
+      const existing = s.daqLiveValues.get(key);
+      const history = existing
+        ? [...existing.history.slice(-39), value]
+        : [value];
+      const next = new Map(s.daqLiveValues);
+      next.set(key, { listId, odtId, entryName: name, addr, typeName: type, value, history });
+      return { daqLiveValues: next };
+    }),
 }));
