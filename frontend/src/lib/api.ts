@@ -13,6 +13,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   } catch {
     throw new Error('Cannot reach XCP client backend. Is the Tauri app running?');
   }
+  if (!res.ok) throw new Error('Cannot reach XCP client backend. Is the Tauri app running?');
   const data = await res.json().catch(() => ({ ok: false, error: 'Invalid response from backend' })) as Record<string, unknown>;
   if (data['ok'] === false) throw new Error((data['error'] as string | undefined) ?? 'Request failed');
   return data as T;
