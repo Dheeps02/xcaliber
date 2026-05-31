@@ -44,6 +44,8 @@ interface AppStore {
   showToast: (message: string, type?: Toast['type']) => void;
   dismissToast: (id: number) => void;
   setAnimationWatermark: (v: number) => void;
+  activeMainTab: 'trace' | 'daq';
+  setActiveMainTab: (tab: 'trace' | 'daq') => void;
 }
 
 function buildCustomCmdDefs(config: AppConfig): Record<string, CmdDef> {
@@ -85,6 +87,7 @@ export const useAppStore = create<AppStore>((set) => ({
   animationsEnabled: true,
   toasts: [],
   animationWatermark: null,
+  activeMainTab: 'trace',
 
   setConnected: (connected, slave) =>
     set((s) => ({
@@ -147,4 +150,5 @@ export const useAppStore = create<AppStore>((set) => ({
   dismissToast: (id) =>
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setAnimationWatermark: (v) => set({ animationWatermark: v }),
+  setActiveMainTab: (tab) => set({ activeMainTab: tab }),
 }));
