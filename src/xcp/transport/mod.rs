@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use crate::xcp::{error::XcpError, packet::XcpPacket};
 
-pub mod udp;
+pub mod dispatched;
 pub mod tcp;
+pub mod udp;
 
 #[async_trait]
 pub trait XcpTransport: Send + Sync {

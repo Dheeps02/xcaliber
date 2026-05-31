@@ -1,10 +1,10 @@
-use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::Arc;
 use crate::xcp::{
     command::XcpCommand,
     error::XcpError,
     packet::XcpPacket,
     response::{ConnectResponse, XcpResponse},
-    transport::XcpTransport,
+    transport::{XcpTransport, dispatched::DispatchedTransport},
 };
 
 /// State of an XCP session.
@@ -15,38 +15,33 @@ pub enum SessionState {
 }
 
 pub struct XcpSession {
-    transport: Box<dyn XcpTransport>,
-    counter: AtomicU16,
+    transport: DispatchedTransport,
     pub state: SessionState,
     pub slave_info: Option<ConnectResponse>,
-    timeout_ms: u64,
 }
 
 impl XcpSession {
     pub fn new(transport: Box<dyn XcpTransport>, timeout_ms: u64) -> Self {
+        let inner: Arc<dyn XcpTransport> = Arc::from(transport);
         Self {
-            transport,
-            counter: AtomicU16::new(0),
+            transport: DispatchedTransport::new(inner, timeout_ms),
             state: SessionState::Disconnected,
             slave_info: None,
-            timeout_ms,
         }
     }
 
     pub fn peek_next_ctr(&self) -> u16 {
-        self.counter.load(Ordering::Relaxed)
+        self.transport.peek_ctr()
     }
 
-    /// Send a command and return the decoded response.
+    /// Send a command and wait for a response PID (≥ 0xFC), skipping DAQ DTOs.
     pub async fn execute(&self, cmd: &XcpCommand) -> Result<XcpResponse, XcpError> {
-        let ctr = self.counter.fetch_add(1, Ordering::Relaxed);
-        let payload = cmd.encode();
-        let pid = payload[0];
-        let packet = XcpPacket::new(ctr, payload);
+        self.transport.execute(cmd).await
+    }
 
-        self.transport.send(&packet).await?;
-        let resp_pkt = self.transport.recv(self.timeout_ms).await?;
-        XcpResponse::decode(&resp_pkt.payload, Some(pid))
+    /// Subscribe to the raw packet broadcast (PID-unfiltered).
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Arc<XcpPacket>> {
+        self.transport.subscribe()
     }
 
     /// CONNECT handshake — updates session state and slave_info.
