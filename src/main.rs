@@ -76,8 +76,15 @@ fn main() {
     }
 
     tauri::Builder::default()
-        .setup(|_app| {
-            tauri::async_runtime::spawn(run_server());
+        .setup(|app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match tokio::task::spawn(run_server()).await {
+                    Ok(()) => eprintln!("[xcp-client] Backend exited unexpectedly"),
+                    Err(e) => eprintln!("[xcp-client] Backend crashed: {e}"),
+                }
+                handle.exit(1);
+            });
             Ok(())
         })
         .run(tauri::generate_context!())
