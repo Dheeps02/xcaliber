@@ -7,10 +7,9 @@ import {
 } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
-import type { DaqList, DaqOdt, DaqEntry, DaqEntryType } from '../lib/types';
+import type { DaqList, DaqEntry, DaqEntryType } from '../lib/types';
 
 // ── constants ────────────────────────────────────────────────────
-const SPARK_N = 40;
 const TYPE_SIZES: Record<DaqEntryType, number> = {
   u8: 1, i8: 1, u16: 2, i16: 2, u32: 4, i32: 4, f32: 4, f64: 8,
 };
