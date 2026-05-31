@@ -1,8 +1,42 @@
 use std::sync::Mutex;
 use tokio::sync::{broadcast, Mutex as AsyncMutex};
 use rusqlite::Connection;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use crate::{config::Config, session::XcpSession};
+
+// ── DAQ data model ────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaqEntryDef {
+    pub name: String,
+    pub addr: u32,
+    pub addr_ext: u8,
+    pub size: u8,
+    pub type_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaqOdtDef {
+    pub id: u32,
+    pub entries: Vec<DaqEntryDef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaqListDef {
+    pub id: u32,
+    pub event_channel: u16,
+    pub odts: Vec<DaqOdtDef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum DaqStatus {
+    Idle,
+    Configured,
+    Running,
+}
+
+// ── AppState ──────────────────────────────────────────────────────
 
 pub struct AppState {
     pub config: Mutex<Config>,
@@ -13,6 +47,9 @@ pub struct AppState {
     pub db: Mutex<Connection>,
     /// Live SSE push channel.
     pub tx: broadcast::Sender<String>,
+    /// DAQ configuration state.
+    pub daq_status: Mutex<DaqStatus>,
+    pub daq_lists: Mutex<Vec<DaqListDef>>,
 }
 
 /// A packet log entry (mirrors the DB row).
@@ -49,6 +86,8 @@ impl AppState {
             session: AsyncMutex::new(None),
             db: Mutex::new(db),
             tx,
+            daq_status: Mutex::new(DaqStatus::Idle),
+            daq_lists: Mutex::new(Vec::new()),
         }
     }
 

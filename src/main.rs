@@ -32,6 +32,20 @@ fn main() {
                     .route("/api/packets",    get(http::routes::get_packets))
                     .route("/api/config",     get(http::routes::get_config).post(http::routes::update_config))
                     .route("/api/network-interfaces", get(http::routes::get_network_interfaces))
+                    // ── DAQ ───────────────────────────────────────
+                    .route("/api/daq/status",  get(http::routes::daq_get_status))
+                    .route("/api/daq/lists",   get(http::routes::daq_get_lists).post(http::routes::daq_add_list))
+                    .route("/api/daq/lists/:id/delete",  axum::routing::post(http::routes::daq_delete_list))
+                    .route("/api/daq/lists/:id/odts",    axum::routing::post(http::routes::daq_add_odt))
+                    .route("/api/daq/lists/:id/odts/:odt_id/entries",
+                        axum::routing::post(http::routes::daq_add_entry))
+                    .route("/api/daq/lists/:id/odts/:odt_id/entries/:idx/delete",
+                        axum::routing::post(http::routes::daq_delete_entry))
+                    .route("/api/daq/lists/:id/event",   axum::routing::post(http::routes::daq_set_event))
+                    .route("/api/daq/configure", axum::routing::post(http::routes::daq_configure))
+                    .route("/api/daq/start",     axum::routing::post(http::routes::daq_start))
+                    .route("/api/daq/stop",      axum::routing::post(http::routes::daq_stop))
+                    .route("/api/daq/free",      axum::routing::post(http::routes::daq_free))
                     .layer(CorsLayer::permissive())
                     .with_state(state);
 

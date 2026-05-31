@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     response::IntoResponse,
     Json,
 };
@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    http::state::{AppState, PacketEntry},
+    http::state::{AppState, DaqEntryDef, DaqListDef, DaqOdtDef, DaqStatus, PacketEntry},
     session::XcpSession,
     xcp::{
         command::XcpCommand,
@@ -92,6 +92,25 @@ fn log_tx(state: &AppState, cmd: &XcpCommand, ctr: u16) -> PacketEntry {
             };
             json!({ "command": name })
         }
+        // ── DAQ commands ──────────────────────────────────────────
+        XcpCommand::FreeDaq =>
+            json!({ "command": "FREE_DAQ" }),
+        XcpCommand::AllocDaq { count } =>
+            json!({ "command": "ALLOC_DAQ", "count": count }),
+        XcpCommand::AllocOdt { daq_list_num, odt_count } =>
+            json!({ "command": "ALLOC_ODT", "daq_list_num": daq_list_num, "odt_count": odt_count }),
+        XcpCommand::AllocOdtEntry { daq_list_num, odt_num, entry_count } =>
+            json!({ "command": "ALLOC_ODT_ENTRY", "daq_list_num": daq_list_num, "odt_num": odt_num, "entry_count": entry_count }),
+        XcpCommand::SetDaqPtr { daq_list_num, odt_num, odt_entry_num } =>
+            json!({ "command": "SET_DAQ_PTR", "daq_list_num": daq_list_num, "odt_num": odt_num, "odt_entry_num": odt_entry_num }),
+        XcpCommand::WriteDaq { bit_offset, size, addr_ext, addr } =>
+            json!({ "command": "WRITE_DAQ", "bit_offset": bit_offset, "size": size, "addr_ext": addr_ext, "addr": addr }),
+        XcpCommand::SetDaqListMode { mode, daq_list_num, event_channel, .. } =>
+            json!({ "command": "SET_DAQ_LIST_MODE", "mode": mode, "daq_list_num": daq_list_num, "event_channel": event_channel }),
+        XcpCommand::StartStopDaqList { mode, daq_list_num } =>
+            json!({ "command": "START_STOP_DAQ_LIST", "mode": mode, "daq_list_num": daq_list_num }),
+        XcpCommand::StartStopSynch { mode } =>
+            json!({ "command": "START_STOP_SYNCH", "mode": mode }),
     };
     let entry = PacketEntry {
         id: 0,
@@ -179,15 +198,12 @@ pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         },
     };
 
-    // Log TX before sending (counter=0 for first packet in new session)
     log_tx(&state, &XcpCommand::Connect { mode: 0 }, 0);
 
     let mut session = XcpSession::new(transport, cfg.timeout_ms);
     match session.connect().await {
         Ok(info) => {
             let info = info.clone();
-
-            // Log RX with the connect response (counter=0, same as TX)
             let connect_resp = XcpResponse::Connect(info.clone());
             let rx_entry = PacketEntry {
                 id: 0,
@@ -430,4 +446,215 @@ pub async fn get_network_interfaces() -> impl IntoResponse {
         })
         .collect();
     Json(json!({ "interfaces": result }))
+}
+
+// ── DAQ routes ────────────────────────────────────────────────────
+
+pub async fn daq_get_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let status = state.daq_status.lock().unwrap().clone();
+    let lists  = state.daq_lists.lock().unwrap().clone();
+    Json(json!({ "state": status, "lists": lists }))
+}
+
+pub async fn daq_get_lists(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let lists = state.daq_lists.lock().unwrap().clone();
+    Json(json!({ "lists": lists }))
+}
+
+#[derive(Deserialize)]
+pub struct AddListBody { pub event_channel: u16 }
+
+pub async fn daq_add_list(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<AddListBody>,
+) -> impl IntoResponse {
+    let mut lists = state.daq_lists.lock().unwrap();
+    let id = lists.iter().map(|l| l.id).max().map(|m| m + 1).unwrap_or(0);
+    let list = DaqListDef { id, event_channel: body.event_channel, odts: vec![DaqOdtDef { id: 0, entries: vec![] }] };
+    lists.push(list.clone());
+    Json(json!({ "list": list }))
+}
+
+pub async fn daq_delete_list(
+    State(state): State<Arc<AppState>>,
+    Path(list_id): Path<u32>,
+) -> impl IntoResponse {
+    state.daq_lists.lock().unwrap().retain(|l| l.id != list_id);
+    Json(json!({ "ok": true }))
+}
+
+pub async fn daq_add_odt(
+    State(state): State<Arc<AppState>>,
+    Path(list_id): Path<u32>,
+) -> impl IntoResponse {
+    let mut lists = state.daq_lists.lock().unwrap();
+    let Some(list) = lists.iter_mut().find(|l| l.id == list_id) else {
+        return (axum::http::StatusCode::NOT_FOUND, Json(json!({ "error": "list not found" }))).into_response();
+    };
+    let odt_id = list.odts.iter().map(|o| o.id).max().map(|m| m + 1).unwrap_or(0);
+    list.odts.push(DaqOdtDef { id: odt_id, entries: vec![] });
+    Json(json!({ "odt_id": odt_id })).into_response()
+}
+
+pub async fn daq_add_entry(
+    State(state): State<Arc<AppState>>,
+    Path((list_id, odt_id)): Path<(u32, u32)>,
+    Json(entry): Json<DaqEntryDef>,
+) -> impl IntoResponse {
+    let mut lists = state.daq_lists.lock().unwrap();
+    let Some(list) = lists.iter_mut().find(|l| l.id == list_id) else {
+        return (axum::http::StatusCode::NOT_FOUND, Json(json!({ "error": "list not found" }))).into_response();
+    };
+    let Some(odt) = list.odts.iter_mut().find(|o| o.id == odt_id) else {
+        return (axum::http::StatusCode::NOT_FOUND, Json(json!({ "error": "odt not found" }))).into_response();
+    };
+    odt.entries.push(entry);
+    Json(json!({ "ok": true })).into_response()
+}
+
+pub async fn daq_delete_entry(
+    State(state): State<Arc<AppState>>,
+    Path((list_id, odt_id, entry_idx)): Path<(u32, u32, usize)>,
+) -> impl IntoResponse {
+    let mut lists = state.daq_lists.lock().unwrap();
+    let Some(list) = lists.iter_mut().find(|l| l.id == list_id) else {
+        return (axum::http::StatusCode::NOT_FOUND, Json(json!({ "error": "list not found" }))).into_response();
+    };
+    let Some(odt) = list.odts.iter_mut().find(|o| o.id == odt_id) else {
+        return (axum::http::StatusCode::NOT_FOUND, Json(json!({ "error": "odt not found" }))).into_response();
+    };
+    if entry_idx < odt.entries.len() {
+        odt.entries.remove(entry_idx);
+    }
+    Json(json!({ "ok": true })).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct SetEventBody { pub event_channel: u16 }
+
+pub async fn daq_set_event(
+    State(state): State<Arc<AppState>>,
+    Path(list_id): Path<u32>,
+    Json(body): Json<SetEventBody>,
+) -> impl IntoResponse {
+    let mut lists = state.daq_lists.lock().unwrap();
+    let Some(list) = lists.iter_mut().find(|l| l.id == list_id) else {
+        return (axum::http::StatusCode::NOT_FOUND, Json(json!({ "error": "list not found" }))).into_response();
+    };
+    list.event_channel = body.event_channel;
+    Json(json!({ "ok": true })).into_response()
+}
+
+async fn daq_configure_inner(state: &Arc<AppState>) -> Result<(), crate::xcp::error::XcpError> {
+    let lists = state.daq_lists.lock().unwrap().clone();
+
+    run_cmd(state, XcpCommand::FreeDaq).await?;
+    run_cmd(state, XcpCommand::AllocDaq { count: lists.len() as u16 }).await?;
+
+    for list in &lists {
+        run_cmd(state, XcpCommand::AllocOdt {
+            daq_list_num: list.id as u16,
+            odt_count: list.odts.len() as u8,
+        }).await?;
+    }
+
+    for list in &lists {
+        for odt in &list.odts {
+            run_cmd(state, XcpCommand::AllocOdtEntry {
+                daq_list_num: list.id as u16,
+                odt_num: odt.id as u8,
+                entry_count: odt.entries.len() as u8,
+            }).await?;
+        }
+    }
+
+    for list in &lists {
+        for odt in &list.odts {
+            for (ei, entry) in odt.entries.iter().enumerate() {
+                run_cmd(state, XcpCommand::SetDaqPtr {
+                    daq_list_num: list.id as u16,
+                    odt_num: odt.id as u8,
+                    odt_entry_num: ei as u8,
+                }).await?;
+                run_cmd(state, XcpCommand::WriteDaq {
+                    bit_offset: 0xFF,
+                    size: entry.size,
+                    addr_ext: entry.addr_ext,
+                    addr: entry.addr,
+                }).await?;
+            }
+        }
+    }
+
+    for list in &lists {
+        run_cmd(state, XcpCommand::SetDaqListMode {
+            mode: 0x10,
+            daq_list_num: list.id as u16,
+            event_channel: list.event_channel,
+            prescaler: 1,
+            priority: 0,
+        }).await?;
+    }
+
+    // SELECT each list for synchronized start
+    for list in &lists {
+        run_cmd(state, XcpCommand::StartStopDaqList {
+            mode: 0x03,
+            daq_list_num: list.id as u16,
+        }).await?;
+    }
+
+    Ok(())
+}
+
+pub async fn daq_configure(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match daq_configure_inner(&state).await {
+        Ok(()) => {
+            *state.daq_status.lock().unwrap() = DaqStatus::Configured;
+            let _ = state.tx.send(serde_json::to_string(&json!({
+                "event": "daq_state_changed", "data": { "state": "configured" }
+            })).unwrap());
+            Json(json!({ "ok": true })).into_response()
+        }
+        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+pub async fn daq_start(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match run_cmd(&state, XcpCommand::StartStopSynch { mode: 0x01 }).await {
+        Ok(_) => {
+            *state.daq_status.lock().unwrap() = DaqStatus::Running;
+            let _ = state.tx.send(serde_json::to_string(&json!({
+                "event": "daq_state_changed", "data": { "state": "running" }
+            })).unwrap());
+            Json(json!({ "ok": true })).into_response()
+        }
+        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+pub async fn daq_stop(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match run_cmd(&state, XcpCommand::StartStopSynch { mode: 0x00 }).await {
+        Ok(_) => {
+            *state.daq_status.lock().unwrap() = DaqStatus::Configured;
+            let _ = state.tx.send(serde_json::to_string(&json!({
+                "event": "daq_state_changed", "data": { "state": "configured" }
+            })).unwrap());
+            Json(json!({ "ok": true })).into_response()
+        }
+        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+pub async fn daq_free(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    match run_cmd(&state, XcpCommand::FreeDaq).await {
+        Ok(_) => {
+            *state.daq_status.lock().unwrap() = DaqStatus::Idle;
+            let _ = state.tx.send(serde_json::to_string(&json!({
+                "event": "daq_state_changed", "data": { "state": "idle" }
+            })).unwrap());
+            Json(json!({ "ok": true })).into_response()
+        }
+        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+    }
 }
