@@ -125,10 +125,15 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
 // ── DAQ List Tree ────────────────────────────────────────────────
 interface TreeProps {
   lists: DaqList[];
-  onListsChange: (lists: DaqList[]) => void;
+  onAddList: () => void;
+  onDeleteList: (listId: number) => void;
+  onSetEvent: (listId: number, ch: number) => void;
+  onAddOdt: (listId: number) => void;
+  onSaveEntry: (entry: DaqEntry, listId: number, odtId: number, entryIdx: number | null) => void;
+  onDeleteEntry: (listId: number, odtId: number, entryIdx: number) => void;
 }
 
-function DaqTree({ lists, onListsChange }: TreeProps) {
+function DaqTree({ lists, onAddList, onDeleteList, onSetEvent, onAddOdt, onSaveEntry, onDeleteEntry }: TreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [popover, setPopover] = useState<{ listId: number; odtId: number; entryIdx: number | null; initial?: DaqEntry; anchor: { x: number; y: number } } | null>(null);
 
@@ -140,49 +145,9 @@ function DaqTree({ lists, onListsChange }: TreeProps) {
     });
   }
 
-  function addList() {
-    const id = lists.length > 0 ? Math.max(...lists.map(l => l.id)) + 1 : 0;
-    onListsChange([...lists, { id, event_channel: 1, odts: [{ id: 0, entries: [] }] }]);
-  }
-
-  function removeList(listId: number) {
-    onListsChange(lists.filter(l => l.id !== listId));
-  }
-
-  function setEvent(listId: number, ch: number) {
-    onListsChange(lists.map(l => l.id === listId ? { ...l, event_channel: ch } : l));
-  }
-
-  function addOdt(listId: number) {
-    onListsChange(lists.map(l => {
-      if (l.id !== listId) return l;
-      const nextId = l.odts.length > 0 ? Math.max(...l.odts.map(o => o.id)) + 1 : 0;
-      return { ...l, odts: [...l.odts, { id: nextId, entries: [] }] };
-    }));
-  }
-
   function saveEntry(entry: DaqEntry, listId: number, odtId: number, entryIdx: number | null) {
-    onListsChange(lists.map(l => {
-      if (l.id !== listId) return l;
-      return {
-        ...l,
-        odts: l.odts.map(o => {
-          if (o.id !== odtId) return o;
-          const entries = entryIdx === null
-            ? [...o.entries, entry]
-            : o.entries.map((e, i) => i === entryIdx ? entry : e);
-          return { ...o, entries };
-        }),
-      };
-    }));
+    onSaveEntry(entry, listId, odtId, entryIdx);
     setPopover(null);
-  }
-
-  function removeEntry(listId: number, odtId: number, entryIdx: number) {
-    onListsChange(lists.map(l => {
-      if (l.id !== listId) return l;
-      return { ...l, odts: l.odts.map(o => o.id !== odtId ? o : { ...o, entries: o.entries.filter((_, i) => i !== entryIdx) }) };
-    }));
   }
 
   const totalEntries = lists.reduce((s, l) => s + l.odts.reduce((ss, o) => ss + o.entries.length, 0), 0);
@@ -191,7 +156,7 @@ function DaqTree({ lists, onListsChange }: TreeProps) {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
         <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600">DAQ Lists</span>
-        <button onClick={addList} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors">
+        <button onClick={onAddList} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors">
           <span style={{ fontSize: 14, lineHeight: '14px' }}>+</span> Add List
         </button>
       </div>
@@ -212,13 +177,13 @@ function DaqTree({ lists, onListsChange }: TreeProps) {
                 <select
                   value={list.event_channel}
                   onClick={e => e.stopPropagation()}
-                  onChange={e => { e.stopPropagation(); setEvent(list.id, Number(e.target.value)); }}
+                  onChange={e => { e.stopPropagation(); onSetEvent(list.id, Number(e.target.value)); }}
                   className="px-1 py-0 bg-gray-900 border border-gray-700 rounded text-[10px] font-mono text-gray-400 focus:outline-none focus:border-blue-500 shrink-0"
                 >
                   {EVENT_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 <button
-                  onClick={e => { e.stopPropagation(); removeList(list.id); }}
+                  onClick={e => { e.stopPropagation(); onDeleteList(list.id); }}
                   className="ml-1 text-gray-600 hover:text-red-400 text-[10px] transition-colors shrink-0"
                 >✕</button>
               </div>
@@ -246,7 +211,7 @@ function DaqTree({ lists, onListsChange }: TreeProps) {
                                 <span className="font-mono text-gray-500 text-[10px] shrink-0">{entry.type_name}</span>
                                 <button
                                   className="ml-0.5 text-gray-700 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                                  onClick={e => { e.stopPropagation(); removeEntry(list.id, odt.id, ei); }}
+                                  onClick={e => { e.stopPropagation(); onDeleteEntry(list.id, odt.id, ei); }}
                                 >✕</button>
                               </div>
                             ))}
@@ -263,7 +228,7 @@ function DaqTree({ lists, onListsChange }: TreeProps) {
                       </div>
                     );
                   })}
-                  <button onClick={() => addOdt(list.id)}
+                  <button onClick={() => onAddOdt(list.id)}
                     className="text-[10px] text-gray-600 hover:text-blue-400 transition-colors px-1 py-0.5 mt-0.5">
                     + Add ODT
                   </button>
@@ -627,46 +592,89 @@ function PaneSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
 
 // ── Root DAQ component ───────────────────────────────────────────
 export function Daq() {
-  const setDaqStatus  = useAppStore(s => s.setDaqStatus);
-  const setDaqLists   = useAppStore(s => s.setDaqLists);
+  const daqLists           = useAppStore(s => s.daqLists);
+  const setDaqLists        = useAppStore(s => s.setDaqLists);
+  const setDaqStatus       = useAppStore(s => s.setDaqStatus);
   const clearDaqLiveValues = useAppStore(s => s.clearDaqLiveValues);
-  const showToast = useAppStore(s => s.showToast);
+  const showToast          = useAppStore(s => s.showToast);
 
-  const [localLists, setLocalLists] = useState<DaqList[]>([]);
   const [treePaneWidth, setTreePaneWidth] = useState(300);
-
-  // Keep store in sync with local list edits
-  useEffect(() => { setDaqLists(localLists); }, [localLists, setDaqLists]);
 
   const splitterDrag = useCallback((dx: number) => {
     setTreePaneWidth(prev => Math.max(160, Math.min(520, prev + dx)));
   }, []);
 
+  // ── Tree mutation handlers (call backend, then sync store) ──────
+
+  async function handleAddList() {
+    try {
+      const result = await api.daqAddList(1);
+      setDaqLists([...daqLists, result.list]);
+    } catch (e) { showToast((e as Error).message, 'error'); }
+  }
+
+  async function handleDeleteList(listId: number) {
+    try {
+      await api.daqDeleteList(listId);
+      setDaqLists(daqLists.filter(l => l.id !== listId));
+    } catch (e) { showToast((e as Error).message, 'error'); }
+  }
+
+  async function handleSetEvent(listId: number, ch: number) {
+    try {
+      await api.daqSetEvent(listId, ch);
+      setDaqLists(daqLists.map(l => l.id === listId ? { ...l, event_channel: ch } : l));
+    } catch (e) { showToast((e as Error).message, 'error'); }
+  }
+
+  async function handleAddOdt(listId: number) {
+    try {
+      const result = await api.daqAddOdt(listId);
+      setDaqLists(daqLists.map(l => {
+        if (l.id !== listId) return l;
+        return { ...l, odts: [...l.odts, { id: result.odt_id, entries: [] }] };
+      }));
+    } catch (e) { showToast((e as Error).message, 'error'); }
+  }
+
+  async function handleSaveEntry(entry: DaqEntry, listId: number, odtId: number, entryIdx: number | null) {
+    try {
+      if (entryIdx !== null) await api.daqDeleteEntry(listId, odtId, entryIdx);
+      await api.daqAddEntry(listId, odtId, entry);
+      const result = await api.daqGetLists();
+      setDaqLists(result.lists);
+    } catch (e) { showToast((e as Error).message, 'error'); }
+  }
+
+  async function handleDeleteEntry(listId: number, odtId: number, entryIdx: number) {
+    try {
+      await api.daqDeleteEntry(listId, odtId, entryIdx);
+      const result = await api.daqGetLists();
+      setDaqLists(result.lists);
+    } catch (e) { showToast((e as Error).message, 'error'); }
+  }
+
+  // ── DAQ lifecycle handlers ──────────────────────────────────────
+
   async function handleConfigure() {
     try {
       await api.daqConfigure();
       setDaqStatus('configured');
-    } catch (e) {
-      showToast((e as Error).message, 'error');
-    }
+    } catch (e) { showToast((e as Error).message, 'error'); }
   }
 
   async function handleStart() {
     try {
       await api.daqStart();
       setDaqStatus('running');
-    } catch (e) {
-      showToast((e as Error).message, 'error');
-    }
+    } catch (e) { showToast((e as Error).message, 'error'); }
   }
 
   async function handleStop() {
     try {
       await api.daqStop();
       setDaqStatus('configured');
-    } catch (e) {
-      showToast((e as Error).message, 'error');
-    }
+    } catch (e) { showToast((e as Error).message, 'error'); }
   }
 
   async function handleFree() {
@@ -674,15 +682,13 @@ export function Daq() {
       await api.daqFree();
       setDaqStatus('idle');
       clearDaqLiveValues();
-    } catch (e) {
-      showToast((e as Error).message, 'error');
-    }
+    } catch (e) { showToast((e as Error).message, 'error'); }
   }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <DaqToolbar
-        lists={localLists}
+        lists={daqLists}
         onConfigure={handleConfigure}
         onStart={handleStart}
         onStop={handleStop}
@@ -690,11 +696,19 @@ export function Daq() {
       />
       <div className="flex flex-1 overflow-hidden">
         <div style={{ background: '#030712', width: treePaneWidth, minWidth: 160 }} className="flex flex-col overflow-hidden border-r border-gray-800">
-          <DaqTree lists={localLists} onListsChange={setLocalLists} />
+          <DaqTree
+            lists={daqLists}
+            onAddList={handleAddList}
+            onDeleteList={handleDeleteList}
+            onSetEvent={handleSetEvent}
+            onAddOdt={handleAddOdt}
+            onSaveEntry={handleSaveEntry}
+            onDeleteEntry={handleDeleteEntry}
+          />
         </div>
         <PaneSplitter onDrag={splitterDrag} />
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <DaqLiveTable lists={localLists} />
+          <DaqLiveTable lists={daqLists} />
         </div>
       </div>
     </div>
