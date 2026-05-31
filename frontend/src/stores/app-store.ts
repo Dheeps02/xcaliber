@@ -8,6 +8,7 @@ export interface Toast {
   id: number;
   message: string;
   type: 'success' | 'error' | 'info';
+  detail?: string;
 }
 
 let toastSeq = 0;
@@ -41,7 +42,7 @@ interface AppStore {
   setTheme: (theme: string) => void;
   setDisplayTimeoutMs: (ms: number) => void;
   setAnimationsEnabled: (v: boolean) => void;
-  showToast: (message: string, type?: Toast['type']) => void;
+  showToast: (message: string, type?: Toast['type'], detail?: string) => void;
   dismissToast: (id: number) => void;
   setAnimationWatermark: (v: number) => void;
   activeMainTab: 'trace' | 'daq';
@@ -160,8 +161,8 @@ export const useAppStore = create<AppStore>((set) => ({
   setTheme: (theme) => set({ theme }),
   setDisplayTimeoutMs: (displayTimeoutMs) => set({ displayTimeoutMs }),
   setAnimationsEnabled: (animationsEnabled) => set({ animationsEnabled }),
-  showToast: (message, type = 'info') =>
-    set((s) => ({ toasts: [...s.toasts, { id: ++toastSeq, message, type }] })),
+  showToast: (message, type = 'info', detail) =>
+    set((s) => ({ toasts: [...s.toasts, { id: ++toastSeq, message, type, detail }] })),
   dismissToast: (id) =>
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setAnimationWatermark: (v) => set({ animationWatermark: v }),

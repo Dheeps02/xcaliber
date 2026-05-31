@@ -5,6 +5,7 @@ import {
   useCallback,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import type { DaqList, DaqEntry, DaqEntryType } from '../lib/types';
@@ -58,49 +59,84 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
   const [addr, setAddr] = useState(initial ? `0x${initial.addr.toString(16).padStart(8, '0').toUpperCase()}` : '');
   const [ext, setExt] = useState(String(initial?.addr_ext ?? 0));
   const [typeName, setTypeName] = useState<DaqEntryType>(initial?.type_name ?? 'u32');
+  const [errors, setErrors] = useState<{ name?: boolean; addr?: boolean }>({});
+  const popRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [onClose]);
 
   function handleSave() {
-    const parsed = parseInt(addr.replace(/^0x/i, ''), 16);
-    if (!name.trim() || isNaN(parsed)) return;
+    const parsedAddr = parseInt(addr.replace(/^0x/i, ''), 16);
+    const errs: { name?: boolean; addr?: boolean } = {};
+    if (!name.trim()) errs.name = true;
+    if (!addr.trim() || isNaN(parsedAddr)) errs.addr = true;
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     onSave(
-      { name: name.trim(), addr: parsed, addr_ext: Number(ext) || 0, size: TYPE_SIZES[typeName], type_name: typeName },
+      { name: name.trim(), addr: parsedAddr, addr_ext: Number(ext) || 0, size: TYPE_SIZES[typeName], type_name: typeName },
       listId, odtId, entryIdx
     );
   }
 
-  const style: React.CSSProperties = {
-    position: 'fixed',
-    top: Math.min(anchor.y, window.innerHeight - 260),
-    left: Math.min(anchor.x, window.innerWidth - 256),
-    width: 240,
-    zIndex: 9998,
-  };
+  // Smart positioning: prefer below anchor, flip above if not enough room
+  const POPUP_H = 268;
+  const POPUP_W = 244;
+  const MARGIN = 8;
+  const below = anchor.y + MARGIN;
+  let top: number;
+  if (below + POPUP_H < window.innerHeight - MARGIN) {
+    top = below;
+  } else {
+    const above = anchor.y - POPUP_H - MARGIN;
+    top = above >= MARGIN ? above : Math.max(MARGIN, window.innerHeight - POPUP_H - MARGIN);
+  }
+  let left = anchor.x;
+  if (left + POPUP_W > window.innerWidth - MARGIN) left = anchor.x - POPUP_W;
+  left = Math.max(MARGIN, left);
 
-  return (
-    <div style={style} className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl p-3">
+  const style: React.CSSProperties = { position: 'fixed', top, left, width: POPUP_W, zIndex: 9998 };
+
+  const inputCls = (err?: boolean) =>
+    `w-full px-2 py-1 bg-gray-800 rounded text-xs text-gray-200 focus:outline-none border ${
+      err ? 'border-red-500 focus:border-red-400' : 'border-gray-700 focus:border-blue-500'
+    }`;
+
+  return createPortal(
+    <div ref={popRef} style={style} className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl p-3">
       <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">ODT Entry</p>
       <div className="space-y-2">
         <div>
           <label className="text-[10px] text-gray-500 block mb-0.5">Name</label>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="EngineRPM"
-            className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500" />
+          <input value={name}
+            onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: false })); }}
+            placeholder="EngineRPM"
+            className={inputCls(errors.name)} />
+          {errors.name && <p className="text-[9px] text-red-400 mt-0.5">Name is required</p>}
         </div>
         <div className="flex gap-2">
           <div className="flex-1">
             <label className="text-[10px] text-gray-500 block mb-0.5">Address</label>
-            <input value={addr} onChange={e => setAddr(e.target.value)} placeholder="0x80004000"
-              className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500" />
+            <input value={addr}
+              onChange={e => { setAddr(e.target.value); setErrors(p => ({ ...p, addr: false })); }}
+              placeholder="0x80004000"
+              className={`font-mono ${inputCls(errors.addr)}`} />
+            {errors.addr && <p className="text-[9px] text-red-400 mt-0.5">Invalid hex address</p>}
           </div>
           <div style={{ width: 48 }}>
             <label className="text-[10px] text-gray-500 block mb-0.5">Ext</label>
             <input value={ext} onChange={e => setExt(e.target.value)} placeholder="0"
-              className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500" />
+              className={`font-mono ${inputCls()}`} />
           </div>
         </div>
         <div>
           <label className="text-[10px] text-gray-500 block mb-0.5">Type</label>
           <select value={typeName} onChange={e => setTypeName(e.target.value as DaqEntryType)}
-            className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500">
+            className={inputCls()}>
             {(['u8','u16','u32','i8','i16','i32','f32','f64'] as DaqEntryType[]).map(t => (
               <option key={t} value={t}>{t} ({TYPE_SIZES[t]}B)</option>
             ))}
@@ -117,7 +153,8 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
           Cancel
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -245,7 +282,7 @@ function DaqTree({ lists, onAddList, onDeleteList, onSetEvent, onAddOdt, onSaveE
         </span>
       </div>
 
-      {/* Entry popover */}
+      {/* Entry popover (rendered via portal in EntryPopover itself) */}
       {popover && (
         <EntryPopover
           listId={popover.listId}

@@ -21,7 +21,8 @@ export function Header() {
         setConnected(true, r.slave);
         showToast('Connected to slave', 'success');
       } catch (e) {
-        showToast(`Connect failed: ${e instanceof Error ? e.message : 'unknown error'}`, 'error');
+        const msg = e instanceof Error ? e.message : 'Connection failed';
+        showToast(msg, 'error');
       }
     }
   }

@@ -3,20 +3,28 @@ import type { ConnectResponse, PacketEntry, AppConfig, NetworkInterface, DaqList
 const BASE = 'http://localhost:8080';
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(BASE + path, {
-    method: 'POST',
-    headers: body != null ? { 'Content-Type': 'application/json' } : {},
-    body: body != null ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'request failed' }));
-    throw new Error((err as { error?: string }).error ?? 'Request failed');
+  let res: Response;
+  try {
+    res = await fetch(BASE + path, {
+      method: 'POST',
+      headers: body != null ? { 'Content-Type': 'application/json' } : {},
+      body: body != null ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new Error('Cannot reach XCP client backend. Is the Tauri app running?');
   }
-  return res.json() as Promise<T>;
+  const data = await res.json().catch(() => ({ ok: false, error: 'Invalid response from backend' })) as Record<string, unknown>;
+  if (data['ok'] === false) throw new Error((data['error'] as string | undefined) ?? 'Request failed');
+  return data as T;
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(BASE + path);
+  let res: Response;
+  try {
+    res = await fetch(BASE + path);
+  } catch {
+    throw new Error('Cannot reach XCP client backend. Is the Tauri app running?');
+  }
   if (!res.ok) throw new Error('Request failed');
   return res.json() as Promise<T>;
 }

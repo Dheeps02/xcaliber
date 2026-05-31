@@ -37,6 +37,36 @@ fn broadcast_packet(state: &AppState, event: &str, entry: &PacketEntry) {
     );
 }
 
+/// Translate an XcpError into a short, user-readable string.
+fn user_error(e: &crate::xcp::error::XcpError) -> String {
+    use crate::xcp::error::XcpError;
+    match e {
+        XcpError::NotConnected => "Not connected to XCP slave".into(),
+        XcpError::Timeout => "Timed out — no response from XCP slave".into(),
+        XcpError::ErrorResponse(code) => format!("XCP slave returned {}", code.name()),
+        XcpError::Transport(msg) => {
+            let cause = if let Some(i) = msg.rfind(" (os error ") { &msg[..i] } else { msg.as_str() };
+            format!("Transport error — {cause}")
+        }
+        XcpError::FrameTooShort(n) => format!("Malformed response — frame too short ({n} bytes)"),
+        XcpError::UnexpectedPid(p) => format!("Unexpected response from slave — PID 0x{p:02X}"),
+    }
+}
+
+/// Format a connection error with the target address.
+fn connect_error(ip: &str, port: u16, e: &crate::xcp::error::XcpError) -> String {
+    use crate::xcp::error::XcpError;
+    let cause = match e {
+        XcpError::Transport(msg) => {
+            let c = if let Some(i) = msg.rfind(" (os error ") { &msg[..i] } else { msg.as_str() };
+            c.to_string()
+        }
+        XcpError::Timeout => "timed out".into(),
+        other => other.to_string(),
+    };
+    format!("Cannot connect to XCP slave at {ip}:{port} — {cause}")
+}
+
 fn log_tx(state: &AppState, cmd: &XcpCommand, ctr: u16) -> PacketEntry {
     let payload = cmd.encode();
     let decoded = match cmd {
@@ -190,11 +220,11 @@ pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let transport: Box<dyn crate::xcp::transport::XcpTransport> = match cfg.protocol.as_str() {
         "tcp" => match TcpTransport::connect(&cfg.server_ip, cfg.server_port, bind_ip).await {
             Ok(t) => Box::new(t),
-            Err(e) => return (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+            Err(e) => return Json(json!({ "ok": false, "error": connect_error(&cfg.server_ip, cfg.server_port, &e) })).into_response(),
         },
         _ => match UdpTransport::connect(&cfg.server_ip, cfg.server_port, bind_ip).await {
             Ok(t) => Box::new(t),
-            Err(e) => return (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+            Err(e) => return Json(json!({ "ok": false, "error": connect_error(&cfg.server_ip, cfg.server_port, &e) })).into_response(),
         },
     };
 
@@ -226,7 +256,7 @@ pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         }
         Err(e) => {
             log_rx_err(&state, &e);
-            (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response()
+            Json(json!({ "ok": false, "error": connect_error(&cfg.server_ip, cfg.server_port, &e) })).into_response()
         }
     }
 }
@@ -260,14 +290,14 @@ pub async fn status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 pub async fn cmd_get_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match run_cmd(&state, XcpCommand::GetStatus).await {
         Ok(r)  => Json(json!({ "ok": true, "response": r })).into_response(),
-        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
 
 pub async fn cmd_get_comm_mode_info(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match run_cmd(&state, XcpCommand::GetCommModeInfo).await {
         Ok(r)  => Json(json!({ "ok": true, "response": r })).into_response(),
-        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
 
@@ -280,7 +310,7 @@ pub async fn cmd_get_id(
 ) -> impl IntoResponse {
     match run_cmd(&state, XcpCommand::GetId { id_type: body.id_type }).await {
         Ok(r)  => Json(json!({ "ok": true, "response": r })).into_response(),
-        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
 
@@ -293,7 +323,7 @@ pub async fn cmd_raw(
 ) -> impl IntoResponse {
     match run_cmd(&state, XcpCommand::Raw { bytes: body.bytes }).await {
         Ok(r)  => Json(json!({ "ok": true, "response": r })).into_response(),
-        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
 
@@ -306,7 +336,7 @@ pub async fn cmd_set_mta(
 ) -> impl IntoResponse {
     match run_cmd(&state, XcpCommand::SetMta { addr_ext: body.addr_ext, addr: body.addr }).await {
         Ok(r)  => Json(json!({ "ok": true, "response": r })).into_response(),
-        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
 
@@ -319,7 +349,7 @@ pub async fn cmd_upload(
 ) -> impl IntoResponse {
     match run_cmd(&state, XcpCommand::Upload { size: body.size }).await {
         Ok(r)  => Json(json!({ "ok": true, "response": r })).into_response(),
-        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
 
@@ -357,7 +387,7 @@ pub async fn cmd_user(
             None => {
                 let e = crate::xcp::error::XcpError::NotConnected;
                 log_rx_err(&state, &e);
-                return (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response();
+                return Json(json!({ "ok": false, "error": user_error(&e) })).into_response();
             }
             Some(session) => session.execute(&XcpCommand::Raw { bytes }).await,
         }
@@ -370,7 +400,7 @@ pub async fn cmd_user(
         }
         Err(e) => {
             log_rx_err(&state, e);
-            (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response()
+            Json(json!({ "ok": false, "error": user_error(e) })).into_response()
         }
     }
 }
@@ -415,7 +445,7 @@ pub async fn update_config(
     };
     match result {
         Ok(()) => Json(json!({ "ok": true })).into_response(),
-        Err(e) => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": e.to_string() })).into_response(),
     }
 }
 
@@ -428,7 +458,7 @@ pub async fn cmd_download(
 ) -> impl IntoResponse {
     match run_cmd(&state, XcpCommand::Download { data: body.data }).await {
         Ok(r)  => Json(json!({ "ok": true, "response": r })).into_response(),
-        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
 
@@ -698,7 +728,6 @@ async fn daq_configure_inner(state: &Arc<AppState>) -> Result<(), crate::xcp::er
 pub async fn daq_configure(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match daq_configure_inner(&state).await {
         Ok(()) => {
-            // Build PID→entry map from the configured lists.
             let lists = state.daq_lists.lock().unwrap().clone();
             *state.daq_dto_map.lock().unwrap() = build_dto_map(&lists);
             *state.daq_status.lock().unwrap() = DaqStatus::Configured;
@@ -707,14 +736,13 @@ pub async fn daq_configure(State(state): State<Arc<AppState>>) -> impl IntoRespo
             })).unwrap());
             Json(json!({ "ok": true })).into_response()
         }
-        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
 
 pub async fn daq_start(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match run_cmd(&state, XcpCommand::StartStopSynch { mode: 0x01 }).await {
         Ok(_) => {
-            // Subscribe to raw transport broadcast, then spawn the DTO receive task.
             let sub = {
                 let guard = state.session.lock().await;
                 guard.as_ref().map(|s| s.subscribe())
@@ -729,7 +757,7 @@ pub async fn daq_start(State(state): State<Arc<AppState>>) -> impl IntoResponse 
             })).unwrap());
             Json(json!({ "ok": true })).into_response()
         }
-        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
 
@@ -743,7 +771,7 @@ pub async fn daq_stop(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             })).unwrap());
             Json(json!({ "ok": true })).into_response()
         }
-        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
 
@@ -758,6 +786,6 @@ pub async fn daq_free(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             })).unwrap());
             Json(json!({ "ok": true })).into_response()
         }
-        Err(e) => (axum::http::StatusCode::BAD_GATEWAY, Json(json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
