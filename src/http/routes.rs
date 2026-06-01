@@ -427,6 +427,7 @@ pub struct UpdateConfigBody {
     pub timeout_ms: u64,
     pub listen_port: u16,
     pub bind_ip: Option<String>,
+    pub events: Option<Vec<crate::config::EventDef>>,
 }
 
 pub async fn update_config(
@@ -441,6 +442,7 @@ pub async fn update_config(
         cfg.connection.timeout_ms = body.timeout_ms;
         cfg.connection.bind_ip = body.bind_ip.filter(|s| !s.is_empty());
         cfg.server.listen_port = body.listen_port;
+        if let Some(events) = body.events { cfg.events = events; }
         cfg.save(&state.config_path)
     };
     match result {
@@ -577,7 +579,7 @@ pub async fn daq_add_list(
 ) -> impl IntoResponse {
     let mut lists = state.daq_lists.lock().unwrap();
     let id = lists.iter().map(|l| l.id).max().map(|m| m + 1).unwrap_or(0);
-    let list = DaqListDef { id, event_channel: body.event_channel, odts: vec![DaqOdtDef { id: 0, entries: vec![] }] };
+    let list = DaqListDef { id, name: None, event_channel: body.event_channel, odts: vec![DaqOdtDef { id: 0, name: None, entries: vec![] }] };
     lists.push(list.clone());
     Json(json!({ "list": list }))
 }
@@ -599,7 +601,7 @@ pub async fn daq_add_odt(
         return (axum::http::StatusCode::NOT_FOUND, Json(json!({ "error": "list not found" }))).into_response();
     };
     let odt_id = list.odts.iter().map(|o| o.id).max().map(|m| m + 1).unwrap_or(0);
-    list.odts.push(DaqOdtDef { id: odt_id, entries: vec![] });
+    list.odts.push(DaqOdtDef { id: odt_id, name: None, entries: vec![] });
     Json(json!({ "odt_id": odt_id })).into_response()
 }
 

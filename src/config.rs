@@ -2,11 +2,29 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct EventDef {
+    pub id: u16,
+    pub name: String,
+}
+
+fn default_events() -> Vec<EventDef> {
+    vec![
+        EventDef { id: 1,  name: "1 ms".into()   },
+        EventDef { id: 2,  name: "10 ms".into()  },
+        EventDef { id: 3,  name: "100 ms".into() },
+        EventDef { id: 4,  name: "1 s".into()    },
+        EventDef { id: 5,  name: "10 s".into()   },
+    ]
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
     pub connection: ConnectionConfig,
     pub server: ServerConfig,
     #[serde(default)]
     pub custom_commands: Vec<CustomCommand>,
+    #[serde(default = "default_events")]
+    pub events: Vec<EventDef>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -110,6 +128,7 @@ impl Default for Config {
             },
             server: ServerConfig { listen_port: 8080 },
             custom_commands: vec![],
+            events: default_events(),
         }
     }
 }

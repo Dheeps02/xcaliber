@@ -18,12 +18,16 @@ pub struct DaqEntryDef {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DaqOdtDef {
     pub id: u32,
+    #[serde(default)]
+    pub name: Option<String>,
     pub entries: Vec<DaqEntryDef>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DaqListDef {
     pub id: u32,
+    #[serde(default)]
+    pub name: Option<String>,
     pub event_channel: u16,
     pub odts: Vec<DaqOdtDef>,
 }
