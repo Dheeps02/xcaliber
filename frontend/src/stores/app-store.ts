@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef, DaqList, DaqStatus, DaqLiveValue, DaqEntryType } from '../lib/types';
+import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef, DaqList, DaqStatus, DaqLiveValue, DaqEntryType, EventDef, A2lVariable } from '../lib/types';
 import { CMD_DEFS } from '../lib/cmd-defs';
 
 const NUM_CELLS = 8;
@@ -18,6 +18,7 @@ interface AppStore {
   slaveInfo: ConnectResponse | null;
   config: AppConfig | null;
   customCmdDefs: Record<string, CmdDef>;
+  events: EventDef[];
   packets: PacketEntry[];
   txCount: number;
   rxCount: number;
@@ -33,6 +34,7 @@ interface AppStore {
 
   setConnected: (connected: boolean, slave?: ConnectResponse) => void;
   setConfig: (cfg: AppConfig) => void;
+  setEvents: (events: EventDef[]) => void;
   addPacket: (p: PacketEntry) => void;
   prependPackets: (packets: PacketEntry[]) => void;
   setAutoScroll: (v: boolean) => void;
@@ -47,6 +49,8 @@ interface AppStore {
   setAnimationWatermark: (v: number) => void;
   activeMainTab: 'trace' | 'daq';
   setActiveMainTab: (tab: 'trace' | 'daq') => void;
+  byteBarCollapsed: boolean;
+  setByteBarCollapsed: (v: boolean) => void;
 
   // ── DAQ ──────────────────────────────────────────────────────────
   daqStatus: DaqStatus;
@@ -58,6 +62,8 @@ interface AppStore {
   updateDaqLiveValue: (listId: number, odtId: number, name: string, addr: number, type: DaqEntryType, value: number) => void;
   setDaqDtoRate: (n: number) => void;
   clearDaqLiveValues: () => void;
+  a2lVariables: A2lVariable[];
+  setA2lVariables: (vars: A2lVariable[]) => void;
 }
 
 function buildCustomCmdDefs(config: AppConfig): Record<string, CmdDef> {
@@ -87,6 +93,7 @@ export const useAppStore = create<AppStore>((set) => ({
   slaveInfo: null,
   config: null,
   customCmdDefs: {},
+  events: [],
   packets: [],
   txCount: 0,
   rxCount: 0,
@@ -100,10 +107,12 @@ export const useAppStore = create<AppStore>((set) => ({
   toasts: [],
   animationWatermark: null,
   activeMainTab: 'trace',
+  byteBarCollapsed: false,
   daqStatus: 'idle',
   daqLists: [],
   daqLiveValues: new Map(),
   daqDtoRate: 0,
+  a2lVariables: [],
 
   setConnected: (connected, slave) =>
     set((s) => ({
@@ -112,7 +121,9 @@ export const useAppStore = create<AppStore>((set) => ({
     })),
 
   setConfig: (config) =>
-    set({ config, customCmdDefs: buildCustomCmdDefs(config) }),
+    set({ config, customCmdDefs: buildCustomCmdDefs(config), events: config.events ?? [] }),
+
+  setEvents: (events) => set({ events }),
 
   addPacket: (p) =>
     set((s) => ({
@@ -166,18 +177,20 @@ export const useAppStore = create<AppStore>((set) => ({
   dismissToast: (id) =>
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setAnimationWatermark: (v) => set({ animationWatermark: v }),
-  setActiveMainTab: (tab) => set({ activeMainTab: tab }),
+  setActiveMainTab: (tab) => set({ activeMainTab: tab, ...(tab === 'daq' ? { byteBarCollapsed: true } : {}) }),
+  setByteBarCollapsed: (byteBarCollapsed) => set({ byteBarCollapsed }),
 
   setDaqStatus: (daqStatus) => set({ daqStatus }),
   setDaqLists: (daqLists) => set({ daqLists }),
   setDaqDtoRate: (daqDtoRate) => set({ daqDtoRate }),
   clearDaqLiveValues: () => set({ daqLiveValues: new Map() }),
+  setA2lVariables: (a2lVariables) => set({ a2lVariables }),
   updateDaqLiveValue: (listId, odtId, name, addr, type, value) =>
     set((s) => {
       const key = `${listId}:${odtId}:${name}`;
       const existing = s.daqLiveValues.get(key);
       const history = existing
-        ? [...existing.history.slice(-39), value]
+        ? [...existing.history.slice(-199), value]
         : [value];
       const next = new Map(s.daqLiveValues);
       next.set(key, { listId, odtId, entryName: name, addr, typeName: type, value, history });

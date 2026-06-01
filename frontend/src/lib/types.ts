@@ -69,6 +69,12 @@ export interface AppConfig {
     listen_port: number;
   };
   custom_commands?: CustomCommandConfig[];
+  events: EventDef[];
+}
+
+export interface EventDef {
+  id: number;
+  name: string;
 }
 
 export interface NetworkInterface {
@@ -90,11 +96,13 @@ export interface DaqEntry {
 
 export interface DaqOdt {
   id: number;
+  name?: string;
   entries: DaqEntry[];
 }
 
 export interface DaqList {
   id: number;
+  name?: string;
   event_channel: number;
   odts: DaqOdt[];
 }
@@ -109,6 +117,12 @@ export interface DaqLiveValue {
   typeName: DaqEntryType;
   value: number | null;
   history: number[];
+}
+
+export interface A2lVariable {
+  name: string;
+  addr: number;
+  type?: DaqEntryType;
 }
 
 export interface DaqDtoEvent {

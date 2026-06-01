@@ -1,4 +1,4 @@
-import type { ConnectResponse, PacketEntry, AppConfig, NetworkInterface, DaqList, DaqEntry, DaqStatus } from './types';
+import type { ConnectResponse, PacketEntry, AppConfig, NetworkInterface, DaqList, DaqEntry, DaqStatus, EventDef } from './types';
 
 const BASE = import.meta.env.DEV ? '' : 'http://localhost:8080';
 
@@ -61,6 +61,7 @@ export const api = {
     timeout_ms: number;
     listen_port: number;
     bind_ip?: string;
+    events?: EventDef[];
   }) => post<{ ok: boolean }>('/api/config', body),
   getNetworkInterfaces: () =>
     get<{ interfaces: NetworkInterface[] }>('/api/network-interfaces'),
