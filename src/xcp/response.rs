@@ -261,24 +261,22 @@ mod tests {
         // FF 01 00 00 FF FF 05 01 01
         let payload = vec![0xFF, 0x01, 0x00, 0x00, 0xFF, 0xFF, 0x05, 0x01, 0x01];
         let resp = XcpResponse::decode(&payload, Some(0xFF)).unwrap();
-        match resp {
-            XcpResponse::Connect(r) => {
-                assert!(r.cal_pag);
-                assert!(!r.daq);
-                assert_eq!(r.max_cto, 255);
-                assert_eq!(r.max_dto, 0x05FF);
-            }
-            _ => panic!("expected Connect"),
-        }
+        let XcpResponse::Connect(r) = resp else {
+            panic!("expected XcpResponse::Connect, got {resp:?}");
+        };
+        assert!(r.cal_pag);
+        assert!(!r.daq);
+        assert_eq!(r.max_cto, 255);
+        assert_eq!(r.max_dto, 0x05FF);
     }
 
     #[test]
     fn decode_error_response() {
         let payload = vec![0xFE, 0x20];
         let resp = XcpResponse::decode(&payload, Some(0xFF)).unwrap();
-        match resp {
-            XcpResponse::Error(e) => assert_eq!(e.name, "ERR_CMD_UNKNOWN"),
-            _ => panic!("expected Error"),
-        }
+        let XcpResponse::Error(e) = resp else {
+            panic!("expected XcpResponse::Error, got {resp:?}");
+        };
+        assert_eq!(e.name, "ERR_CMD_UNKNOWN");
     }
 }

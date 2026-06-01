@@ -103,7 +103,7 @@ impl AppState {
 
     pub fn insert_packet(&self, entry: &PacketEntry) -> i64 {
         let db = self.db.lock().unwrap();
-        db.execute(
+        match db.execute(
             "INSERT INTO packets (direction, counter, timestamp_ms, hex, pid, decoded)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
@@ -114,7 +114,10 @@ impl AppState {
                 entry.pid,
                 entry.decoded.to_string(),
             ],
-        ).ok();
+        ) {
+            Ok(_) => {}
+            Err(e) => eprintln!("[db] insert_packet failed: {e}"),
+        }
         db.last_insert_rowid()
     }
 

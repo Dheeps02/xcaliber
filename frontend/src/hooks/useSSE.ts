@@ -9,7 +9,7 @@ export function useSSE() {
   const setConnected         = useAppStore((s) => s.setConnected);
   const setConfig            = useAppStore((s) => s.setConfig);
   const setAnimationWatermark = useAppStore((s) => s.setAnimationWatermark);
-  const updateDaqLiveValue   = useAppStore((s) => s.updateDaqLiveValue);
+  const batchUpdateDaqLiveValues = useAppStore((s) => s.batchUpdateDaqLiveValues);
   const setDaqStatus         = useAppStore((s) => s.setDaqStatus);
   const setDaqLists          = useAppStore((s) => s.setDaqLists);
   const setDaqDtoRate        = useAppStore((s) => s.setDaqDtoRate);
@@ -38,20 +38,21 @@ export function useSSE() {
 
         } else if (msg.event === 'daq_dto') {
           const d = msg.data as DaqDtoEvent;
-          // Update live values for each signal in this DTO
-          const liveValuesStore = useAppStore.getState().daqLists;
-          for (const list of liveValuesStore) {
+          const updates: Parameters<typeof batchUpdateDaqLiveValues>[0] = [];
+          const daqLists = useAppStore.getState().daqLists;
+          for (const list of daqLists) {
             if (list.id !== d.list_id) continue;
             for (const odt of list.odts) {
               if (odt.id !== d.odt_id) continue;
               for (const entry of odt.entries) {
                 const val = d.values[entry.name];
                 if (val !== undefined) {
-                  updateDaqLiveValue(d.list_id, d.odt_id, entry.name, entry.addr, entry.type_name, val);
+                  updates.push({ listId: d.list_id, odtId: d.odt_id, name: entry.name, addr: entry.addr, type: entry.type_name, value: val });
                 }
               }
             }
           }
+          if (updates.length > 0) batchUpdateDaqLiveValues(updates);
           // Compute DTOs/s over a 2-second rolling window
           const now = Date.now();
           dtoCountRef.current.count += 1;
