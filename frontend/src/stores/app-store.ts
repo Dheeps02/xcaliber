@@ -60,10 +60,15 @@ interface AppStore {
   setDaqStatus: (s: DaqStatus) => void;
   setDaqLists: (lists: DaqList[]) => void;
   updateDaqLiveValue: (listId: number, odtId: number, name: string, addr: number, type: DaqEntryType, value: number) => void;
+  batchUpdateDaqLiveValues: (updates: { listId: number; odtId: number; name: string; addr: number; type: DaqEntryType; value: number }[]) => void;
   setDaqDtoRate: (n: number) => void;
   clearDaqLiveValues: () => void;
   a2lVariables: A2lVariable[];
   setA2lVariables: (vars: A2lVariable[]) => void;
+
+  alertMsg: string | null;
+  showAlert: (msg: string) => void;
+  clearAlert: () => void;
 }
 
 function buildCustomCmdDefs(config: AppConfig): Record<string, CmdDef> {
@@ -126,12 +131,17 @@ export const useAppStore = create<AppStore>((set) => ({
   setEvents: (events) => set({ events }),
 
   addPacket: (p) =>
-    set((s) => ({
-      packets: [...s.packets, p],
-      txCount: p.direction === 'tx' ? s.txCount + 1 : s.txCount,
-      rxCount: p.direction === 'rx' ? s.rxCount + 1 : s.rxCount,
-      lastPacketId: Math.max(s.lastPacketId, p.id),
-    })),
+    set((s) => {
+      const packets = s.packets.length >= 2000
+        ? [...s.packets.slice(-1999), p]
+        : [...s.packets, p];
+      return {
+        packets,
+        txCount: p.direction === 'tx' ? s.txCount + 1 : s.txCount,
+        rxCount: p.direction === 'rx' ? s.rxCount + 1 : s.rxCount,
+        lastPacketId: Math.max(s.lastPacketId, p.id),
+      };
+    }),
 
   prependPackets: (incoming) =>
     set((s) => {
@@ -185,15 +195,28 @@ export const useAppStore = create<AppStore>((set) => ({
   setDaqDtoRate: (daqDtoRate) => set({ daqDtoRate }),
   clearDaqLiveValues: () => set({ daqLiveValues: new Map() }),
   setA2lVariables: (a2lVariables) => set({ a2lVariables }),
+  alertMsg: null,
+  showAlert: (msg) => set({ alertMsg: msg }),
+  clearAlert: () => set({ alertMsg: null }),
   updateDaqLiveValue: (listId, odtId, name, addr, type, value) =>
     set((s) => {
       const key = `${listId}:${odtId}:${name}`;
       const existing = s.daqLiveValues.get(key);
-      const history = existing
-        ? [...existing.history.slice(-199), value]
-        : [value];
+      const history = existing ? [...existing.history.slice(-199), value] : [value];
       const next = new Map(s.daqLiveValues);
       next.set(key, { listId, odtId, entryName: name, addr, typeName: type, value, history });
+      return { daqLiveValues: next };
+    }),
+
+  batchUpdateDaqLiveValues: (updates) =>
+    set((s) => {
+      const next = new Map(s.daqLiveValues);
+      for (const { listId, odtId, name, addr, type, value } of updates) {
+        const key = `${listId}:${odtId}:${name}`;
+        const existing = next.get(key);
+        const history = existing ? [...existing.history.slice(-199), value] : [value];
+        next.set(key, { listId, odtId, entryName: name, addr, typeName: type, value, history });
+      }
       return { daqLiveValues: next };
     }),
 }));

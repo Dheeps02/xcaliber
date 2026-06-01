@@ -4,6 +4,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  memo,
   Fragment,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
@@ -20,7 +21,7 @@ const DEFAULT_COL_WIDTHS = { signal: 160, value: 96, type: 52, address: 100, lis
 const ODT_COLORS = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#ec4899','#84cc16'];
 
 // ── Sparkline ────────────────────────────────────────────────────
-function Sparkline({ history, color = '#10b981', zoom = 40, onZoomChange }: {
+const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 40, onZoomChange }: {
   history: number[];
   color?: string;
   zoom?: number;
@@ -61,7 +62,7 @@ function Sparkline({ history, color = '#10b981', zoom = 40, onZoomChange }: {
       <polyline points={pts} fill="none" style={{ stroke: color, transition: 'stroke 300ms ease' }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   );
-}
+});
 
 // ── Animated count for DAQ summary ───────────────────────────────
 function DaqAnimNum({ value }: { value: number }) {
@@ -94,32 +95,62 @@ interface EntryPopoverProps {
   onClose: () => void;
 }
 
+function resolveEntryAddr(input: string, a2lVars: A2lVariable[]): number | null {
+  const t = input.trim();
+  if (/^(?:0x)?[0-9a-fA-F]+$/i.test(t)) {
+    const n = parseInt(t.replace(/^0x/i, ''), 16);
+    return isNaN(n) ? null : n;
+  }
+  const v = a2lVars.find((v) => v.name === t);
+  return v ? v.addr : null;
+}
+
 function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClose }: EntryPopoverProps) {
-  const a2lVars = useAppStore((s) => s.a2lVariables);
+  const a2lVars  = useAppStore((s) => s.a2lVariables);
+  const showAlert = useAppStore((s) => s.showAlert);
   const [name, setName] = useState(initial?.name ?? '');
   const [addr, setAddr] = useState(initial ? `0x${initial.addr.toString(16).padStart(8, '0').toUpperCase()}` : '');
   const [ext, setExt] = useState(String(initial?.addr_ext ?? 0));
   const [typeName, setTypeName] = useState<DaqEntryType>(initial?.type_name ?? 'u32');
   const [errors, setErrors] = useState<{ name?: boolean; addr?: boolean }>({});
-  const [suggestions, setSuggestions] = useState<A2lVariable[]>([]);
-  const [suggOpen, setSuggOpen] = useState(false);
+  const [nameSuggs, setNameSuggs] = useState<A2lVariable[]>([]);
+  const [nameSuggOpen, setNameSuggOpen] = useState(false);
+  const [addrSuggs, setAddrSuggs] = useState<A2lVariable[]>([]);
+  const [addrSuggOpen, setAddrSuggOpen] = useState(false);
   const popRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Filter A2L suggestions
+  // Label field: filter A2L suggestions by name
   useEffect(() => {
-    if (!name.trim() || a2lVars.length === 0) { setSuggestions([]); return; }
+    if (!name.trim() || a2lVars.length === 0) { setNameSuggs([]); return; }
     const q = name.toLowerCase();
-    setSuggestions(a2lVars.filter(v => v.name.toLowerCase().includes(q)).slice(0, 8));
+    setNameSuggs(a2lVars.filter(v => v.name.toLowerCase().includes(q)).slice(0, 8));
   }, [name, a2lVars]);
 
-  function selectSuggestion(v: A2lVariable) {
+  // Address field: filter A2L suggestions when not a hex string
+  useEffect(() => {
+    const t = addr.trim();
+    if (!t || /^0x/i.test(t) || a2lVars.length === 0) { setAddrSuggs([]); return; }
+    const q = t.toLowerCase();
+    setAddrSuggs(a2lVars.filter(v => v.name.toLowerCase().includes(q)).slice(0, 8));
+    setAddrSuggOpen(true);
+  }, [addr, a2lVars]);
+
+  function selectNameSuggestion(v: A2lVariable) {
     setName(v.name);
     setAddr(`0x${v.addr.toString(16).padStart(8, '0').toUpperCase()}`);
     if (v.type) setTypeName(v.type);
-    setSuggestions([]);
-    setSuggOpen(false);
+    setNameSuggs([]);
+    setNameSuggOpen(false);
     setErrors({});
+  }
+
+  function selectAddrSuggestion(v: A2lVariable) {
+    setAddr(`0x${v.addr.toString(16).padStart(8, '0').toUpperCase()}`);
+    if (v.type) setTypeName(v.type);
+    setAddrSuggs([]);
+    setAddrSuggOpen(false);
+    setErrors(p => ({ ...p, addr: false }));
   }
 
   // Close on outside click
@@ -132,19 +163,25 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
   }, [onClose]);
 
   function handleSave() {
-    const parsedAddr = parseInt(addr.replace(/^0x/i, ''), 16);
+    const addrTrim = addr.trim();
+    const isHex = /^(?:0x)?[0-9a-fA-F]+$/i.test(addrTrim);
+    if (!isHex && a2lVars.length === 0) {
+      showAlert('No A2L file loaded.\n\nLoad an A2L JSON file first to resolve variable names.');
+      return;
+    }
+    const resolvedAddr = resolveEntryAddr(addr, a2lVars);
     const errs: { name?: boolean; addr?: boolean } = {};
     if (!name.trim()) errs.name = true;
-    if (!addr.trim() || isNaN(parsedAddr)) errs.addr = true;
+    if (resolvedAddr === null) errs.addr = true;
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     onSave(
-      { name: name.trim(), addr: parsedAddr, addr_ext: Number(ext) || 0, size: TYPE_SIZES[typeName], type_name: typeName },
+      { name: name.trim(), addr: resolvedAddr!, addr_ext: Number(ext) || 0, size: TYPE_SIZES[typeName], type_name: typeName },
       listId, odtId, entryIdx
     );
   }
 
   // Smart positioning: prefer below anchor, flip above if not enough room
-  const POPUP_H = suggestions.length > 0 && suggOpen ? 340 : 268;
+  const POPUP_H = (nameSuggs.length > 0 && nameSuggOpen) || (addrSuggs.length > 0 && addrSuggOpen) ? 340 : 268;
   const POPUP_W = 244;
   const MARGIN = 8;
   const below = anchor.y + MARGIN;
@@ -171,24 +208,24 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
       <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">ODT Entry</p>
       <div className="space-y-2">
         <div className="relative">
-          <label className="text-[10px] text-gray-500 block mb-0.5">Name</label>
+          <label className="text-[10px] text-gray-500 block mb-0.5">Label</label>
           <input
             ref={nameInputRef}
             value={name}
-            onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: false })); setSuggOpen(true); }}
-            onFocus={() => setSuggOpen(true)}
+            onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: false })); setNameSuggOpen(true); }}
+            onFocus={() => setNameSuggOpen(true)}
+            onBlur={() => setTimeout(() => setNameSuggOpen(false), 120)}
             placeholder="EngineRPM"
             className={inputCls(errors.name)}
           />
-          {errors.name && <p className="text-[9px] text-red-400 mt-0.5">Name is required</p>}
-          {/* A2L suggestions dropdown */}
-          {suggOpen && suggestions.length > 0 && (
+          {errors.name && <p className="text-[9px] text-red-400 mt-0.5">Label is required</p>}
+          {nameSuggOpen && nameSuggs.length > 0 && (
             <div className="absolute z-10 left-0 right-0 top-full mt-0.5 bg-gray-800 border border-gray-700 rounded shadow-xl max-h-36 overflow-y-auto">
-              {suggestions.map(v => (
+              {nameSuggs.map(v => (
                 <div
                   key={v.name}
                   className="flex items-center justify-between px-2 py-1 hover:bg-gray-700 cursor-pointer transition-colors"
-                  onMouseDown={e => { e.preventDefault(); selectSuggestion(v); }}
+                  onMouseDown={e => { e.preventDefault(); selectNameSuggestion(v); }}
                 >
                   <span className="text-xs text-gray-200 truncate">{v.name}</span>
                   <span className="text-[10px] text-gray-500 font-mono ml-2 shrink-0">
@@ -200,13 +237,30 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
           )}
         </div>
         <div className="flex gap-2">
-          <div className="flex-1">
+          <div className="flex-1 relative">
             <label className="text-[10px] text-gray-500 block mb-0.5">Address</label>
             <input value={addr}
-              onChange={e => { setAddr(e.target.value); setErrors(p => ({ ...p, addr: false })); }}
-              placeholder="0x80004000"
+              onChange={e => { setAddr(e.target.value); setErrors(p => ({ ...p, addr: false })); setAddrSuggOpen(true); }}
+              onBlur={() => setTimeout(() => setAddrSuggOpen(false), 120)}
+              placeholder="0x... or VarName"
               className={`font-mono ${inputCls(errors.addr)}`} />
-            {errors.addr && <p className="text-[9px] text-red-400 mt-0.5">Invalid hex address</p>}
+            {errors.addr && <p className="text-[9px] text-red-400 mt-0.5">Invalid address or unknown variable</p>}
+            {addrSuggOpen && addrSuggs.length > 0 && (
+              <div className="absolute z-10 left-0 right-0 top-full mt-0.5 bg-gray-800 border border-gray-700 rounded shadow-xl max-h-36 overflow-y-auto">
+                {addrSuggs.map(v => (
+                  <div
+                    key={v.name}
+                    className="flex items-center justify-between px-2 py-1 hover:bg-gray-700 cursor-pointer transition-colors"
+                    onMouseDown={e => { e.preventDefault(); selectAddrSuggestion(v); }}
+                  >
+                    <span className="text-xs text-gray-200 truncate">{v.name}</span>
+                    <span className="text-[10px] text-gray-500 font-mono ml-2 shrink-0">
+                      0x{v.addr.toString(16).toUpperCase().padStart(8, '0')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{ width: 48 }}>
             <label className="text-[10px] text-gray-500 block mb-0.5">Ext</label>
@@ -763,16 +817,13 @@ interface ToolbarProps {
   onFree: () => void;
   onSave: () => void;
   onLoad: (file: File) => void;
-  onLoadA2l: (file: File) => void;
 }
 
-function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoad, onLoadA2l }: ToolbarProps) {
+function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoad }: ToolbarProps) {
   const daqStatus = useAppStore(s => s.daqStatus);
   const connected = useAppStore(s => s.connected);
   const daqDtoRate = useAppStore(s => s.daqDtoRate);
-  const a2lVariables = useAppStore(s => s.a2lVariables);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const a2lInputRef = useRef<HTMLInputElement>(null);
 
   const canConfigure = daqStatus === 'idle' && connected && lists.some(l => l.odts.some(o => o.entries.length > 0));
   const canStart     = daqStatus === 'configured';
@@ -795,7 +846,7 @@ function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoa
     'text-gray-500';
 
   return (
-    <div className="flex items-center gap-2 px-4 h-10 border-b border-gray-800 bg-gray-900/60 shrink-0">
+    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-800 bg-gray-900/60 shrink-0">
       <input
         ref={fileInputRef}
         type="file"
@@ -806,17 +857,6 @@ function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoa
           if (file) { onLoad(file); e.target.value = ''; }
         }}
       />
-      <input
-        ref={a2lInputRef}
-        type="file"
-        accept=".json"
-        className="hidden"
-        onChange={e => {
-          const file = e.target.files?.[0];
-          if (file) { onLoadA2l(file); e.target.value = ''; }
-        }}
-      />
-
       {/* Status */}
       <div className="flex items-center gap-1.5 shrink-0">
         <span className={`w-2 h-2 rounded-full shrink-0 ${ledClass}`} />
@@ -828,7 +868,7 @@ function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoa
       <button
         onClick={onFree}
         disabled={!canFree}
-        className={`px-2.5 py-1 rounded text-[10px] leading-none font-medium border transition-colors translate-y-px ${
+        className={`h-6 px-2.5 rounded text-[10px] font-medium flex items-center border transition-colors ${
           canFree
             ? 'text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer'
             : 'text-gray-600 border-gray-800 bg-gray-900 cursor-not-allowed opacity-40'
@@ -842,7 +882,7 @@ function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoa
       <button
         onClick={onConfigure}
         disabled={!canConfigure}
-        className={`px-2.5 py-1 rounded text-[10px] leading-none font-medium border transition-colors translate-y-px text-blue-400 border-blue-500/30 bg-blue-500/10 ${
+        className={`h-6 px-2.5 rounded text-[10px] font-medium flex items-center border transition-colors text-blue-400 border-blue-500/30 bg-blue-500/10 ${
           canConfigure ? 'hover:bg-blue-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
         }`}
       >
@@ -854,7 +894,7 @@ function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoa
         onClick={onStart}
         disabled={!canStart}
         title="Start DAQ"
-        className={`w-7 h-7 rounded flex items-center justify-center text-xs border transition-colors text-green-400 border-green-500/30 bg-green-500/10 ${
+        className={`w-6 h-6 rounded flex items-center justify-center text-xs border transition-colors text-green-400 border-green-500/30 bg-green-500/10 ${
           canStart ? 'hover:bg-green-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
         }`}
       >▶</button>
@@ -864,7 +904,7 @@ function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoa
         onClick={onStop}
         disabled={!canStop}
         title="Stop DAQ"
-        className={`w-7 h-7 rounded flex items-center justify-center text-xs border transition-colors text-red-400 border-red-500/30 bg-red-500/10 ${
+        className={`w-6 h-6 rounded flex items-center justify-center text-xs border transition-colors text-red-400 border-red-500/30 bg-red-500/10 ${
           canStop ? 'hover:bg-red-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
         }`}
       >■</button>
@@ -876,31 +916,18 @@ function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoa
 
       <div className="w-px h-4 bg-gray-800" />
 
-      {/* A2L load */}
-      <button
-        onClick={() => a2lInputRef.current?.click()}
-        title={a2lVariables.length > 0 ? `A2L loaded: ${a2lVariables.length} variables` : 'Load A2L JSON for variable autocomplete'}
-        className={`px-2.5 py-1 rounded text-[10px] leading-none font-medium border transition-colors cursor-pointer translate-y-px ${
-          a2lVariables.length > 0
-            ? 'text-green-400 border-green-500/30 bg-green-500/10 hover:bg-green-500/20'
-            : 'text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700'
-        }`}
-      >
-        A2L{a2lVariables.length > 0 ? ` (${a2lVariables.length})` : ''}
-      </button>
-
       {/* Export / Import */}
       <button
         onClick={onSave}
         title="Export DAQ lists to .daq file"
-        className="px-2.5 py-1 rounded text-[10px] leading-none font-medium border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer translate-y-px"
+        className="h-6 px-2.5 rounded text-[10px] font-medium flex items-center border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer"
       >
         Export
       </button>
       <button
         onClick={() => fileInputRef.current?.click()}
         title="Import DAQ lists from .daq file"
-        className="px-2.5 py-1 rounded text-[10px] leading-none font-medium border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer translate-y-px"
+        className="h-6 px-2.5 rounded text-[10px] font-medium flex items-center border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer"
       >
         Import
       </button>
@@ -952,7 +979,6 @@ export function Daq() {
   const setDaqStatus       = useAppStore(s => s.setDaqStatus);
   const clearDaqLiveValues = useAppStore(s => s.clearDaqLiveValues);
   const showToast          = useAppStore(s => s.showToast);
-  const setA2lVariables    = useAppStore(s => s.setA2lVariables);
 
   const [treePaneWidth, setTreePaneWidth] = useState(300);
   const [odtColors, setOdtColors] = useState<Record<string, string>>(() => {
@@ -1079,21 +1105,6 @@ export function Daq() {
     }
   }
 
-  async function handleLoadA2l(file: File) {
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text) as unknown;
-      // Accept [{name, addr, type?}] or {variables: [{...}]}
-      const arr = Array.isArray(data) ? data
-        : (data as Record<string, unknown>).variables ?? [];
-      if (!Array.isArray(arr)) throw new Error();
-      setA2lVariables(arr as { name: string; addr: number; type?: DaqEntryType }[]);
-      showToast(`Loaded ${(arr as unknown[]).length} A2L variable(s)`, 'success');
-    } catch {
-      showToast('Invalid A2L JSON. Expected [{name, addr, type?}]', 'error');
-    }
-  }
-
   // ── DAQ lifecycle handlers ──────────────────────────────────────
 
   async function handleConfigure() {
@@ -1136,7 +1147,6 @@ export function Daq() {
         onFree={handleFree}
         onSave={handleSaveDaq}
         onLoad={handleLoadDaq}
-        onLoadA2l={handleLoadA2l}
       />
       <div className="flex flex-1 overflow-hidden">
         <div style={{ background: '#030712', width: treePaneWidth, minWidth: 160 }} className="flex flex-col overflow-hidden border-r border-gray-800">

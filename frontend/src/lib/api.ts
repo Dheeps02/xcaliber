@@ -35,6 +35,7 @@ export const api = {
   disconnect: () => post<{ ok: boolean }>('/api/disconnect'),
   status: () => get<{ connected: boolean; slave?: ConnectResponse }>('/api/status'),
   getStatus: () => post<{ ok: boolean; response: unknown }>('/api/command/get-status'),
+  sync: () => post<{ ok: boolean; response: unknown }>('/api/command/raw', { bytes: [0xfc] }),
   getCommModeInfo: () =>
     post<{ ok: boolean; response: unknown }>('/api/command/get-comm-mode-info'),
   getId: (id_type: number) =>
