@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useSSE } from './hooks/useSSE';
 import { TooltipProvider } from './context/TooltipContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { Sidebar } from './components/Sidebar';
@@ -8,6 +9,7 @@ import { MtaBar } from './components/MtaBar';
 import { ByteBar } from './components/ByteBar';
 import { PacketTrace } from './components/PacketTrace';
 import { Daq } from './components/Daq';
+import { AlertModal } from './components/AlertModal';
 import { useAppStore } from './stores/app-store';
 
 function AppInner() {
@@ -78,14 +80,17 @@ function AppInner() {
         </main>
       </div>
       <Footer />
+      <AlertModal />
     </div>
   );
 }
 
 export default function App() {
   return (
-    <TooltipProvider>
-      <AppInner />
-    </TooltipProvider>
+    <ErrorBoundary>
+      <TooltipProvider>
+        <AppInner />
+      </TooltipProvider>
+    </ErrorBoundary>
   );
 }
