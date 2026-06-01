@@ -28,7 +28,3 @@ name = "1 s"
 [[events]]
 id = 5
 name = "10 s"
-
-[[events]]
-id = 6
-name = ""

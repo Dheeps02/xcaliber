@@ -33,7 +33,7 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
 
 fn broadcast_packet(state: &AppState, event: &str, entry: &PacketEntry) {
     let _ = state.tx.send(
-        serde_json::to_string(&json!({ "event": event, "data": entry })).unwrap()
+        serde_json::to_string(&json!({ "event": event, "data": entry })).unwrap_or_default()
     );
 }
 
@@ -251,7 +251,7 @@ pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             let _ = state.tx.send(serde_json::to_string(&json!({
                 "event": "state_changed",
                 "data": { "state": "connected", "slave": info },
-            })).unwrap());
+            })).unwrap_or_default());
             Json(json!({ "ok": true, "slave": info })).into_response()
         }
         Err(e) => {
@@ -275,7 +275,7 @@ pub async fn disconnect(State(state): State<Arc<AppState>>) -> impl IntoResponse
     let _ = state.tx.send(serde_json::to_string(&json!({
         "event": "state_changed",
         "data": { "state": "disconnected" },
-    })).unwrap());
+    })).unwrap_or_default());
     Json(json!({ "ok": true }))
 }
 
@@ -416,7 +416,7 @@ pub async fn get_packets(
 }
 
 pub async fn get_config(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    Json(serde_json::to_value(&*state.config.lock().unwrap()).unwrap())
+    Json(serde_json::to_value(&*state.config.lock().unwrap()).unwrap_or_default())
 }
 
 #[derive(Deserialize)]
@@ -434,6 +434,26 @@ pub async fn update_config(
     State(state): State<Arc<AppState>>,
     Json(body): Json<UpdateConfigBody>,
 ) -> impl IntoResponse {
+    if body.protocol != "udp" && body.protocol != "tcp" {
+        return Json(json!({ "ok": false, "error": "protocol must be \"udp\" or \"tcp\"" })).into_response();
+    }
+    if body.server_ip.parse::<std::net::IpAddr>().is_err() {
+        return Json(json!({ "ok": false, "error": "server_ip is not a valid IP address" })).into_response();
+    }
+    if let Some(ref ip) = body.bind_ip {
+        if !ip.is_empty() && ip.parse::<std::net::IpAddr>().is_err() {
+            return Json(json!({ "ok": false, "error": "bind_ip is not a valid IP address" })).into_response();
+        }
+    }
+    if body.timeout_ms == 0 {
+        return Json(json!({ "ok": false, "error": "timeout_ms must be greater than 0" })).into_response();
+    }
+    if let Some(ref events) = body.events {
+        if events.iter().any(|e| e.name.trim().is_empty()) {
+            return Json(json!({ "ok": false, "error": "event names must not be empty" })).into_response();
+        }
+    }
+
     let result = {
         let mut cfg = state.config.lock().unwrap();
         cfg.connection.server_ip = body.server_ip;
@@ -521,8 +541,9 @@ async fn daq_receive_task(
 ) {
     loop {
         let pkt = match sub.recv().await {
-            Ok(p)  => p,
-            Err(_) => break,
+            Ok(p) => p,
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
         };
         let pid = match pkt.payload.first().copied() {
             Some(p) if p < 0xFC => p,
@@ -555,7 +576,7 @@ async fn daq_receive_task(
                 "values": values,
             }
         });
-        let _ = state.tx.send(serde_json::to_string(&event).unwrap());
+        let _ = state.tx.send(serde_json::to_string(&event).unwrap_or_default());
     }
 }
 
@@ -735,7 +756,7 @@ pub async fn daq_configure(State(state): State<Arc<AppState>>) -> impl IntoRespo
             *state.daq_status.lock().unwrap() = DaqStatus::Configured;
             let _ = state.tx.send(serde_json::to_string(&json!({
                 "event": "daq_state_changed", "data": { "state": "configured" }
-            })).unwrap());
+            })).unwrap_or_default());
             Json(json!({ "ok": true })).into_response()
         }
         Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
@@ -756,7 +777,7 @@ pub async fn daq_start(State(state): State<Arc<AppState>>) -> impl IntoResponse 
             *state.daq_status.lock().unwrap() = DaqStatus::Running;
             let _ = state.tx.send(serde_json::to_string(&json!({
                 "event": "daq_state_changed", "data": { "state": "running" }
-            })).unwrap());
+            })).unwrap_or_default());
             Json(json!({ "ok": true })).into_response()
         }
         Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
@@ -770,7 +791,7 @@ pub async fn daq_stop(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             *state.daq_status.lock().unwrap() = DaqStatus::Configured;
             let _ = state.tx.send(serde_json::to_string(&json!({
                 "event": "daq_state_changed", "data": { "state": "configured" }
-            })).unwrap());
+            })).unwrap_or_default());
             Json(json!({ "ok": true })).into_response()
         }
         Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
@@ -785,7 +806,7 @@ pub async fn daq_free(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             *state.daq_status.lock().unwrap() = DaqStatus::Idle;
             let _ = state.tx.send(serde_json::to_string(&json!({
                 "event": "daq_state_changed", "data": { "state": "idle" }
-            })).unwrap());
+            })).unwrap_or_default());
             Json(json!({ "ok": true })).into_response()
         }
         Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),

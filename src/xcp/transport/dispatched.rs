@@ -73,12 +73,12 @@ impl DispatchedTransport {
 
         time::timeout(time::Duration::from_millis(self.timeout_ms), async {
             loop {
-                let pkt = sub.recv().await.map_err(|e| match e {
-                    broadcast::error::RecvError::Closed  =>
-                        XcpError::Transport("dispatch channel closed".into()),
-                    broadcast::error::RecvError::Lagged(_) =>
-                        XcpError::Transport("dispatch receiver lagged".into()),
-                })?;
+                let pkt = match sub.recv().await {
+                    Ok(p) => p,
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue, // missed some DTOs, keep waiting
+                    Err(broadcast::error::RecvError::Closed) =>
+                        return Err(XcpError::Transport("dispatch channel closed".into())),
+                };
                 if pkt.payload.first().copied().unwrap_or(0) >= 0xFC {
                     return XcpResponse::decode(&pkt.payload, Some(cmd_pid));
                 }
