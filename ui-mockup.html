@@ -8,61 +8,183 @@
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; font-family: 'Inter', -apple-system, sans-serif; }
+
   .hex-tx { color: #60a5fa; }
   .hex-rx { color: #34d399; }
-  .scrollbar-thin::-webkit-scrollbar { width: 4px; }
-  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-  .scrollbar-thin::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
-  tr.selected > td { background: #1a2f4a; }
-  .badge-tx { background:#1e3a8a; color:#93c5fd; border:1px solid #3b82f6; }
-  .badge-rx { background:#064e3b; color:#6ee7b7; border:1px solid #10b981; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+
+  .badge-tx  { background:#1e3a8a; color:#93c5fd; border:1px solid #3b82f6; }
+  .badge-rx  { background:#064e3b; color:#6ee7b7; border:1px solid #10b981; }
+  .badge-err { background:#450a0a; color:#fca5a5; border:1px solid #ef4444; }
+
   @keyframes blink-pulse {
     0%,100% { opacity:1; box-shadow:0 0 5px 1px #4ade80; }
-    50%     { opacity:0.3; box-shadow:none; }
+    50%      { opacity:0.3; box-shadow:none; }
   }
-  .blinker-on { animation:blink-pulse 1.6s ease-in-out infinite; background:#4ade80; }
-  .expand-row { display:none; }
-  .expand-row.open { display:table-row; }
+  .blinker-on     { animation:blink-pulse  1.6s ease-in-out infinite; background:#4ade80; }
+  .blinker-yellow { background:#fbbf24; box-shadow:0 0 6px 2px rgba(251,191,36,.5),0 0 12px 2px rgba(251,191,36,.2); }
+  .blinker-off    { background:#ef4444; box-shadow:0 0 6px 2px rgba(239,68,68,.5),0 0 12px 2px rgba(239,68,68,.2); }
+  .blinker-grey   { background:#4b5563; box-shadow:0 0 4px 1px rgba(75,85,99,.4); }
 
-  /* X button — top-right inside cell, CSS hover reveal */
+  #sidebar { transition:width 150ms ease; overflow:hidden; min-width:28px; }
+  #sidebar.collapsed { width:28px !important; }
+  #sidebar.collapsed .sidebar-content { display:none; }
+
+  .mtab-active   { border-bottom:2px solid #3b82f6; color:#60a5fa; }
+  .mtab-inactive { border-bottom:2px solid transparent; color:#6b7280; }
+  .mtab-inactive:hover { color:#d1d5db; }
+
   .byte-wrap .clear-btn {
-    display: none;
-    position: absolute; top: 2px; right: 2px;
-    width: 13px; height: 13px; font-size: 8px;
-    align-items: center; justify-content: center;
-    background: #111827; color: #6b7280;
-    border: none; border-radius: 2px;
-    cursor: pointer; line-height: 1; z-index: 2;
+    display:none; position:absolute; top:2px; right:2px;
+    width:13px; height:13px; font-size:8px; align-items:center; justify-content:center;
+    background:#111827; color:#6b7280; border:none; border-radius:2px; cursor:pointer; line-height:1; z-index:2;
   }
-  .byte-wrap:hover .clear-btn { display: flex; }
-  .byte-wrap .clear-btn:hover { color: #f87171; background: #1f2937; }
+  .byte-wrap:hover .clear-btn { display:flex; }
+  .byte-wrap .clear-btn:hover { color:#f87171; background:#1f2937; }
 
-  /* Sidebar collapse */
-  #sidebar { transition: width 150ms ease; overflow: hidden; min-width: 28px; }
-  #sidebar.collapsed { width: 28px !important; }
-  #sidebar.collapsed .sidebar-content { display: none; }
+  .detail-row { display:none; }
+  .detail-row.open { display:block; }
+
+  .group-body { display:grid; grid-template-rows:1fr; transition:grid-template-rows 180ms ease, opacity 120ms ease; }
+  .group-body.collapsed { grid-template-rows:0fr; opacity:0; }
+  .group-body > div { min-height:0; overflow:hidden; }
+
+  /* DAQ list / ODT cards */
+  .daq-list-card {
+    border: 1px solid #374151;
+    border-radius: 6px;
+    background: rgba(17,24,39,0.7);
+    margin-bottom: 6px;
+    overflow: hidden;
+  }
+  .daq-list-header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px;
+    background: rgba(31,41,55,0.6);
+    cursor: pointer; user-select: none;
+    border-bottom: 1px solid #374151;
+  }
+  .daq-list-header:hover { background: rgba(55,65,81,0.5); }
+  .daq-list-body { padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+
+  .daq-odt-card {
+    border: 1px solid rgba(55,65,81,0.6);
+    border-radius: 4px;
+    background: rgba(3,7,18,0.5);
+    overflow: hidden;
+  }
+  .daq-odt-header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 8px;
+    background: rgba(17,24,39,0.4);
+    cursor: pointer; user-select: none;
+    border-bottom: 1px solid rgba(55,65,81,0.4);
+    font-size: 10px; color: #9ca3af;
+  }
+  .daq-odt-header:hover { background: rgba(31,41,55,0.5); }
+  .daq-odt-body { padding: 3px 4px; }
+  .daq-entry-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 2px 6px; border-radius: 3px; cursor: pointer;
+    transition: background 100ms;
+  }
+  .daq-entry-row:hover { background: rgba(55,65,81,0.35); }
+
+  /* Sparkline */
+  .sparkline-cell { width: 80px; cursor: pointer; }
+  .sparkline-cell svg { display: block; }
+  .sparkline-cell:hover svg polyline { stroke: #34d399; }
+
+  .resizer { width:4px; cursor:col-resize; background:transparent; flex-shrink:0; transition:background 120ms; }
+  .resizer:hover, .resizer.dragging { background:#3b82f6; }
+
+  @keyframes val-flash { 0%,100%{color:inherit} 40%{color:#fbbf24} }
+  .val-flash { animation:val-flash 400ms ease; }
 </style>
 </head>
 <body class="bg-gray-950 text-gray-100 h-screen flex flex-col overflow-hidden">
 
-<!-- Global tooltip — fixed, JS-positioned, fades in/out -->
-<div id="g-tip"
-     class="fixed bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1.5 max-w-[220px] z-[9999] pointer-events-none text-[10px] leading-relaxed"
-     style="display:none; opacity:0; transition:opacity 130ms ease;"></div>
+<!-- Global tooltip -->
+<div id="g-tip" class="fixed bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1.5 max-w-[220px] z-[9999] pointer-events-none text-[10px] leading-relaxed"
+     style="display:none;opacity:0;transition:opacity 130ms ease;"></div>
 
-<!-- PID filter popover — fixed, JS-positioned -->
-<div id="pid-popover"
-     class="fixed bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-[9998] hidden"
-     style="width:192px;">
+<!-- PID filter popover -->
+<div id="pid-popover" class="fixed bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-[9998] hidden" style="width:192px;">
   <div class="p-2 border-b border-gray-800">
-    <input id="pid-search" placeholder="Search PID…" maxlength="2"
-           oninput="buildPidList()"
+    <input id="pid-search" placeholder="Search PID…" maxlength="2" oninput="buildPidList()"
            class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500"/>
   </div>
-  <div id="pid-list" class="p-1 max-h-44 overflow-y-auto scrollbar-thin"></div>
+  <div id="pid-list" class="p-1 max-h-44 overflow-y-auto"></div>
   <div class="p-1.5 border-t border-gray-800 flex gap-1">
     <button onclick="selectAllPids()" class="flex-1 py-0.5 rounded text-[10px] text-gray-400 hover:text-gray-200 hover:bg-gray-700 border border-gray-700 transition-colors">All</button>
     <button onclick="clearPids()"     class="flex-1 py-0.5 rounded text-[10px] text-gray-400 hover:text-gray-200 hover:bg-gray-700 border border-gray-700 transition-colors">Clear</button>
+  </div>
+</div>
+
+<!-- DAQ entry edit popover -->
+<div id="entry-popover" class="fixed bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-[9998] hidden p-3" style="width:240px;">
+  <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">ODT Entry</p>
+  <div class="space-y-2">
+    <div>
+      <label class="text-[10px] text-gray-500 block mb-0.5">Name</label>
+      <input id="ep-name" placeholder="Engine RPM" class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"/>
+    </div>
+    <div class="flex gap-2">
+      <div class="flex-1">
+        <label class="text-[10px] text-gray-500 block mb-0.5">Address</label>
+        <input id="ep-addr" placeholder="0x80004000" class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"/>
+      </div>
+      <div style="width:52px">
+        <label class="text-[10px] text-gray-500 block mb-0.5">Ext</label>
+        <input id="ep-ext" placeholder="0" class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"/>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <div class="flex-1">
+        <label class="text-[10px] text-gray-500 block mb-0.5">Type</label>
+        <select id="ep-type" class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500">
+          <option>u8</option><option>u16</option><option selected>u32</option>
+          <option>i8</option><option>i16</option><option>i32</option><option>f32</option><option>f64</option>
+        </select>
+      </div>
+      <div style="width:52px">
+        <label class="text-[10px] text-gray-500 block mb-0.5">Size</label>
+        <input id="ep-size" value="4" class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"/>
+      </div>
+    </div>
+  </div>
+  <div class="flex gap-1.5 mt-3">
+    <button onclick="saveEntry()" class="flex-1 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">Save</button>
+    <button onclick="closeEntryPopover()" class="px-3 py-1 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700 transition-colors">Cancel</button>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div id="settings-modal" class="fixed inset-0 bg-black/60 z-[9990] hidden flex items-center justify-center">
+  <div class="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-96 p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-gray-200">Settings</h2>
+      <button onclick="closeSettings()" class="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-200 hover:bg-gray-800 text-xs transition-colors">✕</button>
+    </div>
+    <div class="space-y-3">
+      <div><label class="text-[10px] text-gray-500 block mb-1">Server IP</label>
+        <input value="127.0.0.1" class="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"/></div>
+      <div class="flex gap-2">
+        <div class="flex-1"><label class="text-[10px] text-gray-500 block mb-1">Port</label>
+          <input value="5555" class="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"/></div>
+        <div class="flex-1"><label class="text-[10px] text-gray-500 block mb-1">Protocol</label>
+          <select class="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"><option>UDP</option><option>TCP</option></select></div>
+      </div>
+      <div><label class="text-[10px] text-gray-500 block mb-1">Timeout (ms)</label>
+        <input value="1000" class="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"/></div>
+    </div>
+    <div class="flex gap-2 mt-4">
+      <button class="flex-1 py-1.5 rounded text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">Save</button>
+      <button onclick="closeSettings()" class="px-4 py-1.5 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700 transition-colors">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -72,16 +194,24 @@
     <span class="font-semibold text-sm tracking-tight">XCP Client</span>
     <span class="text-gray-600 text-xs">v0.1.0</span>
   </div>
-  <div class="flex items-center gap-3">
-    <button class="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-800 hover:bg-gray-700 text-gray-400 border border-gray-700 transition-colors">
-      GET_STATUS
-    </button>
+  <div class="flex items-center gap-2">
     <div class="flex items-center gap-2">
-      <span class="w-2 h-2 rounded-full blinker-on shrink-0"></span>
-      <button class="px-3 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 transition-colors">
-        Disconnect
+      <span id="hdr-dot" class="w-2 h-2 rounded-full shrink-0 blinker-off"></span>
+      <button id="hdr-conn-btn" onclick="toggleConnect()" style="min-width:90px"
+              class="py-1 rounded-md text-xs font-medium border transition-colors text-center bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20">
+        Connect
       </button>
     </div>
+    <button id="hdr-status-btn" disabled onclick="sendGetStatus()"
+            class="px-2 py-1 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-400 border border-gray-700 transition-colors">
+      Get Status
+    </button>
+    <button onclick="openSettings()" title="Settings"
+            class="w-7 h-7 rounded flex items-center justify-center text-gray-500 hover:text-gray-200 hover:bg-gray-800 transition-colors">
+      <svg viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+        <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+      </svg>
+    </button>
   </div>
 </header>
 
@@ -94,28 +224,67 @@
       <button onclick="toggleSidebar()" id="sb-btn"
               class="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 text-xs transition-colors">‹</button>
     </div>
-    <div class="sidebar-content flex flex-col flex-1 overflow-y-auto scrollbar-thin">
-      <div class="px-3 pb-3 border-b border-gray-800">
-        <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">Session</p>
-        <button onclick="selectCmd('get-comm-mode-info',this)"
-                class="cmd-btn w-full px-2 py-1.5 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-left transition-colors flex items-center justify-between">
-          <span>GET_COMM_MODE_INFO</span>
-          <span class="text-gray-600 font-mono text-[10px]">0xFB</span>
-        </button>
+    <div class="sidebar-content flex flex-col flex-1 overflow-hidden">
+      <div class="flex px-2 gap-1 pb-1 shrink-0">
+        <button id="sb-tab-system" onclick="switchSbTab('system')"
+                class="flex-1 py-1 rounded text-[10px] font-medium transition-colors bg-gray-800 text-gray-300 border border-gray-700">System</button>
+        <button id="sb-tab-user" onclick="switchSbTab('user')"
+                class="flex-1 py-1 rounded text-[10px] font-medium transition-colors text-gray-600 border border-gray-800 hover:text-gray-400 hover:border-gray-700">User</button>
       </div>
-      <div class="px-3 py-3">
-        <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">Identification</p>
-        <div class="space-y-1.5">
-          <button onclick="selectCmd('get-id-ascii',this)"
-                  class="cmd-btn w-full px-2 py-1.5 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-left transition-colors flex items-center justify-between">
-            <span>GET_ID (ASCII)</span>
-            <span class="text-gray-600 font-mono text-[10px]">0xFA</span>
+      <div id="sb-panel-system" class="flex-1 overflow-y-auto px-2 pb-2 space-y-2">
+        <div>
+          <button onclick="toggleSbGroup('g-session')" class="w-full flex items-center justify-between px-1 py-1 text-[10px] font-semibold uppercase tracking-widest text-gray-500 hover:text-gray-400 transition-colors select-none">
+            <span>Session</span><span id="g-session-arrow" class="text-gray-600">▾</span>
           </button>
-          <button onclick="selectCmd('get-id-file',this)"
-                  class="cmd-btn w-full px-2 py-1.5 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-left transition-colors flex items-center justify-between">
-            <span>GET_ID (Filename)</span>
-            <span class="text-gray-600 font-mono text-[10px]">0xFA</span>
+          <div id="g-session" class="space-y-1 mt-0.5">
+            <button onclick="selectCmd('get-comm-mode-info',this)" class="cmd-btn w-full flex items-center rounded text-xs font-medium overflow-hidden border border-gray-700 bg-gray-900 hover:border-gray-600 transition-colors">
+              <span class="px-1.5 py-1 font-mono text-[10px] border-r border-gray-700 bg-gray-900 text-gray-500 shrink-0 w-9 text-center">FB</span>
+              <span class="px-2 py-1 text-left flex-1 truncate font-mono tracking-tight text-gray-300 text-[11px]">GET_COMM_MODE_INFO</span>
+            </button>
+          </div>
+        </div>
+        <div>
+          <button onclick="toggleSbGroup('g-ident')" class="w-full flex items-center justify-between px-1 py-1 text-[10px] font-semibold uppercase tracking-widest text-gray-500 hover:text-gray-400 transition-colors select-none">
+            <span>Identification</span><span id="g-ident-arrow" class="text-gray-600">▾</span>
           </button>
+          <div id="g-ident" class="space-y-1 mt-0.5">
+            <button onclick="selectCmd('get-id-ascii',this)" class="cmd-btn w-full flex items-center rounded text-xs font-medium overflow-hidden border border-gray-700 bg-gray-900 hover:border-gray-600 transition-colors">
+              <span class="px-1.5 py-1 font-mono text-[10px] border-r border-gray-700 bg-gray-900 text-gray-500 shrink-0 w-9 text-center">FA</span>
+              <span class="px-2 py-1 text-left flex-1 truncate font-mono tracking-tight text-gray-300 text-[11px]">GET_ID (ASCII)</span>
+            </button>
+            <button onclick="selectCmd('get-id-file',this)" class="cmd-btn w-full flex items-center rounded text-xs font-medium overflow-hidden border border-gray-700 bg-gray-900 hover:border-gray-600 transition-colors">
+              <span class="px-1.5 py-1 font-mono text-[10px] border-r border-gray-700 bg-gray-900 text-gray-500 shrink-0 w-9 text-center">FA</span>
+              <span class="px-2 py-1 text-left flex-1 truncate font-mono tracking-tight text-gray-300 text-[11px]">GET_ID (Filename)</span>
+            </button>
+          </div>
+        </div>
+        <div>
+          <button onclick="toggleSbGroup('g-mem')" class="w-full flex items-center justify-between px-1 py-1 text-[10px] font-semibold uppercase tracking-widest text-gray-500 hover:text-gray-400 transition-colors select-none">
+            <span>Memory</span><span id="g-mem-arrow" class="text-gray-600">▾</span>
+          </button>
+          <div id="g-mem" class="space-y-1 mt-0.5">
+            <button onclick="selectCmd('upload',this)" class="cmd-btn w-full flex items-center rounded text-xs font-medium overflow-hidden border border-gray-700 bg-gray-900 hover:border-gray-600 transition-colors">
+              <span class="px-1.5 py-1 font-mono text-[10px] border-r border-gray-700 bg-gray-900 text-gray-500 shrink-0 w-9 text-center">F5</span>
+              <span class="px-2 py-1 text-left flex-1 truncate font-mono tracking-tight text-gray-300 text-[11px]">UPLOAD</span>
+            </button>
+            <button onclick="selectCmd('download',this)" class="cmd-btn w-full flex items-center rounded text-xs font-medium overflow-hidden border border-gray-700 bg-gray-900 hover:border-gray-600 transition-colors">
+              <span class="px-1.5 py-1 font-mono text-[10px] border-r border-gray-700 bg-gray-900 text-gray-500 shrink-0 w-9 text-center">F0</span>
+              <span class="px-2 py-1 text-left flex-1 truncate font-mono tracking-tight text-gray-300 text-[11px]">DOWNLOAD</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="sb-panel-user" class="hidden flex-1 overflow-y-auto px-2 pb-2 space-y-2">
+        <div>
+          <button onclick="toggleSbGroup('g-user')" class="w-full flex items-center justify-between px-1 py-1 text-[10px] font-semibold uppercase tracking-widest text-gray-500 hover:text-gray-400 transition-colors select-none">
+            <span>Custom</span><span id="g-user-arrow" class="text-gray-600">▾</span>
+          </button>
+          <div id="g-user" class="space-y-1 mt-0.5">
+            <button onclick="selectCmd('read-sensor',this)" class="cmd-btn w-full flex items-center rounded text-xs font-medium overflow-hidden border border-gray-700 bg-gray-900 hover:border-gray-600 transition-colors">
+              <span class="px-1.5 py-1 font-mono text-[10px] border-r border-gray-700 bg-gray-900 text-gray-500 shrink-0 w-9 text-center">F1</span>
+              <span class="px-2 py-1 text-left flex-1 truncate font-mono tracking-tight text-gray-300 text-[11px]">Read Sensor</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -124,11 +293,20 @@
   <!-- Main -->
   <main class="flex-1 flex flex-col overflow-hidden min-w-0">
 
-    <!-- MTA / SIZE bar -->
-    <div class="flex items-center gap-4 px-4 h-10 border-b border-gray-800 bg-gray-900 shrink-0">
+    <!-- Memory Access bar — visible in Trace only, hidden in DAQ -->
+    <div id="mta-bar" class="flex items-center gap-4 px-4 h-10 border-b border-gray-800 bg-gray-900 shrink-0">
       <div class="flex items-center gap-2">
         <label class="text-[10px] text-gray-500 shrink-0">MTA</label>
-        <input value="0x00000000" class="w-28 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"/>
+        <div class="relative">
+          <input id="mta-addr" value="0x00000000" placeholder="0x… or symbol name"
+                 class="w-36 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"
+                 oninput="onMtaInput(this)"/>
+          <div id="mta-suggestions" class="hidden absolute top-full left-0 mt-0.5 bg-gray-800 border border-gray-700 rounded shadow-xl z-50 min-w-48 py-0.5 text-xs font-mono">
+            <div class="px-2 py-1 hover:bg-gray-700 cursor-pointer text-gray-300">EngineRPM <span class="text-gray-600 ml-1">0x80004000</span></div>
+            <div class="px-2 py-1 hover:bg-gray-700 cursor-pointer text-gray-300">ThrottlePos <span class="text-gray-600 ml-1">0x80004002</span></div>
+            <div class="px-2 py-1 hover:bg-gray-700 cursor-pointer text-gray-300">OilTemp <span class="text-gray-600 ml-1">0x80005000</span></div>
+          </div>
+        </div>
       </div>
       <div class="flex items-center gap-2">
         <label class="text-[10px] text-gray-500 shrink-0">SIZE</label>
@@ -136,553 +314,815 @@
       </div>
       <div class="flex items-center gap-1.5">
         <button class="px-3 py-1 rounded text-xs font-medium bg-green-600/15 text-green-400 border border-green-500/30 hover:bg-green-600/25 transition-colors">Upload</button>
-        <button class="px-3 py-1 rounded text-xs font-medium bg-orange-600/15 text-orange-400 border border-orange-500/30 hover:bg-orange-600/25 transition-colors">Download</button>
+        <button disabled class="px-3 py-1 rounded text-xs font-medium bg-orange-600/15 text-orange-400 border border-orange-500/30 opacity-40 cursor-not-allowed">Download</button>
       </div>
-      <span class="text-[10px] text-gray-600">SET_MTA fires automatically</span>
+      <div class="flex items-center gap-2 ml-auto">
+        <span class="text-[10px] text-gray-600">Auto SET_MTA</span>
+        <div class="w-7 h-4 rounded-full bg-blue-600 relative cursor-pointer">
+          <div class="absolute right-0.5 top-0.5 w-3 h-3 rounded-full bg-white shadow"></div>
+        </div>
+        <div class="w-px h-3 bg-gray-700 mx-1"></div>
+        <span id="a2l-label" class="text-[10px] text-blue-400 font-mono hidden">engine.a2l ✓</span>
+        <button id="a2l-load-btn" onclick="loadA2l()"
+                class="px-1.5 py-0.5 rounded text-[10px] text-gray-500 hover:text-blue-400 border border-gray-700 hover:border-blue-500/50 bg-gray-900 transition-colors">
+          Load A2L…
+        </button>
+      </div>
     </div>
 
-    <!-- ── Byte bar ──────────────────────────────────────────── -->
-    <div class="px-4 pt-2.5 pb-2 border-b border-gray-800 bg-gray-900 shrink-0">
-      <div id="byte-bar" class="flex gap-2 w-full"></div>
-      <button onclick="sendRaw()"
-              class="w-full mt-2 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">
-        Send
-      </button>
+    <!-- Command Builder (byte sequencer) — collapsible, both views -->
+    <div id="cmd-bar-area" class="border-b border-gray-800 bg-gray-900 shrink-0">
+      <div class="flex items-center px-3 h-6 cursor-pointer select-none hover:bg-gray-800/40 transition-colors" onclick="toggleCmdBar()">
+        <span class="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex-1">Command Builder</span>
+        <button id="cmd-bar-toggle" class="w-4 h-4 text-[10px] text-gray-600 hover:text-gray-400 flex items-center justify-center transition-colors">▼</button>
+      </div>
+      <div id="cmd-bar-content" class="px-4 pt-2.5 pb-2 border-t border-gray-800/60">
+        <div id="byte-bar" class="flex gap-2 w-full"></div>
+        <button onclick="sendRaw()" class="w-full mt-2 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">Send</button>
+      </div>
     </div>
 
-    <!-- Trace section -->
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <!-- Main tab strip -->
+    <div class="flex items-end gap-0 px-3 pt-1.5 border-b border-gray-800 bg-gray-900 shrink-0" style="height:32px;">
+      <button id="mtab-trace" onclick="switchMainTab('trace')" class="px-3 pb-1 text-xs font-medium transition-colors mtab-active">Packet Trace</button>
+      <button id="mtab-daq"   onclick="switchMainTab('daq')"   class="px-3 pb-1 text-xs font-medium transition-colors mtab-inactive">DAQ</button>
+    </div>
 
-      <!-- Trace toolbar -->
-      <div class="flex items-center justify-between px-4 h-9 border-b border-gray-800 bg-gray-900 shrink-0">
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-medium text-gray-400">Packet Trace</span>
+    <!-- ══ Packet Trace ══════════════════════════════════════════ -->
+    <div id="panel-trace" class="flex-1 flex flex-col overflow-hidden">
+      <!-- Toolbar -->
+      <div class="flex items-center justify-between px-4 h-9 border-b border-gray-800 bg-gray-900/60 shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
           <div class="flex items-center gap-1">
-            <button onclick="setDirFilter('all',this)" class="df-all px-2 py-0.5 rounded text-[10px] bg-blue-600 text-white">All</button>
-            <button onclick="setDirFilter('tx',this)"  class="df-tx  px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800">TX</button>
-            <button onclick="setDirFilter('rx',this)"  class="df-rx  px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800">RX</button>
+            <button onclick="setDirFilter('all',this)" class="df-all px-2 py-0.5 rounded text-[10px] bg-blue-600 text-white transition-colors">All</button>
+            <button onclick="setDirFilter('tx',this)"  class="df-tx  px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors">TX</button>
+            <button onclick="setDirFilter('rx',this)"  class="df-rx  px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors">RX</button>
           </div>
-          <!-- PID filter icon -->
           <button id="pid-filter-btn" onclick="togglePidPopover(this)"
-                  class="relative w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
-                  title="Filter by PID">
-            <!-- funnel icon -->
-            <svg viewBox="0 0 16 16" fill="currentColor" class="w-3.5 h-3.5">
-              <path d="M1 2.5A.5.5 0 0 1 1.5 2h13a.5.5 0 0 1 .35.854L10 7.707V13.5a.5.5 0 0 1-.223.416l-3 2A.5.5 0 0 1 6 15.5V7.707L1.15 2.854A.5.5 0 0 1 1 2.5z"/>
-            </svg>
-            <span id="pid-filter-badge"
-                  class="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full text-[7px] text-white items-center justify-center hidden">
-            </span>
+                  class="relative w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors" title="Filter by PID">
+            <svg viewBox="0 0 16 16" fill="currentColor" class="w-3.5 h-3.5"><path d="M1 2.5A.5.5 0 0 1 1.5 2h13a.5.5 0 0 1 .35.854L10 7.707V13.5a.5.5 0 0 1-.223.416l-3 2A.5.5 0 0 1 6 15.5V7.707L1.15 2.854A.5.5 0 0 1 1 2.5z"/></svg>
+            <span id="pid-filter-badge" class="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full text-[7px] text-white items-center justify-center hidden"></span>
+          </button>
+          <button id="collapse-all-btn" onclick="toggleCollapseAll()"
+                  class="px-1.5 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors shrink-0">
+            ⊟ Collapse All
           </button>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 shrink-0">
           <div class="flex items-center gap-2 text-[10px] font-mono">
-            <span class="text-blue-400">TX: 14</span>
+            <span class="text-blue-400">TX: 5</span>
             <span class="text-gray-700">|</span>
-            <span class="text-green-400">RX: 14</span>
+            <span class="text-green-400">RX: 4</span>
           </div>
           <label class="flex items-center gap-1.5 text-[10px] text-gray-500 cursor-pointer">
             <input type="checkbox" checked class="accent-blue-500"/> Auto-scroll
           </label>
-          <button class="px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700">Clear</button>
-          <button onclick="toggleTrace()" id="trace-btn"
+          <button class="px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors">Clear</button>
+          <button onclick="toggleTrace()" id="trace-toggle-btn"
                   class="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 text-xs transition-colors">▼</button>
         </div>
       </div>
-
       <!-- Table -->
-      <div class="flex-1 overflow-y-auto scrollbar-thin font-mono text-xs" id="trace-table">
-        <table class="w-full border-collapse">
+      <div class="flex-1 overflow-y-auto font-mono text-xs" id="trace-table">
+        <table class="w-full border-collapse" style="table-layout:fixed">
           <thead class="sticky top-0 bg-gray-900 z-10">
             <tr class="text-left text-[10px] text-gray-500 uppercase tracking-wider">
-              <th class="px-3 py-2 w-10">Dir</th>
-              <th class="px-3 py-2 w-12">Ctr</th>
-              <th class="px-3 py-2 w-32">Time</th>
+              <th class="px-3 py-2" style="width:160px">Command</th>
+              <th class="px-3 py-2" style="width:60px">Dir</th>
+              <th class="px-3 py-2" style="width:52px">Ctr</th>
+              <th class="px-3 py-2" style="width:120px">Time</th>
               <th class="px-3 py-2">Hex</th>
             </tr>
           </thead>
-          <tbody id="tbody">
-
-            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors"
-                data-dir="tx" data-pid="FF" onclick="toggleRow(this,'e0')">
-              <td class="px-3 py-2"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></td>
-              <td class="px-3 py-2 text-gray-500">0</td>
-              <td class="px-3 py-2 text-gray-500">12:01:00.000</td>
-              <td class="px-3 py-2"><span class="hex-tx">FF</span> <span class="hex-tx">00</span></td>
-            </tr>
-            <tr id="e0" class="expand-row bg-gray-900/60">
-              <td colspan="4" class="px-6 pb-3 pt-1">
-                <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">CONNECT (mode=Normal)</div>
-                <div class="space-y-0.5 text-xs">
-                  <div><span class="tc text-gray-500 w-32 inline-block">command</span><span class="text-blue-400">CONNECT</span></div>
-                  <div><span class="tc text-gray-500 w-32 inline-block">mode</span><span class="text-blue-400">0x00</span> <span class="text-gray-600">(Normal)</span></div>
+          <tbody>
+            <!-- Group: CONNECT -->
+            <tr class="border-t border-gray-800/60 cursor-pointer select-none bg-gray-900/30 hover:bg-gray-800/30 transition-colors" onclick="togglePairGroup('pg0')">
+              <td colspan="5" class="px-2 py-1">
+                <div class="flex items-center gap-1.5">
+                  <span id="pg0-arrow" class="text-gray-500 text-[10px] w-3 shrink-0">▾</span>
+                  <span class="text-gray-300 font-medium text-[11px]">CONNECT</span>
+                  <div class="flex-1 h-px bg-gray-800/60 ml-1"></div>
                 </div>
               </td>
             </tr>
-
-            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors selected"
-                data-dir="rx" data-pid="FF" onclick="toggleRow(this,'e1')">
-              <td class="px-3 py-2"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></td>
-              <td class="px-3 py-2 text-gray-500">0</td>
-              <td class="px-3 py-2 text-gray-500">12:01:00.003</td>
-              <td class="px-3 py-2">
-                <span class="hex-rx">FF</span> <span class="hex-rx">01</span> <span class="hex-rx">00</span>
-                <span class="hex-rx">FF</span> <span class="hex-rx">FF</span> <span class="hex-rx">05</span>
-                <span class="hex-rx">01</span> <span class="hex-rx">01</span>
-              </td>
-            </tr>
-            <tr id="e1" class="expand-row open bg-gray-900/60">
-              <td colspan="4" class="px-6 pb-3 pt-1">
-                <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">+OK CONNECT Response</div>
-                <div class="space-y-0.5 text-xs">
-                  <div><span class="tc text-gray-500 w-32 inline-block">pid</span><span class="text-green-400">0xFF</span> <span class="text-gray-600">(positive response)</span></div>
-                  <div><span class="tc text-gray-500 w-32 inline-block">resource</span><span class="text-green-400">0x01</span> <span class="text-gray-600">cal_pag=true  daq=false</span></div>
-                  <div><span class="tc text-gray-500 w-32 inline-block">comm_mode_basic</span><span class="text-green-400">0x00</span></div>
-                  <div><span class="tc text-gray-500 w-32 inline-block">max_cto</span><span class="text-green-400">255</span></div>
-                  <div><span class="tc text-gray-500 w-32 inline-block">max_dto</span><span class="text-green-400">1535</span></div>
-                  <div><span class="tc text-gray-500 w-32 inline-block">proto_version</span><span class="text-green-400">1.1</span></div>
+            <tr class="bg-gray-900/30"><td colspan="5" class="p-0 border-0">
+              <div id="pg0" class="group-body"><div>
+                <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors" onclick="toggleDetail('d-connect-tx')">
+                  <div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Request</div>
+                  <div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></div>
+                  <div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">0</div>
+                  <div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:00.000</div>
+                  <div class="px-3 py-1.5 flex-1"><span class="hex-tx">FF 00</span></div>
                 </div>
-              </td>
-            </tr>
-
-            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors"
-                data-dir="tx" data-pid="FD" onclick="toggleRow(this,'e2')">
-              <td class="px-3 py-2"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></td>
-              <td class="px-3 py-2 text-gray-500">1</td>
-              <td class="px-3 py-2 text-gray-500">12:01:01.120</td>
-              <td class="px-3 py-2"><span class="hex-tx">FD</span></td>
-            </tr>
-            <tr id="e2" class="expand-row bg-gray-900/60">
-              <td colspan="4" class="px-6 pb-3 pt-1">
-                <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">GET_STATUS</div>
-                <div class="space-y-0.5 text-xs">
-                  <div><span class="tc text-gray-500 w-32 inline-block">command</span><span class="text-blue-400">GET_STATUS</span></div>
+                <div id="d-connect-tx" class="detail-row bg-gray-900/60 px-6 pb-2 pt-1">
+                  <div class="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">CONNECT — request</div>
+                  <div><span class="text-gray-500 w-28 inline-block">mode</span><span class="text-blue-400">0x00</span> <span class="text-gray-600">(Normal)</span></div>
                 </div>
-              </td>
-            </tr>
-
-            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors"
-                data-dir="rx" data-pid="FF" onclick="toggleRow(this,'e3')">
-              <td class="px-3 py-2"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></td>
-              <td class="px-3 py-2 text-gray-500">1</td>
-              <td class="px-3 py-2 text-gray-500">12:01:01.124</td>
-              <td class="px-3 py-2">
-                <span class="hex-rx">FF</span> <span class="hex-rx">00</span> <span class="hex-rx">00</span>
-                <span class="hex-rx">00</span> <span class="hex-rx">00</span> <span class="hex-rx">00</span>
-              </td>
-            </tr>
-            <tr id="e3" class="expand-row bg-gray-900/60">
-              <td colspan="4" class="px-6 pb-3 pt-1">
-                <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">+OK GET_STATUS Response</div>
-                <div class="space-y-0.5 text-xs">
-                  <div><span class="tc text-gray-500 w-32 inline-block">daq_running</span><span class="text-green-400">false</span></div>
-                  <div><span class="tc text-gray-500 w-32 inline-block">resume</span><span class="text-green-400">false</span></div>
-                  <div><span class="tc text-gray-500 w-32 inline-block">session_id</span><span class="text-green-400">0</span></div>
+                <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors bg-gray-800/20" onclick="toggleDetail('d-connect-rx')">
+                  <div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Response</div>
+                  <div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></div>
+                  <div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">0</div>
+                  <div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:00.003</div>
+                  <div class="px-3 py-1.5 flex-1"><span class="hex-rx">FF 01 00 FF FF 05 01 01</span></div>
                 </div>
-              </td>
-            </tr>
-
-            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors"
-                data-dir="tx" data-pid="FA" onclick="toggleRow(this,'e4')">
-              <td class="px-3 py-2"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></td>
-              <td class="px-3 py-2 text-gray-500">2</td>
-              <td class="px-3 py-2 text-gray-500">12:01:02.310</td>
-              <td class="px-3 py-2"><span class="hex-tx">FA</span> <span class="hex-tx">00</span></td>
-            </tr>
-            <tr id="e4" class="expand-row bg-gray-900/60">
-              <td colspan="4" class="px-6 pb-3 pt-1">
-                <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">GET_ID (type=AsciiText)</div>
-                <div class="space-y-0.5 text-xs">
-                  <div><span class="tc text-gray-500 w-32 inline-block">type</span><span class="text-blue-400">0x00</span> <span class="text-gray-600">(ASCII text)</span></div>
+                <div id="d-connect-rx" class="detail-row open bg-gray-900/60 px-6 pb-2 pt-1 text-xs space-y-0.5">
+                  <div class="text-[10px] text-gray-500 mb-1 uppercase tracking-wider">CONNECT — response</div>
+                  <div><span class="text-gray-500 w-28 inline-block">max_cto</span><span class="text-green-400">255</span></div>
+                  <div><span class="text-gray-500 w-28 inline-block">max_dto</span><span class="text-green-400">1535</span></div>
+                  <div><span class="text-gray-500 w-28 inline-block">proto_version</span><span class="text-green-400">1.1</span></div>
                 </div>
-              </td>
+              </div></div>
+            </td></tr>
+            <!-- Group: GET_STATUS -->
+            <tr class="border-t border-gray-800/60 cursor-pointer select-none hover:bg-gray-800/30 transition-colors" onclick="togglePairGroup('pg1')">
+              <td colspan="5" class="px-2 py-1"><div class="flex items-center gap-1.5"><span id="pg1-arrow" class="text-gray-500 text-[10px] w-3 shrink-0">▾</span><span class="text-gray-300 font-medium text-[11px]">GET_STATUS</span><div class="flex-1 h-px bg-gray-800/60 ml-1"></div></div></td>
             </tr>
-
-            <tr class="pkt-row border-b border-gray-800/40 hover:bg-gray-800/30 cursor-pointer transition-colors"
-                data-dir="rx" data-pid="FE" onclick="toggleRow(this,'e5')">
-              <td class="px-3 py-2"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></td>
-              <td class="px-3 py-2 text-gray-500">2</td>
-              <td class="px-3 py-2 text-gray-500">12:01:04.010</td>
-              <td class="px-3 py-2">
-                <span style="color:#f87171">FE</span> <span style="color:#f87171">20</span>
-              </td>
+            <tr><td colspan="5" class="p-0 border-0"><div id="pg1" class="group-body"><div>
+              <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors">
+                <div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Request</div>
+                <div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></div>
+                <div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">1</div>
+                <div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:01.120</div>
+                <div class="px-3 py-1.5 flex-1"><span class="hex-tx">FD</span></div>
+              </div>
+              <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors bg-gray-800/20">
+                <div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Response</div>
+                <div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></div>
+                <div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">1</div>
+                <div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:01.124</div>
+                <div class="px-3 py-1.5 flex-1"><span class="hex-rx">FF 00 00 00 00 00</span></div>
+              </div>
+            </div></div></td></tr>
+            <!-- Group: SET_MTA + UPLOAD -->
+            <tr class="border-t border-gray-800/60 cursor-pointer select-none bg-gray-900/30 hover:bg-gray-800/30 transition-colors" onclick="togglePairGroup('pg2')">
+              <td colspan="5" class="px-2 py-1"><div class="flex items-center gap-1.5"><span id="pg2-arrow" class="text-gray-500 text-[10px] w-3 shrink-0">▾</span><span class="text-gray-300 font-medium text-[11px]">SET_MTA</span><div class="flex-1 h-px bg-gray-800/60 ml-1"></div></div></td>
             </tr>
-            <tr id="e5" class="expand-row bg-gray-900/60">
-              <td colspan="4" class="px-6 pb-3 pt-1">
-                <div class="text-[10px] text-red-500 mb-1.5 uppercase tracking-wider">-ERR Response</div>
-                <div class="space-y-0.5 text-xs">
-                  <div><span class="tc text-gray-500 w-32 inline-block">error_code</span><span class="text-red-400">0x20</span></div>
-                  <div><span class="tc text-gray-500 w-32 inline-block">meaning</span><span class="text-red-400">ERR_CMD_UNKNOWN</span></div>
-                </div>
-              </td>
+            <tr class="bg-gray-900/30"><td colspan="5" class="p-0 border-0"><div id="pg2" class="group-body"><div>
+              <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors"><div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Request</div><div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">2</div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:02.010</div><div class="px-3 py-1.5 flex-1"><span class="hex-tx">F6 00 00 00 00 00 00 00</span></div></div>
+              <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors bg-gray-800/20"><div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Response</div><div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">2</div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:02.014</div><div class="px-3 py-1.5 flex-1"><span class="hex-rx">FF</span></div></div>
+            </div></div></td></tr>
+            <!-- Solo error -->
+            <tr class="border-b border-gray-800/40 hover:bg-gray-700/20 cursor-pointer transition-colors bg-gray-900/30" onclick="toggleDetail('d-solo-err')">
+              <td class="px-2 py-1.5"><div class="flex items-center gap-1 min-w-0 pl-4"><span class="text-gray-500 text-[10px]">GET_ID</span></div></td>
+              <td class="px-3 py-1.5"><span class="badge-err px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></td>
+              <td class="px-3 py-1.5 text-gray-500">3</td>
+              <td class="px-3 py-1.5 text-gray-500">12:01:04.010</td>
+              <td class="px-3 py-1.5"><span style="color:#f87171">FE 20</span></td>
             </tr>
-
+            <tr><td colspan="5" class="p-0"><div id="d-solo-err" class="detail-row bg-gray-900/60 px-6 pb-2 pt-1 text-xs space-y-0.5">
+              <div class="text-[10px] text-red-500 mb-1 uppercase tracking-wider">ERR Response</div>
+              <div><span class="text-gray-500 w-28 inline-block">error_code</span><span class="text-red-400">0x20</span></div>
+              <div><span class="text-gray-500 w-28 inline-block">meaning</span><span class="text-red-400">ERR_CMD_UNKNOWN</span></div>
+            </div></td></tr>
+            <!-- DAQ configure sequence — appears here when Configure is clicked (bidirectional sync) -->
+            <tr class="border-t border-gray-800/60 cursor-pointer select-none bg-indigo-950/20 hover:bg-indigo-900/20 transition-colors" onclick="togglePairGroup('pg-daq0')">
+              <td colspan="5" class="px-2 py-1"><div class="flex items-center gap-1.5">
+                <span id="pg-daq0-arrow" class="text-gray-500 text-[10px] w-3 shrink-0">▾</span>
+                <span class="text-gray-300 font-medium text-[11px]">FREE_DAQ</span>
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-900/50 text-indigo-300 border border-indigo-700/50 ml-1">DAQ</span>
+                <div class="flex-1 h-px bg-gray-800/60 ml-1"></div>
+              </div></td>
+            </tr>
+            <tr class="bg-indigo-950/10"><td colspan="5" class="p-0 border-0"><div id="pg-daq0" class="group-body"><div>
+              <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors"><div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Request</div><div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">4</div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:05.100</div><div class="px-3 py-1.5 flex-1"><span class="hex-tx">DA</span></div></div>
+              <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors bg-gray-800/20"><div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Response</div><div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">4</div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:05.103</div><div class="px-3 py-1.5 flex-1"><span class="hex-rx">FF</span></div></div>
+            </div></div></td></tr>
+            <tr class="border-t border-gray-800/60 cursor-pointer select-none bg-indigo-950/20 hover:bg-indigo-900/20 transition-colors" onclick="togglePairGroup('pg-daq1')">
+              <td colspan="5" class="px-2 py-1"><div class="flex items-center gap-1.5">
+                <span id="pg-daq1-arrow" class="text-gray-500 text-[10px] w-3 shrink-0">▾</span>
+                <span class="text-gray-300 font-medium text-[11px]">ALLOC_DAQ</span>
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-900/50 text-indigo-300 border border-indigo-700/50 ml-1">DAQ</span>
+                <div class="flex-1 h-px bg-gray-800/60 ml-1"></div>
+              </div></td>
+            </tr>
+            <tr class="bg-indigo-950/10"><td colspan="5" class="p-0 border-0"><div id="pg-daq1" class="group-body"><div>
+              <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors"><div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Request</div><div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">5</div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:05.105</div><div class="px-3 py-1.5 flex-1"><span class="hex-tx">D9 00 00 02 00</span></div></div>
+              <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors bg-gray-800/20"><div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Response</div><div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">5</div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:05.108</div><div class="px-3 py-1.5 flex-1"><span class="hex-rx">FF</span></div></div>
+            </div></div></td></tr>
+            <tr class="border-t border-gray-800/60 cursor-pointer select-none bg-indigo-950/20 hover:bg-indigo-900/20 transition-colors" onclick="togglePairGroup('pg-daq2')">
+              <td colspan="5" class="px-2 py-1"><div class="flex items-center gap-1.5">
+                <span id="pg-daq2-arrow" class="text-gray-500 text-[10px] w-3 shrink-0">▾</span>
+                <span class="text-gray-300 font-medium text-[11px]">WRITE_DAQ</span>
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-900/50 text-indigo-300 border border-indigo-700/50 ml-1">DAQ</span>
+                <div class="flex-1 h-px bg-gray-800/60 ml-1"></div>
+              </div></td>
+            </tr>
+            <tr class="bg-indigo-950/10"><td colspan="5" class="p-0 border-0"><div id="pg-daq2" class="group-body"><div>
+              <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors"><div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Request</div><div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold">TX</span></div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">6</div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:05.110</div><div class="px-3 py-1.5 flex-1"><span class="hex-tx">D6 00 02 00 00 40 00 80</span></div></div>
+              <div class="flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors bg-gray-800/20"><div class="px-2 py-1.5 pl-7 shrink-0 text-gray-500 text-[10px]" style="width:160px">Response</div><div class="px-3 py-1.5 shrink-0" style="width:60px"><span class="badge-rx px-1.5 py-0.5 rounded text-[10px] font-semibold">RX</span></div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:52px">6</div><div class="px-3 py-1.5 text-gray-500 shrink-0" style="width:120px">12:01:05.113</div><div class="px-3 py-1.5 flex-1"><span class="hex-rx">FF</span></div></div>
+            </div></div></td></tr>
           </tbody>
         </table>
       </div>
     </div>
+
+    <!-- ══ DAQ panel ═════════════════════════════════════════════ -->
+    <div id="panel-daq" class="flex-1 flex flex-col overflow-hidden hidden">
+
+      <!-- DAQ toolbar -->
+      <div class="flex items-center gap-2 px-4 h-10 border-b border-gray-800 bg-gray-900/60 shrink-0">
+        <!-- Status: LED + label -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span id="daq-led" class="w-2 h-2 rounded-full shrink-0 blinker-grey"></span>
+          <span id="daq-state-label" class="text-[10px] text-gray-500 w-[64px]">Idle</span>
+        </div>
+
+        <div class="w-px h-4 bg-gray-800"></div>
+
+        <!-- Free All -->
+        <button id="daq-free-btn" onclick="daqFreeAll()" disabled
+                class="px-2.5 py-1 rounded text-[10px] font-medium text-gray-600 border border-gray-800 bg-gray-900 cursor-not-allowed transition-colors">
+          Free All
+        </button>
+
+        <div class="w-px h-4 bg-gray-800"></div>
+
+        <!-- Configure -->
+        <button id="daq-cfg-btn" onclick="daqConfigure()" disabled
+                class="px-2.5 py-1 rounded text-[10px] font-medium border transition-colors opacity-40 cursor-not-allowed text-blue-400 border-blue-500/30 bg-blue-500/10">
+          Configure
+        </button>
+
+        <!-- Play / Stop -->
+        <button id="daq-start-btn" onclick="daqStart()" disabled title="Start"
+                class="w-7 h-7 rounded flex items-center justify-center text-xs border transition-colors opacity-40 cursor-not-allowed text-green-400 border-green-500/30 bg-green-500/10">▶</button>
+        <button id="daq-stop-btn" onclick="daqStop()" disabled title="Stop"
+                class="w-7 h-7 rounded flex items-center justify-center text-xs border transition-colors opacity-40 cursor-not-allowed text-red-400 border-red-500/30 bg-red-500/10">■</button>
+
+        <div class="flex-1"></div>
+
+        <!-- DTO rate -->
+        <span id="daq-dto-count" class="text-[10px] text-gray-600 font-mono">0 DTOs / s</span>
+      </div>
+
+      <!-- DAQ body: tree + live values -->
+      <div class="flex flex-1 overflow-hidden">
+
+        <!-- Left: DAQ List tree -->
+        <div id="daq-tree-pane" class="flex flex-col overflow-hidden" style="width:300px; min-width:200px; background:#030712;">
+          <div class="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
+            <span class="text-[10px] font-semibold uppercase tracking-widest text-gray-600">DAQ Lists</span>
+            <div class="flex items-center gap-2">
+              <!-- Default event selector for new lists -->
+              <select id="daq-default-event"
+                      class="px-1.5 py-0.5 bg-gray-900 border border-gray-800 rounded text-[10px] font-mono text-gray-500 focus:outline-none focus:border-blue-500"
+                      title="Default event for new lists">
+                <option value="01">0x01 — 1 ms</option>
+                <option value="02">0x02 — 10 ms</option>
+                <option value="03">0x03 — 100 ms</option>
+                <option value="04">0x04 — 1 s</option>
+              </select>
+              <button onclick="addDaqList()" class="flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors">
+                <span style="font-size:14px;line-height:14px">+</span> Add List
+              </button>
+            </div>
+          </div>
+          <div id="daq-tree" class="flex-1 overflow-y-auto p-2"></div>
+        </div>
+
+        <!-- Resizer -->
+        <div class="resizer border-x border-gray-800" id="daq-resizer"></div>
+
+        <!-- Right: Live values with sparklines -->
+        <div class="flex-1 flex flex-col overflow-hidden min-w-0">
+          <div class="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
+            <span class="text-[10px] font-semibold uppercase tracking-widest text-gray-600">Live Values</span>
+            <span class="text-[10px] text-gray-600">Click graph to expand</span>
+          </div>
+          <div class="flex-1 overflow-auto">
+            <table class="w-full border-collapse text-xs font-mono">
+              <thead class="sticky top-0 bg-gray-900 z-10">
+                <tr class="text-left text-[10px] text-gray-500 uppercase tracking-wider">
+                  <th class="px-3 py-1.5">Signal</th>
+                  <th class="px-3 py-1.5 w-24">Value</th>
+                  <th class="px-3 py-1.5 w-14">Type</th>
+                  <th class="px-3 py-1.5 w-24">Address</th>
+                  <th class="px-3 py-1.5 w-14">List/ODT</th>
+                  <th class="px-3 py-1.5 w-24">Plot</th>
+                </tr>
+              </thead>
+              <tbody id="live-tbody"></tbody>
+            </table>
+            <div id="live-empty" class="flex flex-col items-center justify-center h-32 text-gray-700 text-xs">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" class="w-8 h-8 mb-2 opacity-40">
+                <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
+              </svg>
+              Add signals to a DAQ list, then click Configure → Start
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
-<!-- ── Status bar ──────────────────────────────────────────────── -->
+<!-- Footer -->
 <footer class="flex items-center justify-between px-4 h-6 border-t border-gray-800 bg-gray-900 shrink-0 text-[10px] text-gray-600">
   <span>127.0.0.1:5555 · UDP</span>
-  <span>6 packets · 3 ms avg RTT</span>
-  <span class="font-mono text-gray-500">max_cto=255 · max_dto=1535 · proto=1.1</span>
+  <span id="footer-pkt-count">9 packets</span>
+  <span id="footer-slave" class="font-mono">not connected</span>
 </footer>
 
 <script>
-// ── String formatting ────────────────────────────────────────────
-// Applied when displaying — config/TOML stays lowercase snake_case
-function toTitleCase(str) {
-  return str.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
-
-// Apply title case to all .tc elements (hardcoded trace labels)
-document.querySelectorAll('.tc').forEach(el => {
-  el.textContent = toTitleCase(el.textContent);
-});
-
-// ── Command definitions ──────────────────────────────────────────
-const CMD_DEFS = {
-  'get-comm-mode-info': {
-    pid: 'FB',
-    fields: [
-      { label: 'pid', tip: 'GET_COMM_MODE_INFO (0xFB) — reads slave communication mode info block' },
-    ],
-  },
-  'get-id-ascii': {
-    pid: 'FA',
-    prefill: { 0:'FA', 1:'00' },
-    fields: [
-      { label: 'pid',  tip: 'GET_ID command (0xFA)' },
-      { label: 'type', tip: 'Identification type (byte 1)', options: [
-        { val:'00', label:'ASCII text' },
-        { val:'01', label:'Filename' },
-        { val:'02', label:'ASAP2 file' },
-        { val:'03', label:'CAN ID list' },
-      ]},
-    ],
-  },
-  'get-id-file': {
-    pid: 'FA',
-    prefill: { 0:'FA', 1:'01' },
-    fields: [
-      { label: 'pid',  tip: 'GET_ID command (0xFA)' },
-      { label: 'type', tip: 'Identification type (byte 1)', options: [
-        { val:'00', label:'ASCII text' },
-        { val:'01', label:'Filename' },
-        { val:'02', label:'ASAP2 file' },
-        { val:'03', label:'CAN ID list' },
-      ]},
-    ],
-  },
-};
-
-const NUM_CELLS = 8;
-let activeCmd = null;
-
-// ── Build byte bar ───────────────────────────────────────────────
-function buildByteBar() {
-  const bar = document.getElementById('byte-bar');
-  bar.innerHTML = '';
-
-  for (let i = 0; i < NUM_CELLS; i++) {
-    const def        = activeCmd ? CMD_DEFS[activeCmd] : null;
-    const field      = def ? def.fields[i] : null;
-    const isPid      = i === 0 && !!def;
-    const prefillVal = (def?.prefill?.[i] != null) ? def.prefill[i] : '';
-
-    const col = document.createElement('div');
-    col.className = 'flex-1 flex flex-col min-w-0';
-
-    // label row
-    const lblRow = document.createElement('div');
-    lblRow.className = 'flex items-center justify-between mb-1 h-4';
-
-    const nameSpan = document.createElement('span');
-    // toTitleCase applied here — config label stays lowercase, display is formatted
-    nameSpan.className = 'text-[10px] truncate ' + (field ? 'text-gray-400' : 'text-gray-700');
-    nameSpan.textContent = field ? toTitleCase(field.label) : '';
-    lblRow.appendChild(nameSpan);
-
-    if (field) {
-      const btnGrp = document.createElement('div');
-      btnGrp.className = 'flex items-center gap-0.5 shrink-0';
-
-      if (field.options) {
-        const ddBtn = document.createElement('button');
-        ddBtn.className = 'text-[10px] text-gray-500 hover:text-blue-400 px-0.5 leading-none transition-colors';
-        ddBtn.textContent = '▾';
-        ddBtn.onclick = (e) => { e.stopPropagation(); openDropdown(i, field.options); };
-        btnGrp.appendChild(ddBtn);
-      }
-
-      const infoBtn = document.createElement('button');
-      infoBtn.className = 'text-[10px] text-gray-600 hover:text-gray-400 px-0.5 leading-none transition-colors';
-      infoBtn.textContent = 'ℹ';
-      infoBtn.onmouseenter = () => showTip(infoBtn, field.tip);
-      infoBtn.onmouseleave = () => hideTip();
-      btnGrp.appendChild(infoBtn);
-      lblRow.appendChild(btnGrp);
-    }
-
-    col.appendChild(lblRow);
-
-    // input wrapper
-    const wrap = document.createElement('div');
-    wrap.className = 'byte-wrap relative';
-
-    const input = document.createElement('input');
-    input.id = 'byte-' + i;
-    input.maxLength = 2;
-    input.value = prefillVal;
-    input.placeholder = '--';
-    input.className = [
-      'w-full px-1 py-1.5 rounded text-xs font-mono text-center focus:outline-none transition-colors border',
-      isPid
-        ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
-        : 'bg-gray-900 border-gray-700 text-gray-200 focus:border-blue-500',
-    ].join(' ');
-    if (isPid) input.disabled = true;
-
-    const xBtn = document.createElement('button');
-    xBtn.className = 'clear-btn';
-    xBtn.textContent = '✕';
-    xBtn.onclick = () => { isPid ? clearCmd() : (input.value = '', input.focus()); };
-
-    wrap.appendChild(input);
-    wrap.appendChild(xBtn);
-    col.appendChild(wrap);
-    bar.appendChild(col);
-  }
-}
-
-function selectCmd(id, btn) {
-  activeCmd = id;
-  document.querySelectorAll('.cmd-btn').forEach(b => {
-    b.classList.remove('border-blue-500','text-blue-300','bg-blue-900/20');
-    b.classList.add('border-gray-700','text-gray-300','bg-gray-800');
-  });
-  btn.classList.add('border-blue-500','text-blue-300','bg-blue-900/20');
-  btn.classList.remove('border-gray-700','text-gray-300','bg-gray-800');
-  buildByteBar();
-}
-
-function clearCmd() {
-  activeCmd = null;
-  document.querySelectorAll('.cmd-btn').forEach(b => {
-    b.classList.remove('border-blue-500','text-blue-300','bg-blue-900/20');
-    b.classList.add('border-gray-700','text-gray-300','bg-gray-800');
-  });
-  buildByteBar();
-}
-
-function sendRaw() {
-  const bytes = [];
-  for (let i = 0; i < NUM_CELLS; i++) {
-    const v = (document.getElementById('byte-'+i).value || '').trim();
-    if (v) bytes.push(v.toUpperCase().padStart(2,'0'));
-  }
-  console.log('Send:', bytes.join(' '));
-}
-
-// ── Dropdown (fixed-positioned, appended to body) ────────────────
-let activeDd = null;
-
-function openDropdown(cellIdx, options) {
-  closeDropdown();
-  const input = document.getElementById('byte-' + cellIdx);
-  const rect  = input.getBoundingClientRect();
-
-  const dd = document.createElement('div');
-  dd.id = 'active-dd';
-  dd.className = 'fixed bg-gray-800 border border-gray-700 rounded-md shadow-2xl z-[9999] py-0.5';
-  dd.style.minWidth = Math.max(rect.width, 130) + 'px';
-  dd.style.top  = (rect.bottom + 3) + 'px';
-  dd.style.left = rect.left + 'px';
-
-  options.forEach(opt => {
-    const item = document.createElement('div');
-    item.className = 'px-2.5 py-1 text-xs font-mono hover:bg-gray-700 cursor-pointer flex items-center gap-2 transition-colors';
-    item.innerHTML = `<span class="text-blue-400 shrink-0">${opt.val}</span><span class="text-gray-400">${opt.label}</span>`;
-    item.onclick = () => { input.value = opt.val; closeDropdown(); };
-    dd.appendChild(item);
-  });
-
-  document.body.appendChild(dd);
-  activeDd = dd;
-
-  requestAnimationFrame(() => {
-    const r = dd.getBoundingClientRect();
-    if (r.right  > window.innerWidth  - 8) dd.style.left = (rect.right  - r.width) + 'px';
-    if (r.bottom > window.innerHeight - 8) dd.style.top  = (rect.top - r.height - 3) + 'px';
-  });
-}
-
-function closeDropdown() {
-  if (activeDd) { activeDd.remove(); activeDd = null; }
-}
-
-// ── Tooltip (fixed, JS-positioned, fades) ───────────────────────
-const tipEl = document.getElementById('g-tip');
-let tipTimer;
-
-function showTip(el, text) {
-  clearTimeout(tipTimer);
-  const rect = el.getBoundingClientRect();
-  tipEl.textContent = text;
-  tipEl.style.display = 'block';
-  tipEl.style.top  = (rect.bottom + 5) + 'px';
-  tipEl.style.left = rect.left + 'px';
-  requestAnimationFrame(() => {
-    const tr = tipEl.getBoundingClientRect();
-    if (tr.right  > window.innerWidth  - 8) tipEl.style.left = (window.innerWidth  - tr.width - 8) + 'px';
-    if (tr.bottom > window.innerHeight - 8) tipEl.style.top  = (rect.top - tr.height - 5) + 'px';
-    tipEl.style.opacity = '1';
-  });
-}
-
-function hideTip() {
-  tipEl.style.opacity = '0';
-  tipTimer = setTimeout(() => { tipEl.style.display = 'none'; }, 140);
-}
-
-// ── PID filter popover ───────────────────────────────────────────
-const selectedPids = new Set();
-let pidPopoverOpen = false;
-
-function togglePidPopover(btn) {
-  const pop = document.getElementById('pid-popover');
-  pidPopoverOpen = !pidPopoverOpen;
-  if (pidPopoverOpen) {
-    const rect = btn.getBoundingClientRect();
-    pop.style.top  = (rect.bottom + 4) + 'px';
-    pop.style.left = rect.left + 'px';
-    pop.classList.remove('hidden');
-    document.getElementById('pid-search').value = '';
-    buildPidList();
-    // keep on screen
-    requestAnimationFrame(() => {
-      const pr = pop.getBoundingClientRect();
-      if (pr.right > window.innerWidth - 8) pop.style.left = (window.innerWidth - pr.width - 8) + 'px';
-    });
+// ── Connection ────────────────────────────────────────────────────
+let connected = false;
+function toggleConnect() {
+  connected = !connected;
+  const dot = document.getElementById('hdr-dot');
+  const btn = document.getElementById('hdr-conn-btn');
+  const sb  = document.getElementById('hdr-status-btn');
+  const foot= document.getElementById('footer-slave');
+  if (connected) {
+    dot.className = 'w-2 h-2 rounded-full shrink-0 blinker-on';
+    btn.className = btn.className.replace(/bg-green-500\/10 text-green-400 border-green-500\/30 hover:bg-green-500\/20/,'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20');
+    btn.textContent = 'Disconnect'; sb.disabled = false;
+    foot.textContent = 'max_cto=255 · max_dto=1535 · proto=1.1'; foot.className = 'font-mono text-gray-500';
+    // Enable DAQ configure when connected
+    updateDaqActionBtn();
   } else {
-    pop.classList.add('hidden');
+    dot.className = 'w-2 h-2 rounded-full shrink-0 blinker-off';
+    btn.className = btn.className.replace(/bg-red-500\/10 text-red-400 border-red-500\/30 hover:bg-red-500\/20/,'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20');
+    btn.textContent = 'Connect'; sb.disabled = true;
+    foot.textContent = 'not connected'; foot.className = 'font-mono';
+    if (daqState !== 'idle') { stopMockStream(); setDaqState('idle'); }
   }
 }
+function sendGetStatus() {}
+function openSettings()  { document.getElementById('settings-modal').classList.remove('hidden'); }
+function closeSettings() { document.getElementById('settings-modal').classList.add('hidden'); }
 
-function buildPidList() {
-  const search  = (document.getElementById('pid-search').value || '').toUpperCase().trim();
-  const listEl  = document.getElementById('pid-list');
-  listEl.innerHTML = '';
-
-  const allPids = [...new Set(
-    [...document.querySelectorAll('.pkt-row')].map(r => r.dataset.pid).filter(Boolean)
-  )].sort();
-
-  allPids.filter(p => !search || p.includes(search)).forEach(pid => {
-    const active = selectedPids.has(pid);
-    const item = document.createElement('div');
-    item.className = 'flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-gray-800 transition-colors';
-    item.innerHTML = `
-      <span class="w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 text-[8px]
-                   ${active ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-600 text-transparent'}">✓</span>
-      <span class="font-mono text-xs ${active ? 'text-blue-300' : 'text-gray-400'}">0x${pid}</span>`;
-    item.onclick = () => {
-      selectedPids.has(pid) ? selectedPids.delete(pid) : selectedPids.add(pid);
-      updatePidFilterBadge();
-      buildPidList();
-      applyFilters();
-    };
-    listEl.appendChild(item);
-  });
-}
-
-function selectAllPids() { selectedPids.clear(); updatePidFilterBadge(); buildPidList(); applyFilters(); }
-function clearPids()     { selectedPids.clear(); updatePidFilterBadge(); buildPidList(); applyFilters(); }
-
-function updatePidFilterBadge() {
-  const badge = document.getElementById('pid-filter-badge');
-  const btn   = document.getElementById('pid-filter-btn');
-  if (selectedPids.size > 0) {
-    badge.textContent = selectedPids.size;
-    badge.classList.remove('hidden');
-    badge.classList.add('flex');
-    btn.classList.add('text-blue-400');
-    btn.classList.remove('text-gray-500');
-  } else {
-    badge.classList.add('hidden');
-    badge.classList.remove('flex');
-    btn.classList.remove('text-blue-400');
-    btn.classList.add('text-gray-500');
-  }
-}
-
-// ── Trace filters ────────────────────────────────────────────────
-let dirFilter = 'all';
-
-function setDirFilter(dir, btn) {
-  dirFilter = dir;
-  ['all','tx','rx'].forEach(d => {
-    const b = document.querySelector('.df-' + d);
-    if (!b) return;
-    b.className = b.className.replace(/bg-blue-600 text-white|text-gray-500 hover:text-gray-300 hover:bg-gray-800/g, '').trim();
-    b.className += d === dir ? ' bg-blue-600 text-white' : ' text-gray-500 hover:text-gray-300 hover:bg-gray-800';
-  });
-  applyFilters();
-}
-
-function applyFilters() {
-  document.querySelectorAll('.pkt-row').forEach(row => {
-    const dirOk = dirFilter === 'all' || row.dataset.dir === dirFilter;
-    const pidOk = selectedPids.size === 0 || selectedPids.has(row.dataset.pid);
-    const show  = dirOk && pidOk;
-    row.style.display = show ? '' : 'none';
-    const m = row.getAttribute('onclick')?.match(/'(e\d+)'/);
-    if (m) {
-      const exp = document.getElementById(m[1]);
-      if (exp) exp.style.display = show ? '' : 'none';
-    }
-  });
-}
-
-// ── Sidebar / trace collapse ─────────────────────────────────────
+// ── Sidebar ───────────────────────────────────────────────────────
 function toggleSidebar() {
-  const sb  = document.getElementById('sidebar');
-  const btn = document.getElementById('sb-btn');
+  const sb = document.getElementById('sidebar');
+  const btn= document.getElementById('sb-btn');
   sb.classList.toggle('collapsed');
   btn.textContent = sb.classList.contains('collapsed') ? '›' : '‹';
 }
-
-function toggleTrace() {
-  const tbl = document.getElementById('trace-table');
-  const btn = document.getElementById('trace-btn');
-  tbl.classList.toggle('hidden');
-  btn.textContent = tbl.classList.contains('hidden') ? '▲' : '▼';
+const collapsedSbGroups = new Set();
+function toggleSbGroup(id) {
+  const el = document.getElementById(id); const arrow = document.getElementById(id+'-arrow');
+  if (collapsedSbGroups.has(id)) { collapsedSbGroups.delete(id); el.style.display=''; if(arrow)arrow.textContent='▾'; }
+  else { collapsedSbGroups.add(id); el.style.display='none'; if(arrow)arrow.textContent='▸'; }
+}
+function switchSbTab(tab) {
+  ['system','user'].forEach(t => {
+    document.getElementById('sb-panel-'+t).classList.toggle('hidden', t!==tab);
+    const btn = document.getElementById('sb-tab-'+t);
+    const active = t===tab;
+    btn.className = btn.className
+      .replace(/bg-gray-800 text-gray-300 border-gray-700|text-gray-600 border-gray-800 hover:text-gray-400 hover:border-gray-700/g,'').trim()
+      + (active ? ' bg-gray-800 text-gray-300 border-gray-700' : ' text-gray-600 border-gray-800 hover:text-gray-400 hover:border-gray-700');
+  });
 }
 
-// ── Row expand ───────────────────────────────────────────────────
-function toggleRow(headerRow, expandId) {
-  const exp    = document.getElementById(expandId);
-  const isOpen = exp.classList.contains('open');
-  document.querySelectorAll('.expand-row').forEach(r => r.classList.remove('open'));
-  document.querySelectorAll('.pkt-row').forEach(r => r.classList.remove('selected'));
-  if (!isOpen) { exp.classList.add('open'); headerRow.classList.add('selected'); }
+// ── Command / Byte Bar ────────────────────────────────────────────
+const CMD_DEFS = {
+  'get-comm-mode-info': { prefill:{0:'FB'}, fields:[{label:'pid',tip:'GET_COMM_MODE_INFO (0xFB)'}] },
+  'get-id-ascii':  { prefill:{0:'FA',1:'00'}, fields:[{label:'pid',tip:'GET_ID'},{label:'type',tip:'ID type',options:[{val:'00',label:'ASCII'},{val:'01',label:'Filename'},{val:'02',label:'ASAP2'},{val:'03',label:'CAN ID list'}]}] },
+  'get-id-file':   { prefill:{0:'FA',1:'01'}, fields:[{label:'pid',tip:'GET_ID'},{label:'type',tip:'ID type',options:[{val:'00',label:'ASCII'},{val:'01',label:'Filename'},{val:'02',label:'ASAP2'},{val:'03',label:'CAN ID list'}]}] },
+  'upload':        { prefill:{0:'F5'}, fields:[{label:'pid',tip:'UPLOAD'},{label:'size',tip:'Num bytes'}] },
+  'download':      { prefill:{0:'F0'}, fields:[{label:'pid',tip:'DOWNLOAD'},{label:'len',tip:'Length'}] },
+  'read-sensor':   { prefill:{0:'F1',1:'01'}, fields:[{label:'pid',tip:'USER_CMD'},{label:'sub',tip:'Sub-command'},{label:'sensor_id',tip:'Sensor ID',options:[{val:'01',label:'Temp'},{val:'02',label:'Pressure'},{val:'03',label:'RPM'}]}] },
+};
+const NUM_CELLS = 8;
+let activeCmd = null;
+function selectCmd(id, btn) {
+  activeCmd = id;
+  document.querySelectorAll('.cmd-btn').forEach(b => {
+    const p=b.querySelector('span:first-child'), n=b.querySelector('span:last-child');
+    b.classList.remove('border-blue-500','bg-blue-900/20'); b.classList.add('border-gray-700','bg-gray-900');
+    if(p){p.classList.remove('bg-blue-900/40','border-blue-500/50','text-blue-400');p.classList.add('bg-gray-900','border-gray-700','text-gray-500');}
+    if(n){n.classList.remove('text-blue-300');n.classList.add('text-gray-300');}
+  });
+  const p=btn.querySelector('span:first-child'),n=btn.querySelector('span:last-child');
+  btn.classList.add('border-blue-500','bg-blue-900/20'); btn.classList.remove('border-gray-700','bg-gray-900');
+  if(p){p.classList.add('bg-blue-900/40','border-blue-500/50','text-blue-400');p.classList.remove('bg-gray-900','border-gray-700','text-gray-500');}
+  if(n){n.classList.add('text-blue-300');n.classList.remove('text-gray-300');}
+  buildByteBar();
 }
-
-// ── Close overlays on outside click ─────────────────────────────
-document.addEventListener('click', (e) => {
-  if (activeDd && !e.target.closest('#active-dd') && !e.target.closest('#byte-bar')) closeDropdown();
-  const pop = document.getElementById('pid-popover');
-  if (pidPopoverOpen && !pop.contains(e.target) && !document.getElementById('pid-filter-btn').contains(e.target)) {
-    pop.classList.add('hidden');
-    pidPopoverOpen = false;
+function buildByteBar() {
+  const bar = document.getElementById('byte-bar'); bar.innerHTML = '';
+  const def = activeCmd ? CMD_DEFS[activeCmd] : null;
+  for (let i=0; i<NUM_CELLS; i++) {
+    const field=def?def.fields[i]:null, isPid=i===0&&!!def, pre=def?.prefill?.[i]??'';
+    const col=document.createElement('div'); col.className='flex-1 flex flex-col min-w-0';
+    const lbl=document.createElement('div'); lbl.className='flex items-center justify-between mb-1 h-4';
+    const nm=document.createElement('span'); nm.className='text-[10px] truncate '+(field?'text-gray-400':'text-gray-700');
+    nm.textContent=field?(field.label.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())):''; lbl.appendChild(nm);
+    if(field){const g=document.createElement('div');g.className='flex items-center gap-0.5 shrink-0';
+      if(field.options){const d=document.createElement('button');d.className='text-[10px] text-gray-500 hover:text-blue-400 px-0.5 leading-none';d.textContent='▾';d.onclick=e=>{e.stopPropagation();openDropdown(i,field.options);};g.appendChild(d);}
+      const inf=document.createElement('button');inf.className='text-[10px] text-gray-600 hover:text-gray-400 px-0.5 leading-none';inf.textContent='ℹ';inf.onmouseenter=()=>showTip(inf,field.tip);inf.onmouseleave=()=>hideTip();g.appendChild(inf);lbl.appendChild(g);}
+    col.appendChild(lbl);
+    const wrap=document.createElement('div');wrap.className='byte-wrap relative';
+    const inp=document.createElement('input');inp.id='byte-'+i;inp.maxLength=2;inp.value=pre;inp.placeholder='--';
+    inp.className='w-full px-1 py-1.5 rounded text-xs font-mono text-center focus:outline-none transition-colors border '+(isPid?'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed':'bg-gray-900 border-gray-700 text-gray-200 focus:border-blue-500');
+    if(isPid)inp.disabled=true;
+    const x=document.createElement('button');x.className='clear-btn';x.textContent='✕';x.onclick=()=>{inp.value='';inp.focus();};
+    wrap.appendChild(inp);wrap.appendChild(x);col.appendChild(wrap);bar.appendChild(col);
   }
+}
+function sendRaw() { console.log('Send'); }
+
+// ── Main tab (Trace / DAQ) ────────────────────────────────────────
+function switchMainTab(tab) {
+  ['trace','daq'].forEach(t => {
+    document.getElementById('panel-'+t).classList.toggle('hidden', t!==tab);
+    const btn = document.getElementById('mtab-'+t);
+    btn.className = btn.className.replace('mtab-active','').replace('mtab-inactive','').trim()+(t===tab?' mtab-active':' mtab-inactive');
+  });
+  document.getElementById('mta-bar').classList.toggle('hidden', tab==='daq');
+}
+
+// ── Command builder collapse ──────────────────────────────────────
+let cmdBarOpen = true;
+let a2lLoaded = false;
+const A2L_SYMBOLS = [
+  { name:'EngineRPM',   addr:'0x80004000', type:'u16' },
+  { name:'ThrottlePos', addr:'0x80004002', type:'f32' },
+  { name:'OilTemp',     addr:'0x80005000', type:'f32' },
+  { name:'OilPressure', addr:'0x80005004', type:'f32' },
+  { name:'BattVoltage', addr:'0x80006000', type:'f32' },
+];
+function toggleCmdBar() {
+  cmdBarOpen = !cmdBarOpen;
+  document.getElementById('cmd-bar-content').classList.toggle('hidden', !cmdBarOpen);
+  document.getElementById('cmd-bar-toggle').textContent = cmdBarOpen ? '▼' : '▲';
+}
+function loadA2l() {
+  a2lLoaded = true;
+  document.getElementById('a2l-label').classList.remove('hidden');
+  document.getElementById('a2l-load-btn').textContent = 'Change…';
+  document.getElementById('mta-addr').placeholder = 'EngineRPM or 0x…';
+}
+function onMtaInput(el) {
+  const sug = document.getElementById('mta-suggestions');
+  const q = el.value.toLowerCase();
+  if (!a2lLoaded || !q || q.startsWith('0x')) { sug.classList.add('hidden'); return; }
+  const matches = A2L_SYMBOLS.filter(s => s.name.toLowerCase().startsWith(q));
+  if (!matches.length) { sug.classList.add('hidden'); return; }
+  sug.innerHTML = matches.map(s =>
+    `<div class="px-2 py-1 hover:bg-gray-700 cursor-pointer" onclick="pickSymbol('${s.name}','${s.addr}')">
+       <span class="text-gray-300">${s.name}</span>
+       <span class="text-gray-600 ml-2">${s.addr}</span>
+       <span class="text-gray-600 ml-1 text-[9px]">${s.type}</span>
+     </div>`
+  ).join('');
+  sug.classList.remove('hidden');
+}
+function pickSymbol(name, addr) {
+  document.getElementById('mta-addr').value = addr;
+  document.getElementById('mta-suggestions').classList.add('hidden');
+}
+
+// ── Trace controls ────────────────────────────────────────────────
+function toggleTrace() {
+  const t=document.getElementById('trace-table'),b=document.getElementById('trace-toggle-btn');
+  t.classList.toggle('hidden'); b.textContent=t.classList.contains('hidden')?'▲':'▼';
+}
+const collapsedPairs = new Set();
+function togglePairGroup(id) {
+  const body=document.getElementById(id),arrow=document.getElementById(id+'-arrow');
+  if(collapsedPairs.has(id)){collapsedPairs.delete(id);body.classList.remove('collapsed');if(arrow)arrow.textContent='▾';}
+  else{collapsedPairs.add(id);body.classList.add('collapsed');if(arrow)arrow.textContent='▸';}
+}
+let allGroupsCollapsed=false;
+function toggleCollapseAll() {
+  allGroupsCollapsed=!allGroupsCollapsed;
+  ['pg0','pg1','pg2'].forEach(id=>{
+    const body=document.getElementById(id),arrow=document.getElementById(id+'-arrow');
+    if(!body)return;
+    if(allGroupsCollapsed){collapsedPairs.add(id);body.classList.add('collapsed');if(arrow)arrow.textContent='▸';}
+    else{collapsedPairs.delete(id);body.classList.remove('collapsed');if(arrow)arrow.textContent='▾';}
+  });
+  document.getElementById('collapse-all-btn').textContent=allGroupsCollapsed?'⊞ Expand All':'⊟ Collapse All';
+}
+function toggleDetail(id){document.getElementById(id)?.classList.toggle('open');}
+
+// ── PID filter ────────────────────────────────────────────────────
+const selectedPids=new Set(); let pidPopoverOpen=false;
+function togglePidPopover(btn){
+  const pop=document.getElementById('pid-popover');pidPopoverOpen=!pidPopoverOpen;
+  if(pidPopoverOpen){const r=btn.getBoundingClientRect();pop.style.top=(r.bottom+4)+'px';pop.style.left=r.left+'px';pop.classList.remove('hidden');document.getElementById('pid-search').value='';buildPidList();}
+  else{pop.classList.add('hidden');}
+}
+function buildPidList(){
+  const s=(document.getElementById('pid-search').value||'').toUpperCase().trim(),l=document.getElementById('pid-list');l.innerHTML='';
+  ['FF','FE','FD','F6','F5'].filter(p=>!s||p.includes(s)).forEach(pid=>{
+    const a=selectedPids.has(pid),item=document.createElement('div');
+    item.className='flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-gray-800 transition-colors';
+    item.innerHTML=`<span class="w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 text-[8px] ${a?'bg-blue-500 border-blue-500 text-white':'border-gray-600 text-transparent'}">✓</span><span class="font-mono text-xs ${a?'text-blue-300':'text-gray-400'}">0x${pid}</span>`;
+    item.onclick=()=>{a?selectedPids.delete(pid):selectedPids.add(pid);updatePidBadge();buildPidList();};l.appendChild(item);
+  });
+}
+function selectAllPids(){selectedPids.clear();updatePidBadge();buildPidList();}
+function clearPids(){selectedPids.clear();updatePidBadge();buildPidList();}
+function updatePidBadge(){
+  const b=document.getElementById('pid-filter-badge'),btn=document.getElementById('pid-filter-btn');
+  if(selectedPids.size>0){b.textContent=selectedPids.size;b.classList.remove('hidden');b.classList.add('flex');btn.classList.add('text-blue-400');btn.classList.remove('text-gray-500');}
+  else{b.classList.add('hidden');b.classList.remove('flex');btn.classList.remove('text-blue-400');btn.classList.add('text-gray-500');}
+}
+let dirFilter='all';
+function setDirFilter(dir){
+  dirFilter=dir;
+  ['all','tx','rx'].forEach(d=>{
+    const b=document.querySelector('.df-'+d);if(!b)return;
+    b.className=b.className.replace(/bg-blue-600 text-white|text-gray-500 hover:text-gray-300 hover:bg-gray-800/g,'').trim();
+    b.className+=d===dir?' bg-blue-600 text-white':' text-gray-500 hover:text-gray-300 hover:bg-gray-800';
+  });
+}
+
+// ── Dropdown + Tooltip ────────────────────────────────────────────
+let activeDd=null;
+function openDropdown(i,opts){
+  closeDropdown();const inp=document.getElementById('byte-'+i),r=inp.getBoundingClientRect();
+  const dd=document.createElement('div');dd.id='active-dd';dd.className='fixed bg-gray-800 border border-gray-700 rounded-md shadow-2xl z-[9999] py-0.5';
+  dd.style.minWidth=Math.max(r.width,130)+'px';dd.style.top=(r.bottom+3)+'px';dd.style.left=r.left+'px';
+  opts.forEach(o=>{const it=document.createElement('div');it.className='px-2.5 py-1 text-xs font-mono hover:bg-gray-700 cursor-pointer flex items-center gap-2 transition-colors';it.innerHTML=`<span class="text-blue-400 shrink-0">${o.val}</span><span class="text-gray-400">${o.label}</span>`;it.onclick=()=>{inp.value=o.val;closeDropdown();};dd.appendChild(it);});
+  document.body.appendChild(dd);activeDd=dd;
+}
+function closeDropdown(){if(activeDd){activeDd.remove();activeDd=null;}}
+const tipEl=document.getElementById('g-tip');let tipTimer;
+function showTip(el,text){clearTimeout(tipTimer);const r=el.getBoundingClientRect();tipEl.textContent=text;tipEl.style.display='block';tipEl.style.top=(r.bottom+5)+'px';tipEl.style.left=r.left+'px';requestAnimationFrame(()=>tipEl.style.opacity='1');}
+function hideTip(){tipEl.style.opacity='0';tipTimer=setTimeout(()=>{tipEl.style.display='none';},140);}
+
+// ── DAQ data ──────────────────────────────────────────────────────
+let daqLists = [
+  { id:0, event:'01', odts:[{id:0,entries:[
+    {name:'Engine RPM',   addr:'0x80004000',ext:0,size:2,type:'u16'},
+    {name:'Throttle Pos', addr:'0x80004002',ext:0,size:4,type:'f32'},
+  ]}]},
+  { id:1, event:'02', odts:[{id:0,entries:[
+    {name:'Oil Temp',     addr:'0x80005000',ext:0,size:4,type:'f32'},
+    {name:'Oil Pressure', addr:'0x80005004',ext:0,size:4,type:'f32'},
+  ]}]},
+];
+let nextListId=2, daqState='idle', daqRunInterval=null;
+const collapsedDaqLists=new Set(), collapsedDaqOdts=new Set();
+let editCtx=null;
+const EVENT_LABELS={'01':'1 ms','02':'10 ms','03':'100 ms','04':'1 s'};
+const EVENT_OPTS=[{v:'01',l:'0x01 — 1 ms'},{v:'02',l:'0x02 — 10 ms'},{v:'03',l:'0x03 — 100 ms'},{v:'04',l:'0x04 — 1 s'}];
+let liveValues={}, sparkHistory={};
+const SPARK_N=40;
+
+// ── DAQ state machine ────────────────────────────────────────────
+// Idle → [Configure] → Configured → [▶] → Running → [■] → Configured
+function setDaqState(s) {
+  daqState = s;
+  const led      = document.getElementById('daq-led');
+  const stLbl    = document.getElementById('daq-state-label');
+  const cfgBtn   = document.getElementById('daq-cfg-btn');
+  const startBtn = document.getElementById('daq-start-btn');
+  const stopBtn  = document.getElementById('daq-stop-btn');
+  const freeBtn  = document.getElementById('daq-free-btn');
+
+  const cfgs = {
+    idle:       { led:'blinker-grey',   label:'Idle',       lCls:'text-gray-500' },
+    configured: { led:'blinker-yellow', label:'Configured', lCls:'text-yellow-400' },
+    running:    { led:'blinker-on',     label:'Running',    lCls:'text-green-400' },
+  }[s];
+
+  led.className    = 'w-2 h-2 rounded-full shrink-0 ' + cfgs.led;
+  stLbl.textContent = cfgs.label;
+  stLbl.className  = 'text-[10px] ' + cfgs.lCls + ' w-[64px]';
+
+  const canCfg   = s==='idle' && connected && daqLists.length>0;
+  const canStart = s==='configured';
+  const canStop  = s==='running';
+  const canFree  = s!=='idle';
+
+  cfgBtn.disabled  = !canCfg;
+  cfgBtn.className = `px-2.5 py-1 rounded text-[10px] font-medium border transition-colors text-blue-400 border-blue-500/30 bg-blue-500/10${canCfg ? ' hover:bg-blue-500/20' : ' opacity-40 cursor-not-allowed'}`;
+
+  startBtn.disabled  = !canStart;
+  startBtn.className = `w-7 h-7 rounded flex items-center justify-center text-xs border transition-colors text-green-400 border-green-500/30 bg-green-500/10${canStart ? ' hover:bg-green-500/20' : ' opacity-40 cursor-not-allowed'}`;
+
+  stopBtn.disabled  = !canStop;
+  stopBtn.className = `w-7 h-7 rounded flex items-center justify-center text-xs border transition-colors text-red-400 border-red-500/30 bg-red-500/10${canStop ? ' hover:bg-red-500/20' : ' opacity-40 cursor-not-allowed'}`;
+
+  freeBtn.disabled  = !canFree;
+  freeBtn.className = `px-2.5 py-1 rounded text-[10px] font-medium border transition-colors ${canFree ? 'text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer' : 'text-gray-600 border-gray-800 bg-gray-900 cursor-not-allowed'}`;
+}
+function updateDaqActionBtn() { setDaqState(daqState); }
+
+function daqConfigure() {
+  if (daqState==='idle' && daqLists.length>0 && connected) { setDaqState('configured'); }
+}
+function daqStart() {
+  if (daqState==='configured') { setDaqState('running'); startMockStream(); }
+}
+function daqStop() {
+  if (daqState==='running') { setDaqState('configured'); stopMockStream(); }
+}
+function daqFreeAll() {
+  if(daqState==='running') stopMockStream();
+  setDaqState('idle');
+  liveValues={}; sparkHistory={};
+  renderLiveTable();
+}
+
+// ── DAQ tree render ───────────────────────────────────────────────
+function renderDaqTree() {
+  const tree=document.getElementById('daq-tree');
+  tree.innerHTML='';
+  if(!daqLists.length){tree.innerHTML='<div class="text-center text-gray-700 text-xs py-6">No DAQ lists. Click + Add List.</div>';renderLiveTable();return;}
+
+  daqLists.forEach(list=>{
+    const lc=collapsedDaqLists.has(list.id);
+    const card=document.createElement('div'); card.className='daq-list-card';
+
+    // List header with inline event selector
+    const hdr=document.createElement('div'); hdr.className='daq-list-header';
+    hdr.onclick=()=>{lc?collapsedDaqLists.delete(list.id):collapsedDaqLists.add(list.id);renderDaqTree();};
+    hdr.innerHTML=`
+      <span class="text-gray-500 text-[10px] w-3 shrink-0">${lc?'▸':'▾'}</span>
+      <span class="text-gray-300 text-[11px] font-semibold flex-1">List ${list.id}</span>`;
+
+    // Per-list event selector (inline in header)
+    const evSel=document.createElement('select');
+    evSel.className='px-1 py-0 bg-gray-900 border border-gray-700 rounded text-[10px] font-mono text-gray-400 focus:outline-none focus:border-blue-500 shrink-0';
+    evSel.style.fontSize='10px';
+    EVENT_OPTS.forEach(o=>{const opt=document.createElement('option');opt.value=o.v;opt.textContent=o.l;if(o.v===list.event)opt.selected=true;evSel.appendChild(opt);});
+    evSel.onchange=e=>{list.event=e.target.value;e.stopPropagation();};
+    evSel.onclick=e=>e.stopPropagation();
+
+    const rmBtn=document.createElement('button');
+    rmBtn.className='ml-1 text-gray-600 hover:text-red-400 text-[10px] transition-colors shrink-0';
+    rmBtn.textContent='✕';
+    rmBtn.onclick=e=>{e.stopPropagation();removeDaqList(list.id);};
+
+    hdr.appendChild(evSel); hdr.appendChild(rmBtn);
+    card.appendChild(hdr);
+
+    if(!lc){
+      const body=document.createElement('div'); body.className='daq-list-body';
+
+      list.odts.forEach(odt=>{
+        const ok=list.id+'-'+odt.id, oc=collapsedDaqOdts.has(ok);
+        const odtCard=document.createElement('div'); odtCard.className='daq-odt-card';
+
+        const oh=document.createElement('div'); oh.className='daq-odt-header';
+        oh.onclick=()=>{oc?collapsedDaqOdts.delete(ok):collapsedDaqOdts.add(ok);renderDaqTree();};
+        oh.innerHTML=`<span class="w-3 shrink-0">${oc?'▸':'▾'}</span><span class="flex-1">ODT ${odt.id}</span><span class="text-gray-600">${odt.entries.length} entries</span>`;
+        odtCard.appendChild(oh);
+
+        if(!oc){
+          const ob=document.createElement('div'); ob.className='daq-odt-body';
+
+          odt.entries.forEach((entry,ei)=>{
+            const er=document.createElement('div'); er.className='daq-entry-row group';
+            er.onclick=()=>openEntryPopover(list.id,odt.id,ei,er);
+            er.innerHTML=`
+              <span class="w-1.5 h-1.5 rounded-full bg-blue-500/50 shrink-0"></span>
+              <span class="text-gray-300 text-[11px] flex-1 truncate">${entry.name}</span>
+              <span class="font-mono text-gray-500 text-[10px] shrink-0">${entry.type}</span>
+              <button class="ml-0.5 text-gray-700 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                      onclick="event.stopPropagation();removeEntry(${list.id},${odt.id},${ei})">✕</button>`;
+            ob.appendChild(er);
+          });
+
+          const ae=document.createElement('div'); ae.className='px-2 py-1';
+          ae.innerHTML=`<button onclick="openEntryPopover(${list.id},${odt.id},-1,this)" class="flex items-center gap-1 text-[10px] text-gray-600 hover:text-blue-400 transition-colors"><span style="font-size:12px;line-height:12px">+</span> Add Entry</button>`;
+          ob.appendChild(ae);
+          odtCard.appendChild(ob);
+        }
+        body.appendChild(odtCard);
+      });
+
+      // Add ODT
+      const ao=document.createElement('div'); ao.className='mt-1';
+      ao.innerHTML=`<button onclick="addOdt(${list.id})" class="flex items-center gap-1 text-[10px] text-gray-600 hover:text-blue-400 transition-colors px-1"><span style="font-size:12px;line-height:12px">+</span> Add ODT</button>`;
+      body.appendChild(ao);
+      card.appendChild(body);
+    }
+    tree.appendChild(card);
+  });
+  renderLiveTable();
+}
+
+// ── Entry popover ─────────────────────────────────────────────────
+function openEntryPopover(listId,odtId,entryIdx,anchor) {
+  editCtx={listId,odtId,entryIdx};
+  const list=daqLists.find(l=>l.id===listId),odt=list?.odts.find(o=>o.id===odtId);
+  const entry=entryIdx>=0?odt?.entries[entryIdx]:null;
+  document.getElementById('ep-name').value=entry?.name??'';
+  document.getElementById('ep-addr').value=entry?.addr??'';
+  document.getElementById('ep-ext').value=entry?.ext??0;
+  document.getElementById('ep-type').value=entry?.type??'u32';
+  document.getElementById('ep-size').value=entry?.size??4;
+  const pop=document.getElementById('entry-popover'),r=anchor.getBoundingClientRect();
+  pop.style.top=(r.bottom+4)+'px'; pop.style.left=r.left+'px'; pop.classList.remove('hidden');
+  requestAnimationFrame(()=>{const pr=pop.getBoundingClientRect();if(pr.right>window.innerWidth-8)pop.style.left=(window.innerWidth-pr.width-8)+'px';if(pr.bottom>window.innerHeight-8)pop.style.top=(r.top-pr.height-4)+'px';});
+  document.getElementById('ep-name').focus();
+}
+function closeEntryPopover(){document.getElementById('entry-popover').classList.add('hidden');editCtx=null;}
+function saveEntry(){
+  if(!editCtx)return;const{listId,odtId,entryIdx}=editCtx;
+  const odt=daqLists.find(l=>l.id===listId)?.odts.find(o=>o.id===odtId);if(!odt)return;
+  const e={name:document.getElementById('ep-name').value||'Signal',addr:document.getElementById('ep-addr').value||'0x00000000',ext:parseInt(document.getElementById('ep-ext').value)||0,type:document.getElementById('ep-type').value,size:parseInt(document.getElementById('ep-size').value)||1};
+  if(entryIdx>=0)odt.entries[entryIdx]=e;else odt.entries.push(e);
+  closeEntryPopover();renderDaqTree();
+}
+function addDaqList(){daqLists.push({id:nextListId++,event:document.getElementById('daq-default-event').value,odts:[{id:0,entries:[]}]});renderDaqTree();}
+function removeDaqList(id){daqLists=daqLists.filter(l=>l.id!==id);renderDaqTree();}
+function addOdt(listId){const l=daqLists.find(l=>l.id===listId);if(l){l.odts.push({id:l.odts.length,entries:[]});renderDaqTree();}}
+function removeEntry(listId,odtId,idx){const odt=daqLists.find(l=>l.id===listId)?.odts.find(o=>o.id===odtId);if(odt){odt.entries.splice(idx,1);renderDaqTree();}}
+
+// ── Sparkline ─────────────────────────────────────────────────────
+function buildSparkline(key) {
+  const hist = sparkHistory[key] || [];
+  const W=80, H=22, pad=1;
+  if(hist.length<2) return `<svg width="${W}" height="${H}"><line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="#374151" stroke-width="1"/></svg>`;
+  const min=Math.min(...hist), max=Math.max(...hist);
+  const range=max-min||1;
+  const pts=hist.map((v,i)=>{
+    const x=pad+(i/(hist.length-1))*(W-pad*2);
+    const y=H-pad-(v-min)/range*(H-pad*2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg width="${W}" height="${H}" class="sparkline-svg"><polyline points="${pts}" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+// ── Live table ────────────────────────────────────────────────────
+function renderLiveTable() {
+  const tbody=document.getElementById('live-tbody'),empty=document.getElementById('live-empty');
+  tbody.innerHTML='';let total=0;
+  daqLists.forEach(list=>list.odts.forEach(odt=>odt.entries.forEach((entry,ei)=>{
+    total++;
+    const key=`${list.id}/${odt.id}/${ei}`;
+    const val=liveValues[key]??'—';
+    const tr=document.createElement('tr'); tr.className='border-b border-gray-800/40 hover:bg-gray-800/20';
+    tr.innerHTML=`
+      <td class="px-3 py-1.5 text-gray-300">${entry.name}</td>
+      <td class="px-3 py-1.5 text-green-400 tabular-nums" id="lv-val-${key.replace(/\//g,'-')}">${val}</td>
+      <td class="px-3 py-1.5 text-gray-600">${entry.type}</td>
+      <td class="px-3 py-1.5 text-gray-600 font-mono text-[10px]">${entry.addr}</td>
+      <td class="px-3 py-1.5 text-gray-700">${list.id}/${odt.id}</td>
+      <td class="px-2 py-1 sparkline-cell" title="Click to expand plot" id="lv-spark-${key.replace(/\//g,'-')}"
+          onclick="openPlot('${key}')">${buildSparkline(key)}</td>`;
+    tbody.appendChild(tr);
+  })));
+  empty.classList.toggle('hidden',total>0);
+}
+
+function openPlot(key) {
+  // Placeholder — full-window plot designed separately
+  alert(`Full plot for "${key}" — to be designed`);
+}
+
+// ── Mock stream ───────────────────────────────────────────────────
+function startMockStream() {
+  daqRunInterval=setInterval(()=>{
+    let n=0;
+    daqLists.forEach(list=>list.odts.forEach(odt=>odt.entries.forEach((entry,ei)=>{
+      const key=`${list.id}/${odt.id}/${ei}`;
+      const bases={'Engine RPM':1250,'Throttle Pos':42.5,'Oil Temp':92.3,'Oil Pressure':3.8};
+      const base=bases[entry.name]??100;
+      const isFloat=entry.type==='f32'||entry.type==='f64';
+      const raw=base+(Math.random()-.5)*base*.06;
+      const next=isFloat?parseFloat(raw.toFixed(2)):Math.round(raw);
+      liveValues[key]=next;
+      if(!sparkHistory[key])sparkHistory[key]=[];
+      sparkHistory[key].push(next);
+      if(sparkHistory[key].length>SPARK_N)sparkHistory[key].shift();
+      // Update value cell
+      const cell=document.getElementById('lv-val-'+key.replace(/\//g,'-'));
+      if(cell){cell.textContent=isFloat?next.toFixed(2):next;cell.classList.remove('val-flash');void cell.offsetWidth;cell.classList.add('val-flash');}
+      // Update sparkline
+      const sc=document.getElementById('lv-spark-'+key.replace(/\//g,'-'));
+      if(sc)sc.innerHTML=buildSparkline(key);
+      n++;
+    })));
+    document.getElementById('daq-dto-count').textContent=(n*2)+' DTOs / s';
+  },400);
+}
+function stopMockStream(){if(daqRunInterval){clearInterval(daqRunInterval);daqRunInterval=null;}document.getElementById('daq-dto-count').textContent='0 DTOs / s';}
+
+// ── Resizer ───────────────────────────────────────────────────────
+(function(){
+  const r=document.getElementById('daq-resizer'),p=document.getElementById('daq-tree-pane');
+  let d=false,sx=0,sw=0;
+  r.addEventListener('mousedown',e=>{d=true;sx=e.clientX;sw=p.offsetWidth;r.classList.add('dragging');document.body.style.cursor='col-resize';document.body.style.userSelect='none';});
+  document.addEventListener('mousemove',e=>{if(!d)return;p.style.width=Math.max(180,Math.min(520,sw+e.clientX-sx))+'px';});
+  document.addEventListener('mouseup',()=>{if(!d)return;d=false;r.classList.remove('dragging');document.body.style.cursor='';document.body.style.userSelect='';});
+})();
+
+// ── Outside-click ─────────────────────────────────────────────────
+document.addEventListener('click',e=>{
+  if(activeDd&&!e.target.closest('#active-dd')&&!e.target.closest('#byte-bar'))closeDropdown();
+  const pop=document.getElementById('pid-popover');
+  if(pidPopoverOpen&&!pop.contains(e.target)&&!document.getElementById('pid-filter-btn').contains(e.target)){pop.classList.add('hidden');pidPopoverOpen=false;}
+  const ep=document.getElementById('entry-popover');
+  if(!ep.classList.contains('hidden')&&!ep.contains(e.target)&&!e.target.closest('.daq-entry-row')&&!e.target.closest('[onclick*="openEntryPopover"]'))closeEntryPopover();
+  if(!document.getElementById('settings-modal').classList.contains('hidden')&&e.target===document.getElementById('settings-modal'))closeSettings();
+  const ms=document.getElementById('mta-suggestions');
+  if(!ms.classList.contains('hidden')&&!ms.contains(e.target)&&e.target.id!=='mta-addr')ms.classList.add('hidden');
 });
 
-// ── Init ─────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────
 buildByteBar();
+renderDaqTree();
+setDaqState('idle');
 </script>
 </body>
 </html>
