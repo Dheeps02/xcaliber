@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+
+const GITHUB_URL = 'https://github.com/Dheeps02/xcaliber';
+const RELEASES_URL = `${GITHUB_URL}/releases`;
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import type { NetworkInterface, EventDef } from '../lib/types';
@@ -8,7 +11,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'appearance' | 'connection' | 'trace' | 'events' | 'accessibility';
+type Tab = 'appearance' | 'connection' | 'trace' | 'events' | 'accessibility' | 'about';
 
 // ── Theme definitions ─────────────────────────────────────────────
 
@@ -444,6 +447,107 @@ function EventsTab() {
   );
 }
 
+// ── About tab ────────────────────────────────────────────────────
+
+type UpdateStatus = 'idle' | 'checking' | 'up-to-date' | 'available' | 'no-releases' | 'error';
+
+function AboutTab() {
+  const [status, setStatus] = useState<UpdateStatus>('idle');
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+
+  async function checkForUpdates() {
+    setStatus('checking');
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(
+        'https://api.github.com/repos/Dheeps02/xcaliber/releases/latest',
+        { signal: controller.signal }
+      ).finally(() => clearTimeout(timer));
+      if (res.status === 404) { setStatus('no-releases'); return; }
+      if (!res.ok) throw new Error();
+      const data = await res.json() as { tag_name: string };
+      const latest = data.tag_name.replace(/^v/, '');
+      setLatestVersion(latest);
+      setStatus(latest === __APP_VERSION__ ? 'up-to-date' : 'available');
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Branding block */}
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+          <span className="text-blue-400 font-bold text-lg font-mono tracking-tight">X</span>
+        </div>
+        <div>
+          <p className="text-base font-semibold text-gray-100 tracking-tight">XCaliber</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">XCP measurement and calibration client</p>
+        </div>
+      </div>
+
+      {/* Meta */}
+      <div className="space-y-2.5">
+        <Row label="Version">
+          <span className="text-[11px] text-gray-300 font-mono">{__APP_VERSION__}</span>
+        </Row>
+        <Row label="Source">
+          <button
+            onClick={() => window.open(GITHUB_URL, '_blank')}
+            className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors font-mono"
+          >
+            github.com/Dheeps02/xcaliber ↗
+          </button>
+        </Row>
+      </div>
+
+      {/* Update check */}
+      <div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={checkForUpdates}
+            disabled={status === 'checking'}
+            className="px-3 py-1.5 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-50 border border-gray-700 text-gray-300 transition-colors active:scale-95"
+          >
+            {status === 'checking' ? 'Checking…' : 'Check for Updates'}
+          </button>
+          {status === 'up-to-date' && (
+            <span className="text-[11px] text-green-400">✓ Up to date</span>
+          )}
+          {status === 'available' && latestVersion && (
+            <span className="text-[11px] text-amber-400 flex items-center gap-1.5">
+              v{latestVersion} available —
+              <button
+                onClick={() => window.open(RELEASES_URL, '_blank')}
+                className="text-blue-400 hover:text-blue-300 transition-colors underline"
+              >
+                Download ↗
+              </button>
+            </span>
+          )}
+          {status === 'no-releases' && (
+            <span className="text-[11px] text-gray-500">No releases published yet</span>
+          )}
+          {status === 'error' && (
+            <span className="text-[11px] text-red-400">Could not reach GitHub</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-[10px] text-gray-500 font-medium w-14 shrink-0">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 // ── Tab config ────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
@@ -452,6 +556,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'trace',         label: 'Trace',         icon: '📋' },
   { id: 'events',        label: 'Events',        icon: '⚡' },
   { id: 'accessibility', label: 'Accessibility', icon: '♿' },
+  { id: 'about',         label: 'About',         icon: 'ℹ️' },
 ];
 
 // ── Modal ─────────────────────────────────────────────────────────
@@ -528,6 +633,7 @@ export function Settings({ onClose }: Props) {
             {tab === 'trace'         && <TraceTab />}
             {tab === 'events'        && <EventsTab />}
             {tab === 'accessibility' && <AccessibilityTab />}
+            {tab === 'about'         && <AboutTab />}
           </div>
         </div>
       </div>

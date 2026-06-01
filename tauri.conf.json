@@ -1,7 +1,7 @@
 {
-  "productName": "xcp-client",
+  "productName": "XCaliber",
   "version": "0.1.0",
-  "identifier": "com.xcp-client.dev",
+  "identifier": "com.xcaliber.app",
   "build": {
     "beforeDevCommand": {
       "script": "npm run dev",
@@ -17,7 +17,7 @@
   "app": {
     "windows": [
       {
-        "title": "XCP Client",
+        "title": "XCaliber",
         "width": 1440,
         "height": 860,
         "resizable": true
@@ -30,6 +30,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.ico"]
+    "icon": ["icons/icon.png", "icons/icon.ico"]
   }
 }
