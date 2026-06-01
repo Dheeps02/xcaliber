@@ -55,9 +55,10 @@ export function ByteBar() {
   const setByteValue = useAppStore((s) => s.setByteValue);
   const setActiveCmd = useAppStore((s) => s.setActiveCmd);
   const customCmdDefs = useAppStore((s) => s.customCmdDefs);
+  const collapsed = useAppStore((s) => s.byteBarCollapsed);
+  const setCollapsed = useAppStore((s) => s.setByteBarCollapsed);
   const { showTip, hideTip } = useTooltip();
   const [dropdown, setDropdown] = useState<Dropdown | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
 
   const def = activeCmd ? (CMD_DEFS[activeCmd] ?? customCmdDefs[activeCmd]) : null;
 
@@ -209,23 +210,22 @@ export function ByteBar() {
   const endByte = startByte + BASE_CELLS - 1;
 
   const cmdLabel = !activeCmd
-    ? 'Custom Bytes'
+    ? 'Command Bar'
     : (def?.userCmdName?.toUpperCase() ?? activeCmd.replace(/-/g, ' ').toUpperCase());
 
   return (
     <div className="border-b border-gray-800 bg-gray-900 shrink-0">
-      {/* Command name header + collapse toggle */}
-      <div className="flex items-center justify-between px-4 h-8">
-        <span className="text-[11px] font-semibold tracking-widest text-gray-500 uppercase select-none">
+      {/* Command name header — click anywhere to collapse/expand */}
+      <div
+        className="flex items-center justify-between px-4 h-8 cursor-pointer select-none hover:bg-gray-800/20 transition-colors"
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        <span className="text-[11px] font-semibold tracking-widest text-gray-500 uppercase">
           {cmdLabel}
         </span>
-        <button
-          onClick={() => setCollapsed(c => !c)}
-          className="text-gray-600 hover:text-gray-400 transition-colors text-[11px] leading-none"
-          title={collapsed ? 'Expand command builder' : 'Collapse command builder'}
-        >
+        <span className="text-gray-600 hover:text-gray-400 transition-colors text-[11px] leading-none">
           {collapsed ? '▾' : '▴'}
-        </button>
+        </span>
       </div>
 
       {/* Collapsible content — grid trick for smooth height animation */}

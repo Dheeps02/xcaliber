@@ -164,28 +164,44 @@ function dirBadgeCls(p: PacketEntry) {
 // ── Animated counter ──────────────────────────────────────────────
 
 function AnimatedCount({ value, label, colorCls }: { value: number; label: string; colorCls: string }) {
-  const prevRef = useRef(value);
+  const [displayed, setDisplayed] = useState(value);
   const [animKey, setAnimKey] = useState(0);
-  const [clearing, setClearing] = useState(false);
+  const [animCls, setAnimCls] = useState('');
+  const displayedRef = useRef(displayed);
+  displayedRef.current = displayed;
+  const t1 = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const t2 = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (prevRef.current !== value) {
-      setClearing(value === 0 && prevRef.current > 0);
-      prevRef.current = value;
+    if (value === displayedRef.current) return;
+    if (t1.current) clearTimeout(t1.current);
+    if (t2.current) clearTimeout(t2.current);
+
+    if (value === 0) {
+      // Animate old value out downward, then swap to 0 and enter from top
+      setAnimCls('count-exit');
+      t1.current = setTimeout(() => {
+        setDisplayed(0);
+        setAnimCls('count-enter-from-top');
+        t2.current = setTimeout(() => setAnimCls(''), 250);
+      }, 160);
+    } else {
+      setDisplayed(value);
       setAnimKey((k) => k + 1);
+      setAnimCls('count-tick');
+      t1.current = setTimeout(() => setAnimCls(''), 240);
     }
   }, [value]);
 
+  useEffect(() => () => {
+    if (t1.current) clearTimeout(t1.current);
+    if (t2.current) clearTimeout(t2.current);
+  }, []);
+
   return (
-    <span className={`${colorCls} inline-flex items-baseline gap-0.5 font-mono text-[10px] overflow-hidden`}>
+    <span className={`${colorCls} inline-flex items-center gap-0.5 font-mono text-[10px] overflow-hidden`}>
       <span className="opacity-60">{label}:</span>
-      <span
-        key={animKey}
-        className={clearing ? 'count-clear' : animKey > 0 ? 'count-tick' : ''}
-        style={{ display: 'inline-block' }}
-      >
-        {value}
-      </span>
+      <span key={animKey} className={animCls} style={{ display: 'inline-block' }}>{displayed}</span>
     </span>
   );
 }
@@ -293,49 +309,48 @@ export function PacketTrace() {
   const [pidAnchor, setPidAnchor] = useState<HTMLElement | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Track which packet IDs have already started their entry animation to prevent double-fire
-  const seenForAnimation = useRef<Set<number>>(new Set());
-  const [animatingIds, setAnimatingIds] = useState<Set<number>>(new Set());
-  // Stagger delay (ms) per group key, computed once at arrival time
+  // IDs whose entry animation has already completed — used to suppress re-animation on re-render
+  const cleanedUpIds = useRef<Set<number>>(new Set());
+  // Stagger delay (ms) per group key, assigned once synchronously during render
   const groupStaggerDelays = useRef<Map<number, number>>(new Map());
-  // All pending-cleanup IDs across batches so timer cancellation doesn't leak them
-  const pendingCleanupIds = useRef<Set<number>>(new Set());
+  // Monotonic counter for sequential stagger; reset after a quiet period
+  const groupStaggerCounter = useRef(0);
+  const staggerResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [packets, autoScroll]);
 
-  // Determine newly-arrived packets and schedule their entry animation
+  // Reset stagger counter on each new command so responses start fresh at 0ms delay
+  useEffect(() => {
+    groupStaggerCounter.current = 0;
+  }, [animationWatermark]);
+
+  // Cleanup-only effect: removes packet-new class after animation finishes
   useEffect(() => {
     if (animationWatermark === null) return;
-    const newIds = packets
-      .filter((p) => p.id > animationWatermark && !seenForAnimation.current.has(p.id))
+    const liveIds = packets
+      .filter((p) => p.id > animationWatermark && !cleanedUpIds.current.has(p.id))
       .map((p) => p.id);
-    if (newIds.length === 0) return;
-    newIds.forEach((id) => seenForAnimation.current.add(id));
+    if (liveIds.length === 0) return;
 
-    // Assign per-group stagger delays once, at arrival time
-    const newIdSet = new Set(newIds);
-    let staggerIdx = 0;
+    // Compute max stagger delay so cleanup fires after the last group finishes
+    let maxDelay = 0;
     for (const g of groups) {
-      const isNew = g.kind === 'pair' ? newIdSet.has(g.tx.id) : newIdSet.has(g.packet.id);
-      if (isNew) {
-        groupStaggerDelays.current.set(g.key, staggerIdx * 150);
-        staggerIdx++;
+      const gId = g.kind === 'pair' ? g.tx.id : g.packet.id;
+      if (gId > animationWatermark && !cleanedUpIds.current.has(gId)) {
+        maxDelay = Math.max(maxDelay, groupStaggerDelays.current.get(g.key) ?? 0);
       }
     }
 
-    // Accumulate IDs for cleanup — so canceling an earlier timer doesn't strand old IDs
-    newIds.forEach((id) => pendingCleanupIds.current.add(id));
-    setAnimatingIds((prev) => new Set([...prev, ...newIds]));
+    // Reset stagger counter after a quiet period so unrelated commands start fresh
+    if (staggerResetRef.current) clearTimeout(staggerResetRef.current);
+    staggerResetRef.current = setTimeout(() => { groupStaggerCounter.current = 0; }, 1500);
+
     const t = setTimeout(() => {
-      setAnimatingIds((prev) => {
-        const s = new Set(prev);
-        pendingCleanupIds.current.forEach((id) => s.delete(id));
-        pendingCleanupIds.current.clear();
-        return s;
-      });
-    }, 600);
+      liveIds.forEach((id) => cleanedUpIds.current.add(id));
+      setVersion((v) => v + 1);
+    }, maxDelay + 400);
     return () => clearTimeout(t);
   }, [packets, animationWatermark]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -406,10 +421,10 @@ export function PacketTrace() {
       setIsClearing(false);
       setCollapsedGroups(new Set());
       setExpandedIds(new Set());
-      setAnimatingIds(new Set());
-      seenForAnimation.current.clear();
+      cleanedUpIds.current.clear();
       groupStaggerDelays.current.clear();
-      pendingCleanupIds.current.clear();
+      groupStaggerCounter.current = 0;
+      if (staggerResetRef.current) { clearTimeout(staggerResetRef.current); staggerResetRef.current = null; }
     }, 220);
   }
 
@@ -445,7 +460,7 @@ export function PacketTrace() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 h-9 border-b border-gray-800 bg-gray-900 shrink-0">
+      <div className="flex items-center justify-between px-4 h-10 border-b border-gray-800 bg-gray-900 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs font-medium text-gray-400 shrink-0">Packet Trace</span>
           <div className="flex items-center gap-1">
@@ -453,7 +468,7 @@ export function PacketTrace() {
               <button
                 key={d}
                 onClick={() => setDirFilter(d)}
-                className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
+                className={`px-2 py-1 rounded text-[10px] leading-none transition-colors translate-y-px ${
                   dirFilter === d ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
                 }`}
               >
@@ -481,7 +496,7 @@ export function PacketTrace() {
           </button>
           <button
             onClick={allCollapsed ? expandAll : collapseAll}
-            className="px-1.5 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors shrink-0"
+            className="px-1.5 py-1 rounded text-[10px] leading-none text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors shrink-0 translate-y-px"
           >
             {allCollapsed ? '⊞ Expand All' : '⊟ Collapse All'}
           </button>
@@ -499,7 +514,7 @@ export function PacketTrace() {
           </label>
           <button
             onClick={handleClear}
-            className="px-2 py-0.5 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors"
+            className="px-2 py-1 rounded text-[10px] leading-none text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors translate-y-px"
           >
             Clear
           </button>
@@ -550,8 +565,12 @@ export function PacketTrace() {
                   const hasPair = rx !== null;
                   const cmdLabel = getCommandLabel(tx);
                   const isTimedOut = !hasPair && Date.now() - tx.timestamp_ms > displayTimeoutMs;
-                  const newTx = animatingIds.has(tx.id);
-                  const newRx = rx !== null && animatingIds.has(rx.id);
+                  const newTx = animationWatermark !== null && tx.id > animationWatermark && !cleanedUpIds.current.has(tx.id);
+                  const newRx = rx !== null && animationWatermark !== null && rx.id > animationWatermark && !cleanedUpIds.current.has(rx.id);
+                  if (newTx && !groupStaggerDelays.current.has(g.key)) {
+                    groupStaggerDelays.current.set(g.key, Math.min(groupStaggerCounter.current, 3) * 120);
+                    groupStaggerCounter.current++;
+                  }
                   const groupDelay = groupStaggerDelays.current.get(g.key) ?? 0;
 
                   return (
@@ -588,7 +607,7 @@ export function PacketTrace() {
                       </tr>
 
                       {/* ── Sub-rows — single TR/TD with grid wrapper for smooth height animation ── */}
-                      <tr className={altBg}>
+                      <tr className={`${altBg} ${newTx ? 'packet-new' : ''}`} style={newTx ? { animationDelay: `${groupDelay}ms` } : undefined}>
                         <td colSpan={COL_SPAN} className="p-0 border-0">
                           <div style={{
                             display: 'grid',
@@ -661,11 +680,17 @@ export function PacketTrace() {
 
                 // ── Solo packet ──────────────────────────────────
                 const p = g.packet;
+                const isNewSolo = animationWatermark !== null && p.id > animationWatermark && !cleanedUpIds.current.has(p.id);
+                if (isNewSolo && !groupStaggerDelays.current.has(g.key)) {
+                  groupStaggerDelays.current.set(g.key, Math.min(groupStaggerCounter.current, 3) * 120);
+                  groupStaggerCounter.current++;
+                }
+                const soloDelay = groupStaggerDelays.current.get(g.key) ?? 0;
                 return (
                   <Fragment key={g.key}>
                     <tr
-                      className={`border-b border-gray-800/40 hover:bg-gray-700/20 cursor-pointer transition-colors ${altBg} ${expandedIds.has(p.id) ? 'bg-gray-800/30' : ''} ${animatingIds.has(p.id) ? 'packet-new' : ''} ${isClearing ? 'row-out' : ''}`}
-                      style={animatingIds.has(p.id) ? { animationDelay: `${groupStaggerDelays.current.get(g.key) ?? 0}ms` } : undefined}
+                      className={`border-b border-gray-800/40 hover:bg-gray-700/20 cursor-pointer transition-colors ${altBg} ${expandedIds.has(p.id) ? 'bg-gray-800/30' : ''} ${isNewSolo ? 'packet-new' : ''} ${isClearing ? 'row-out' : ''}`}
+                      style={isNewSolo ? { animationDelay: `${soloDelay}ms` } : undefined}
                       onClick={() => toggleRow(p)}
                     >
                       <td className="px-2 py-1.5">

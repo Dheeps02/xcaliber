@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
-import type { NetworkInterface } from '../lib/types';
+import type { NetworkInterface, EventDef } from '../lib/types';
 import { SpinInput } from './SpinInput';
 
 interface Props {
   onClose: () => void;
 }
 
-type Tab = 'appearance' | 'connection' | 'trace' | 'accessibility';
+type Tab = 'appearance' | 'connection' | 'trace' | 'events' | 'accessibility';
 
 // ── Theme definitions ─────────────────────────────────────────────
 
@@ -321,12 +321,136 @@ function AccessibilityTab() {
   );
 }
 
+function EventsTab() {
+  const config = useAppStore(s => s.config);
+  const setConfig = useAppStore(s => s.setConfig);
+  const setEvents = useAppStore(s => s.setEvents);
+  const storeEvents = useAppStore(s => s.events);
+
+  const [draft, setDraft] = useState<EventDef[]>(() => storeEvents.length > 0 ? storeEvents : []);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(storeEvents);
+
+  function addEvent() {
+    const nextId = draft.length > 0 ? Math.max(...draft.map(e => e.id)) + 1 : 1;
+    setSaved(false);
+    setDraft(d => [...d, { id: nextId, name: '' }]);
+  }
+
+  function removeEvent(idx: number) {
+    setSaved(false);
+    setDraft(d => d.filter((_, i) => i !== idx));
+  }
+
+  function setField(idx: number, key: keyof EventDef, value: string | number) {
+    setSaved(false);
+    setDraft(d => d.map((e, i) => i === idx ? { ...e, [key]: value } : e));
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      if (!config) return;
+      await api.updateConfig({
+        server_ip: config.connection.server_ip,
+        server_port: config.connection.server_port,
+        protocol: config.connection.protocol,
+        timeout_ms: config.connection.timeout_ms,
+        listen_port: config.server.listen_port,
+        bind_ip: config.connection.bind_ip,
+        events: draft,
+      });
+      setEvents(draft);
+      setConfig({ ...config, events: draft });
+      setSaved(true);
+    } catch {
+      // keep form editable
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputCls = 'px-2 py-1 rounded bg-gray-800 border border-gray-700 text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500';
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] text-gray-500">
+        Define XCP event channels shown in the DAQ list dropdown. Changes are saved to config.toml.
+      </p>
+      <div className="border border-gray-800 rounded-lg overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-gray-800/60 text-left text-[10px] text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 w-16">ID</th>
+              <th className="px-3 py-2">Name</th>
+              <th className="px-3 py-2 w-8" />
+            </tr>
+          </thead>
+          <tbody>
+            {draft.length === 0 && (
+              <tr>
+                <td colSpan={3} className="px-3 py-4 text-center text-gray-700 text-[11px]">No events. Click + Add Event.</td>
+              </tr>
+            )}
+            {draft.map((ev, i) => (
+              <tr key={i} className="border-t border-gray-800">
+                <td className="px-3 py-1.5">
+                  <input
+                    type="number"
+                    value={ev.id}
+                    onChange={e => setField(i, 'id', parseInt(e.target.value) || 0)}
+                    className={`${inputCls} w-14 no-spinner`}
+                  />
+                </td>
+                <td className="px-3 py-1.5">
+                  <input
+                    type="text"
+                    value={ev.name}
+                    onChange={e => setField(i, 'name', e.target.value)}
+                    placeholder="e.g. 1 ms"
+                    className={`${inputCls} w-full`}
+                  />
+                </td>
+                <td className="px-3 py-1.5 text-center">
+                  <button
+                    onClick={() => removeEvent(i)}
+                    className="text-gray-600 hover:text-red-400 transition-colors text-[11px]"
+                    title="Remove"
+                  >✕</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button
+        onClick={addEvent}
+        className="text-[11px] text-gray-500 hover:text-blue-400 transition-colors flex items-center gap-1"
+      >
+        <span style={{ fontSize: 14 }}>+</span> Add Event
+      </button>
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          onClick={save}
+          disabled={saving || !dirty}
+          className="px-4 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors active:scale-95"
+        >
+          {saving ? 'Saving…' : 'Save to config.toml'}
+        </button>
+        {saved && <span className="text-[10px] text-green-400">✓ Saved</span>}
+      </div>
+    </div>
+  );
+}
+
 // ── Tab config ────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'appearance',    label: 'Appearance',    icon: '🎨' },
   { id: 'connection',    label: 'Connection',    icon: '🔌' },
   { id: 'trace',         label: 'Trace',         icon: '📋' },
+  { id: 'events',        label: 'Events',        icon: '⚡' },
   { id: 'accessibility', label: 'Accessibility', icon: '♿' },
 ];
 
@@ -402,6 +526,7 @@ export function Settings({ onClose }: Props) {
             {tab === 'appearance'    && <AppearanceTab />}
             {tab === 'connection'    && <ConnectionTab />}
             {tab === 'trace'         && <TraceTab />}
+            {tab === 'events'        && <EventsTab />}
             {tab === 'accessibility' && <AccessibilityTab />}
           </div>
         </div>
