@@ -57,6 +57,7 @@ export function ByteBar() {
   const customCmdDefs = useAppStore((s) => s.customCmdDefs);
   const collapsed = useAppStore((s) => s.byteBarCollapsed);
   const setCollapsed = useAppStore((s) => s.setByteBarCollapsed);
+  const showToast = useAppStore((s) => s.showToast);
   const { showTip, hideTip } = useTooltip();
   const [dropdown, setDropdown] = useState<Dropdown | null>(null);
 
@@ -79,6 +80,8 @@ export function ByteBar() {
   // Always-fresh reference to shownValues, avoids stale closure in useEffect
   const shownValuesRef = useRef(shownValues);
   shownValuesRef.current = shownValues;
+  // Tracks label texts from the previous render so we know whether a label is newly appearing
+  const prevLabelTextsRef = useRef<string[]>(Array(BASE_CELLS).fill(''));
 
   useEffect(() => {
     if (!dropdown) return;
@@ -88,6 +91,15 @@ export function ByteBar() {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [dropdown]);
+
+  // After every render, snapshot current label texts so the next render can tell
+  // whether a label is newly appearing (prev empty → current non-empty).
+  useEffect(() => {
+    prevLabelTextsRef.current = Array.from({ length: BASE_CELLS }, (_, i) => {
+      const fd = section === 0 ? def?.fields[i] : undefined;
+      return fd ? toTitleCase(fd.label) : '';
+    });
+  });
 
   // Get/set a cell value within the current section
   function getCellValue(i: number): string {
@@ -200,9 +212,11 @@ export function ByteBar() {
     }
 
     if (def?.isUserCmd && def.userCmdName) {
-      await api.userCmd(def.userCmdName, bytes[1] ?? 0, bytes.slice(2)).catch(() => {});
+      await api.userCmd(def.userCmdName, bytes[1] ?? 0, bytes.slice(2))
+        .catch((e: Error) => showToast(e.message, 'error'));
     } else {
-      await api.raw(bytes).catch(() => {});
+      await api.raw(bytes)
+        .catch((e: Error) => showToast(e.message, 'error'));
     }
   }
 
@@ -280,6 +294,14 @@ export function ByteBar() {
             const cellValue = getCellValue(i);
             const cellShown = shownValues[i] ?? '';
 
+            // Use label-enter (fade-in only) when no label existed before;
+            // use label-fade (fade-out + fade-in) when replacing an existing label.
+            const prevLabelText = prevLabelTextsRef.current[i] ?? '';
+            const currentLabelText = fieldDef ? toTitleCase(fieldDef.label) : '';
+            const lblAnimClass = prevLabelText === '' && currentLabelText !== ''
+              ? 'label-enter'
+              : 'label-fade';
+
             const spanAnimClass =
               spanPhase === 'exit'  ? 'count-exit' :
               spanPhase === 'enter' ? 'count-tick' :
@@ -302,7 +324,7 @@ export function ByteBar() {
                     </span>
                     <span
                       key={`lbl-${labelKey}-${i}`}
-                      className={`text-[10px] truncate label-fade ${
+                      className={`text-[10px] truncate ${lblAnimClass} ${
                         fieldDef ? 'text-gray-400' : 'text-gray-700'
                       }`}
                     >
@@ -352,17 +374,17 @@ export function ByteBar() {
                         // Keep shownValues in sync (typing, not a cmd/section change)
                         if (section === 0) {
                           setByteValue(i, v);
-                          setShownValues((prev) => {
-                            const n = [...prev];
-                            n[i] = v;
-                            return n;
-                          });
-                          setTypeKeys((prev) => {
-                            const n = [...prev];
-                            n[i]++;
-                            return n;
-                          });
                         }
+                        setShownValues((prev) => {
+                          const n = [...prev];
+                          n[i] = v;
+                          return n;
+                        });
+                        setTypeKeys((prev) => {
+                          const n = [...prev];
+                          n[i]++;
+                          return n;
+                        });
                       }
                     }}
                     placeholder=""
@@ -398,12 +420,12 @@ export function ByteBar() {
                         setCellValue(i, '');
                         if (section === 0) {
                           setByteValue(i, '');
-                          setShownValues((prev) => {
-                            const n = [...prev];
-                            n[i] = '';
-                            return n;
-                          });
                         }
+                        setShownValues((prev) => {
+                          const n = [...prev];
+                          n[i] = '';
+                          return n;
+                        });
                         inputRefs.current[i]?.focus();
                       }
                     }}
@@ -446,12 +468,12 @@ export function ByteBar() {
                   setCellValue(i, opt.val);
                   if (section === 0) {
                     setByteValue(i, opt.val);
-                    setShownValues((prev) => {
-                      const n = [...prev];
-                      n[i] = opt.val;
-                      return n;
-                    });
                   }
+                  setShownValues((prev) => {
+                    const n = [...prev];
+                    n[i] = opt.val;
+                    return n;
+                  });
                   setDropdown(null);
                 }}
               >

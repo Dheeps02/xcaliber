@@ -460,7 +460,7 @@ export function PacketTrace() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 h-10 border-b border-gray-800 bg-gray-900 shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs font-medium text-gray-400 shrink-0">Packet Trace</span>
           <div className="flex items-center gap-1">
@@ -468,7 +468,7 @@ export function PacketTrace() {
               <button
                 key={d}
                 onClick={() => setDirFilter(d)}
-                className={`px-2 py-1 rounded text-[10px] leading-none transition-colors translate-y-px ${
+                className={`h-6 px-2 rounded text-[10px] flex items-center transition-colors ${
                   dirFilter === d ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
                 }`}
               >
@@ -496,7 +496,7 @@ export function PacketTrace() {
           </button>
           <button
             onClick={allCollapsed ? expandAll : collapseAll}
-            className="px-1.5 py-1 rounded text-[10px] leading-none text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors shrink-0 translate-y-px"
+            className="h-6 px-2 rounded text-[10px] flex items-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors shrink-0"
           >
             {allCollapsed ? '⊞ Expand All' : '⊟ Collapse All'}
           </button>
@@ -514,13 +514,13 @@ export function PacketTrace() {
           </label>
           <button
             onClick={handleClear}
-            className="px-2 py-1 rounded text-[10px] leading-none text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors translate-y-px"
+            className="h-6 px-2 rounded text-[10px] flex items-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors"
           >
             Clear
           </button>
           <button
             onClick={() => setTraceVisible(!traceVisible)}
-            className="w-5 h-5 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 text-xs transition-colors"
+            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 text-xs transition-colors"
           >
             {traceVisible ? '▼' : '▲'}
           </button>
