@@ -64,12 +64,55 @@ export interface AppConfig {
     protocol: string;
     timeout_ms: number;
     bind_ip?: string;
+    src_mac?: string;
+    dst_mac?: string;
   };
   server: {
     listen_port: number;
   };
   custom_commands?: CustomCommandConfig[];
   events: EventDef[];
+  user_cmds?: UserCmdDef[];
+}
+
+// ── USER_CMD (0xF1) types ─────────────────────────────────────────
+
+export interface MatchCondition {
+  reqByteOffset: number;
+  op: '==' | '!=' | '<' | '>' | '<=' | '>=';
+  value: number;
+}
+
+export interface UserCmdResponseByte {
+  offset: number;
+  label: string;
+}
+
+export interface UserCmdResponseVariant {
+  id: string;
+  name: string;
+  conditions: MatchCondition[];
+  bytes: UserCmdResponseByte[];
+}
+
+export interface UserCmdRequestByte {
+  label: string;
+  tip: string;
+  default: string;
+  options: { val: string; label: string }[];
+}
+
+export interface UserCmdDef {
+  id: string;
+  name: string;
+  group?: string;
+  requestBytes: UserCmdRequestByte[];
+  responseVariants: UserCmdResponseVariant[];
+}
+
+export interface UserCmdFileFormat {
+  version: 1;
+  commands: UserCmdDef[];
 }
 
 export interface EventDef {

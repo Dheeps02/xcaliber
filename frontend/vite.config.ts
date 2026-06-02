@@ -10,6 +10,9 @@ const { version } = JSON.parse(
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
   define: {
     __APP_VERSION__: JSON.stringify(version),
   },

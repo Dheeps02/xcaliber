@@ -6,6 +6,7 @@ import {
   useMemo,
   memo,
   Fragment,
+  useId,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -29,6 +30,8 @@ const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 4
 }) {
   const W = 200, H = 22;
   const svgRef = useRef<SVGSVGElement>(null);
+  const rawId = useId();
+  const gradId = `sg${rawId.replace(/[^a-z0-9]/gi, '')}`;
 
   useEffect(() => {
     const el = svgRef.current;
@@ -49,16 +52,52 @@ const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 4
       </svg>
     );
   }
+
   const mn = Math.min(...slice);
   const mx = Math.max(...slice);
   const range = mx - mn || 1;
-  const pts = slice.map((v, i) => {
-    const x = (i / (slice.length - 1)) * (W - 4) + 2;
-    const y = (H - 4) - ((v - mn) / range) * (H - 8) + 2;
-    return `${x},${y}`;
-  }).join(' ');
+  const points = slice.map((v, i) => ({
+    x: (i / (slice.length - 1)) * (W - 4) + 2,
+    y: (H - 4) - ((v - mn) / range) * (H - 8) + 2,
+  }));
+
+  const pts = points.map(p => `${p.x},${p.y}`).join(' ');
+
+  // Closed path for the gradient fill: follow the line then drop to the bottom
+  const first = points[0], last = points[points.length - 1];
+  const fillPath = `M ${first.x},${first.y} `
+    + points.slice(1).map(p => `L ${p.x},${p.y}`).join(' ')
+    + ` L ${last.x},${H} L ${first.x},${H} Z`;
+
+  // Vertical grid lines: ~5 columns, spacing scales with zoom
+  const gridStep = Math.max(1, Math.round(slice.length / 5));
+  const vertLines: number[] = [];
+  for (let i = gridStep; i < slice.length - 1; i += gridStep) {
+    vertLines.push((i / (slice.length - 1)) * (W - 4) + 2);
+  }
+
   return (
     <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" className="block">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2={H} gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor={color} stopOpacity={0.35} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+
+      {/* Background */}
+      <rect width={W} height={H} fill={color} fillOpacity={0.06} />
+
+      {/* Grid */}
+      <line x1={2} y1={H / 2} x2={W - 2} y2={H / 2} stroke="#374151" strokeWidth={0.5} />
+      {vertLines.map((x, i) => (
+        <line key={i} x1={x} y1={0} x2={x} y2={H} stroke="#374151" strokeWidth={0.5} />
+      ))}
+
+      {/* Gradient fill */}
+      <path d={fillPath} fill={`url(#${gradId})`} />
+
+      {/* Line */}
       <polyline points={pts} fill="none" style={{ stroke: color, transition: 'stroke 300ms ease' }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   );
@@ -307,20 +346,27 @@ interface TreeProps {
   onDeleteEntry: (listId: number, odtId: number, entryIdx: number) => void;
   onRenameList: (listId: number, name: string | undefined) => void;
   onRenameOdt: (listId: number, odtId: number, name: string | undefined) => void;
+  onMoveEntry: (listId: number, odtId: number, fromIdx: number, toIdx: number) => void;
 }
 
-function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, onDeleteOdt, onSetEvent, onAddOdt, onSaveEntry, onDeleteEntry, onRenameList, onRenameOdt }: TreeProps) {
+function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, onDeleteOdt, onSetEvent, onAddOdt, onSaveEntry, onDeleteEntry, onRenameList, onRenameOdt, onMoveEntry }: TreeProps) {
   const storeEvents = useAppStore(s => s.events);
   const events = storeEvents.length > 0 ? storeEvents : [
     { id: 1, name: '1 ms' }, { id: 2, name: '10 ms' }, { id: 3, name: '100 ms' },
     { id: 4, name: '1 s' }, { id: 5, name: '10 s' },
   ];
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [exitingLists,   setExitingLists]   = useState<Set<number>>(new Set());
+  const [exitingOdts,    setExitingOdts]    = useState<Set<string>>(new Set());
+  const [exitingEntries, setExitingEntries] = useState<Set<string>>(new Set());
   const [popover, setPopover] = useState<{ listId: number; odtId: number; entryIdx: number | null; initial?: DaqEntry; anchor: { x: number; y: number } } | null>(null);
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [colorPicker, setColorPicker] = useState<{ listId: number; odtId: number; x: number; y: number } | null>(null);
+  const [dragEntry, setDragEntry] = useState<{ listId: number; odtId: number; fromIdx: number } | null>(null);
+  const [dropOver, setDropOver] = useState<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
+  const [recentlyMoved, setRecentlyMoved] = useState<string | null>(null);
 
   useEffect(() => {
     if (renamingKey && renameInputRef.current) {
@@ -366,6 +412,34 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
 
   function cancelRename() { setRenamingKey(null); }
 
+  const ANIM_MS = 160;
+
+  function handleDeleteList(listId: number) {
+    setExitingLists(s => new Set(s).add(listId));
+    setTimeout(() => {
+      onDeleteList(listId);
+      setExitingLists(s => { const n = new Set(s); n.delete(listId); return n; });
+    }, ANIM_MS);
+  }
+
+  function handleDeleteOdt(listId: number, odtId: number) {
+    const key = `${listId}:${odtId}`;
+    setExitingOdts(s => new Set(s).add(key));
+    setTimeout(() => {
+      onDeleteOdt(listId, odtId);
+      setExitingOdts(s => { const n = new Set(s); n.delete(key); return n; });
+    }, ANIM_MS);
+  }
+
+  function handleDeleteEntry(listId: number, odtId: number, ei: number) {
+    const key = `${listId}:${odtId}:${ei}`;
+    setExitingEntries(s => new Set(s).add(key));
+    setTimeout(() => {
+      onDeleteEntry(listId, odtId, ei);
+      setExitingEntries(s => { const n = new Set(s); n.delete(key); return n; });
+    }, ANIM_MS);
+  }
+
   function saveEntry(entry: DaqEntry, listId: number, odtId: number, entryIdx: number | null) {
     onSaveEntry(entry, listId, odtId, entryIdx);
     setPopover(null);
@@ -390,7 +464,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
           const lKey = `list-${list.id}`;
           const lCollapsed = collapsed.has(lKey);
           return (
-            <div key={list.id} className="daq-list-card mb-1.5">
+            <div key={list.id} className={`daq-list-card mb-1.5${exitingLists.has(list.id) ? ' daq-exiting' : ''}`}>
               {/* List header */}
               <div className="daq-list-header group" onClick={(e) => { if (!(e.target as Element).closest('[data-no-collapse]')) toggleCollapse(lKey); }}>
                 <span className="text-gray-500 text-[10px] w-3 shrink-0">{lCollapsed ? '▸' : '▾'}</span>
@@ -432,7 +506,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                   })}
                 </select>
                 <button
-                  onClick={e => { e.stopPropagation(); onDeleteList(list.id); }}
+                  onClick={e => { e.stopPropagation(); handleDeleteList(list.id); }}
                   className="ml-1 text-gray-600 hover:text-red-400 text-[10px] transition-colors shrink-0"
                 >✕</button>
               </div>
@@ -453,7 +527,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                       const oRenameKey = `odt-${list.id}-${odt.id}`;
                       const oCollapsed = collapsed.has(oKey);
                       return (
-                        <div key={odt.id} className="daq-odt-card">
+                        <div key={odt.id} className={`daq-odt-card${exitingOdts.has(`${list.id}:${odt.id}`) ? ' daq-exiting' : ''}`}>
                           <div className="daq-odt-header group" onClick={(e) => { if (!(e.target as Element).closest('[data-no-collapse]')) toggleCollapse(oKey); }}>
                             <span className="w-3 shrink-0">{oCollapsed ? '▸' : '▾'}</span>
                             <button
@@ -491,7 +565,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                             )}
                             <span className="text-gray-600 shrink-0">{odt.entries.length} entries</span>
                             <button
-                              onClick={e => { e.stopPropagation(); onDeleteOdt(list.id, odt.id); }}
+                              onClick={e => { e.stopPropagation(); handleDeleteOdt(list.id, odt.id); }}
                               className="ml-1 text-gray-600 hover:text-red-400 text-[10px] transition-colors shrink-0"
                               title="Delete ODT"
                             >✕</button>
@@ -508,19 +582,58 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                           >
                             <div style={{ minHeight: 0, overflow: 'hidden' }}>
                               <div className="daq-odt-body">
-                                {odt.entries.map((entry, ei) => (
-                                  <div key={ei} className="daq-entry-row group" onClick={(e) => {
-                                    setPopover({ listId: list.id, odtId: odt.id, entryIdx: ei, initial: entry, anchor: { x: e.clientX, y: e.clientY } });
-                                  }}>
-                                    <span className="w-2 h-px rounded-full bg-gray-600 shrink-0" />
+                                {odt.entries.map((entry, ei) => {
+                                  const isDragging = dragEntry?.listId === list.id && dragEntry?.odtId === odt.id && dragEntry?.fromIdx === ei;
+                                  const isDropAbove = dropOver?.listId === list.id && dropOver?.odtId === odt.id && dropOver?.toIdx === ei && dropOver?.above;
+                                  const isDropBelow = dropOver?.listId === list.id && dropOver?.odtId === odt.id && dropOver?.toIdx === ei && !dropOver?.above;
+                                  const movedKey = `${list.id}:${odt.id}:${entry.name}`;
+                                  return (
+                                  <div
+                                    key={ei}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.effectAllowed = 'move';
+                                      setDragEntry({ listId: list.id, odtId: odt.id, fromIdx: ei });
+                                    }}
+                                    onDragEnd={() => { setDragEntry(null); setDropOver(null); }}
+                                    onDragOver={(e) => {
+                                      if (dragEntry?.listId !== list.id || dragEntry?.odtId !== odt.id) return;
+                                      e.preventDefault();
+                                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                      const above = e.clientY < rect.top + rect.height / 2;
+                                      setDropOver({ listId: list.id, odtId: odt.id, toIdx: ei, above });
+                                    }}
+                                    onDrop={(e) => {
+                                      e.preventDefault();
+                                      if (!dragEntry || dragEntry.listId !== list.id || dragEntry.odtId !== odt.id) return;
+                                      const { fromIdx } = dragEntry;
+                                      const raw = dropOver?.above ? ei : ei + 1;
+                                      const toIdx = raw > fromIdx ? raw - 1 : raw;
+                                      const name = odt.entries[fromIdx]?.name ?? '';
+                                      setDragEntry(null);
+                                      setDropOver(null);
+                                      if (toIdx !== fromIdx) {
+                                        setRecentlyMoved(`${list.id}:${odt.id}:${name}`);
+                                        setTimeout(() => setRecentlyMoved(null), 450);
+                                        onMoveEntry(list.id, odt.id, fromIdx, toIdx);
+                                      }
+                                    }}
+                                    className={`daq-entry-row group${exitingEntries.has(`${list.id}:${odt.id}:${ei}`) ? ' daq-exiting' : ''}${isDragging ? ' opacity-40' : ''}${isDropAbove ? ' daq-drag-over-above' : ''}${isDropBelow ? ' daq-drag-over-below' : ''}${recentlyMoved === movedKey ? ' daq-moved' : ''}`}
+                                    onClick={(e) => {
+                                      if (dragEntry) return;
+                                      setPopover({ listId: list.id, odtId: odt.id, entryIdx: ei, initial: entry, anchor: { x: e.clientX, y: e.clientY } });
+                                    }}
+                                  >
+                                    <span className="w-3 text-gray-700 shrink-0 cursor-grab active:cursor-grabbing text-[10px] leading-none select-none">⠿</span>
                                     <span className="text-gray-300 text-[11px] flex-1 truncate">{entry.name}</span>
                                     <span className="font-mono text-gray-500 text-[10px] shrink-0">{entry.type_name}</span>
                                     <button
                                       className="ml-0.5 text-gray-700 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                                      onClick={e => { e.stopPropagation(); onDeleteEntry(list.id, odt.id, ei); }}
+                                      onClick={e => { e.stopPropagation(); handleDeleteEntry(list.id, odt.id, ei); }}
                                     >✕</button>
                                   </div>
-                                ))}
+                                  );
+                                })}
                                 <div className="px-2 py-1">
                                   <button
                                     onClick={e => setPopover({ listId: list.id, odtId: odt.id, entryIdx: null, anchor: { x: e.clientX, y: e.clientY } })}
@@ -751,8 +864,7 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
                     <tr>
                       <td
                         colSpan={6}
-                        className={`px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-800 cursor-pointer select-none hover:bg-gray-800/40 transition-colors ${gi > 0 ? 'border-t border-t-gray-700' : ''}`}
-                        style={{ background: 'rgba(17,24,39,0.7)' }}
+                        className={`px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-800 cursor-pointer select-none hover:bg-gray-800/40 transition-colors bg-gray-900/70 ${gi > 0 ? 'border-t border-t-gray-700' : ''}`}
                         onClick={() => setCollapsedLists(prev => {
                           const next = new Set(prev);
                           if (next.has(list.id)) next.delete(list.id); else next.add(list.id);
@@ -811,6 +923,7 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
 }
 interface ToolbarProps {
   lists: DaqList[];
+  configuring: boolean;
   onConfigure: () => void;
   onStart: () => void;
   onStop: () => void;
@@ -819,13 +932,13 @@ interface ToolbarProps {
   onLoad: (file: File) => void;
 }
 
-function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoad }: ToolbarProps) {
+function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, onSave, onLoad }: ToolbarProps) {
   const daqStatus = useAppStore(s => s.daqStatus);
   const connected = useAppStore(s => s.connected);
   const daqDtoRate = useAppStore(s => s.daqDtoRate);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const canConfigure = daqStatus === 'idle' && connected && lists.some(l => l.odts.some(o => o.entries.length > 0));
+  const canConfigure = !configuring && daqStatus === 'idle' && connected && lists.some(l => l.odts.some(o => o.entries.length > 0));
   const canStart     = daqStatus === 'configured';
   const canStop      = daqStatus === 'running';
   const canFree      = daqStatus !== 'idle';
@@ -846,7 +959,7 @@ function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoa
     'text-gray-500';
 
   return (
-    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-800 bg-gray-900/60 shrink-0">
+    <div className="flex items-center gap-2 px-4 h-9 border-b border-gray-800 bg-gray-900/60 shrink-0">
       <input
         ref={fileInputRef}
         type="file"
@@ -882,11 +995,19 @@ function DaqToolbar({ lists, onConfigure, onStart, onStop, onFree, onSave, onLoa
       <button
         onClick={onConfigure}
         disabled={!canConfigure}
-        className={`h-6 px-2.5 rounded text-[10px] font-medium flex items-center border transition-colors text-blue-400 border-blue-500/30 bg-blue-500/10 ${
+        className={`h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors text-blue-400 border-blue-500/30 bg-blue-500/10 ${
           canConfigure ? 'hover:bg-blue-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
         }`}
       >
-        Configure
+        {configuring ? (
+          <>
+            <svg className="animate-spin" width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.3" />
+              <path d="M5 1a4 4 0 0 1 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            Configuring DAQ
+          </>
+        ) : 'Configure'}
       </button>
 
       {/* Play */}
@@ -981,6 +1102,7 @@ export function Daq() {
   const showToast          = useAppStore(s => s.showToast);
 
   const [treePaneWidth, setTreePaneWidth] = useState(300);
+  const [configuring, setConfiguring] = useState(false);
   const [odtColors, setOdtColors] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     let idx = 0;
@@ -1074,8 +1196,31 @@ export function Daq() {
     ));
   }
 
+  function handleMoveEntry(listId: number, odtId: number, fromIdx: number, toIdx: number) {
+    setDaqLists(daqLists.map(l => {
+      if (l.id !== listId) return l;
+      return {
+        ...l,
+        odts: l.odts.map(o => {
+          if (o.id !== odtId) return o;
+          const entries = [...o.entries];
+          const [removed] = entries.splice(fromIdx, 1);
+          entries.splice(toIdx, 0, removed);
+          return { ...o, entries };
+        }),
+      };
+    }));
+  }
+
   function handleSaveDaq() {
-    const data = JSON.stringify({ version: 1, lists: daqLists }, null, 2);
+    const colors: Record<string, string> = {};
+    daqLists.forEach((list, li) => {
+      list.odts.forEach((odt, oi) => {
+        const c = odtColors[`${list.id}:${odt.id}`];
+        if (c) colors[`${li}:${oi}`] = c;
+      });
+    });
+    const data = JSON.stringify({ version: 1, lists: daqLists, colors }, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1088,7 +1233,7 @@ export function Daq() {
   async function handleLoadDaq(file: File) {
     try {
       const text = await file.text();
-      const data = JSON.parse(text) as { version: number; lists: DaqList[] };
+      const data = JSON.parse(text) as { version: number; lists: DaqList[]; colors?: Record<string, string> };
       if (data.version !== 1 || !Array.isArray(data.lists)) {
         showToast('Invalid .daq file format', 'error');
         return;
@@ -1099,6 +1244,9 @@ export function Daq() {
         odts: (l.odts ?? []).map((o: DaqOdt, oi: number) => ({ ...o, id: oi })),
       }));
       setDaqLists(reIndexed);
+      if (data.colors) {
+        setOdtColors(data.colors);
+      }
       showToast(`Loaded ${reIndexed.length} DAQ list(s)`, 'success');
     } catch {
       showToast('Failed to parse .daq file', 'error');
@@ -1108,11 +1256,14 @@ export function Daq() {
   // ── DAQ lifecycle handlers ──────────────────────────────────────
 
   async function handleConfigure() {
+    setConfiguring(true);
+    await new Promise<void>(r => setTimeout(r, 0));
     try {
       await api.daqReplaceLists(daqLists);
       await api.daqConfigure();
       setDaqStatus('configured');
     } catch (e) { showToast((e as Error).message, 'error'); }
+    finally { setConfiguring(false); }
   }
 
   async function handleStart() {
@@ -1141,6 +1292,7 @@ export function Daq() {
     <div className="flex-1 flex flex-col overflow-hidden">
       <DaqToolbar
         lists={daqLists}
+        configuring={configuring}
         onConfigure={handleConfigure}
         onStart={handleStart}
         onStop={handleStop}
@@ -1149,7 +1301,7 @@ export function Daq() {
         onLoad={handleLoadDaq}
       />
       <div className="flex flex-1 overflow-hidden">
-        <div style={{ background: '#030712', width: treePaneWidth, minWidth: 160 }} className="flex flex-col overflow-hidden border-r border-gray-800">
+        <div style={{ width: treePaneWidth, minWidth: 160 }} className="flex flex-col overflow-hidden border-r border-gray-800 bg-gray-950">
           <DaqTree
             lists={daqLists}
             odtColors={odtColors}
@@ -1163,6 +1315,7 @@ export function Daq() {
             onDeleteEntry={handleDeleteEntry}
             onRenameList={handleRenameList}
             onRenameOdt={handleRenameOdt}
+            onMoveEntry={handleMoveEntry}
           />
         </div>
         <PaneSplitter onDrag={splitterDrag} />

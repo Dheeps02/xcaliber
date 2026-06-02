@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import type { PacketEntry, ConnectResponse, DaqDtoEvent, DaqStatus } from '../lib/types';
 
 export function useSSE() {
-  const addPacket            = useAppStore((s) => s.addPacket);
+  const batchAddPackets      = useAppStore((s) => s.batchAddPackets);
   const prependPackets       = useAppStore((s) => s.prependPackets);
   const setConnected         = useAppStore((s) => s.setConnected);
   const setConfig            = useAppStore((s) => s.setConfig);
@@ -14,10 +14,27 @@ export function useSSE() {
   const setDaqLists          = useAppStore((s) => s.setDaqLists);
   const setDaqDtoRate        = useAppStore((s) => s.setDaqDtoRate);
   const esRef = useRef<EventSource | null>(null);
-  // DTO rate counter: { count, windowStart }
   const dtoCountRef = useRef({ count: 0, windowStart: Date.now() });
+  const pendingDaqRef = useRef<Parameters<typeof batchUpdateDaqLiveValues>[0]>([]);
+  const pendingPktsRef = useRef<Parameters<typeof batchAddPackets>[0]>([]);
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
+    function scheduleFlush() {
+      if (rafRef.current !== null) return;
+      rafRef.current = requestAnimationFrame(() => {
+        if (pendingPktsRef.current.length > 0) {
+          batchAddPackets(pendingPktsRef.current);
+          pendingPktsRef.current = [];
+        }
+        if (pendingDaqRef.current.length > 0) {
+          batchUpdateDaqLiveValues(pendingDaqRef.current);
+          pendingDaqRef.current = [];
+        }
+        rafRef.current = null;
+      });
+    }
+
     function connect() {
       esRef.current?.close();
       const es = new EventSource(import.meta.env.DEV ? '/events' : 'http://localhost:8080/events');
@@ -30,7 +47,8 @@ export function useSSE() {
         };
 
         if (msg.event === 'packet_tx' || msg.event === 'packet_rx') {
-          addPacket(msg.data as PacketEntry);
+          pendingPktsRef.current.push(msg.data as PacketEntry);
+          scheduleFlush();
 
         } else if (msg.event === 'state_changed') {
           const d = msg.data as { state: string; slave?: ConnectResponse };
@@ -52,7 +70,10 @@ export function useSSE() {
               }
             }
           }
-          if (updates.length > 0) batchUpdateDaqLiveValues(updates);
+          if (updates.length > 0) {
+            pendingDaqRef.current.push(...updates);
+            scheduleFlush();
+          }
           // Compute DTOs/s over a 2-second rolling window
           const now = Date.now();
           dtoCountRef.current.count += 1;
@@ -102,6 +123,7 @@ export function useSSE() {
 
     return () => {
       esRef.current?.close();
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }

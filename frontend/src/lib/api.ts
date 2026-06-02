@@ -62,6 +62,8 @@ export const api = {
     timeout_ms: number;
     listen_port: number;
     bind_ip?: string;
+    src_mac?: string;
+    dst_mac?: string;
     events?: EventDef[];
   }) => post<{ ok: boolean }>('/api/config', body),
   getNetworkInterfaces: () =>

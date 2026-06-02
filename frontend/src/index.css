@@ -240,9 +240,18 @@ button:active:not(:disabled) { transform: scale(0.95); }
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+  animation: input-text-appear 200ms ease both;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
 select {
-  animation: input-text-appear 200ms ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 4'%3E%3Cpath d='M1 1l3 2 3-2' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+  background-size: 8px 4px;
+  padding-right: 18px !important;
+  animation: input-text-appear 240ms ease 80ms both;
   transition: border-color 150ms ease, background-color 150ms ease;
 }
 
@@ -258,10 +267,11 @@ select {
 
 /* ── DAQ tree components ────────────────────────────────────────── */
 .daq-list-card {
-  background: rgba(17, 24, 39, 0.6);
-  border: 1px solid rgb(31 41 55);
+  background: color-mix(in srgb, var(--color-gray-900) 60%, transparent);
+  border: 1px solid var(--color-gray-800);
   border-radius: 6px;
   overflow: hidden;
+  animation: daq-enter 180ms ease-out;
 }
 .daq-list-header {
   display: flex;
@@ -270,15 +280,16 @@ select {
   padding: 5px 8px;
   cursor: pointer;
   user-select: none;
-  background: rgba(31, 41, 55, 0.4);
+  background: color-mix(in srgb, var(--color-gray-800) 40%, transparent);
   transition: background 120ms ease;
 }
-.daq-list-header:hover { background: rgba(55, 65, 81, 0.4); }
+.daq-list-header:hover { background: color-mix(in srgb, var(--color-gray-700) 40%, transparent); }
 .daq-list-body { padding: 4px 4px 4px 8px; }
 .daq-odt-card {
   margin-bottom: 2px;
   border-radius: 4px;
   overflow: hidden;
+  animation: daq-enter 160ms ease-out;
 }
 .daq-odt-header {
   display: flex;
@@ -286,13 +297,13 @@ select {
   gap: 4px;
   padding: 3px 6px;
   font-size: 10px;
-  color: #6b7280;
+  color: var(--color-gray-500);
   cursor: pointer;
   user-select: none;
   transition: background 120ms ease;
   border-radius: 4px;
 }
-.daq-odt-header:hover { background: rgba(55, 65, 81, 0.3); }
+.daq-odt-header:hover { background: color-mix(in srgb, var(--color-gray-700) 30%, transparent); }
 .daq-odt-body { padding: 1px 2px 2px 12px; }
 .daq-entry-row {
   display: flex;
@@ -302,8 +313,9 @@ select {
   cursor: pointer;
   border-radius: 3px;
   transition: background 100ms ease;
+  animation: daq-enter 140ms ease-out;
 }
-.daq-entry-row:hover { background: rgba(55, 65, 81, 0.4); }
+.daq-entry-row:hover { background: color-mix(in srgb, var(--color-gray-700) 40%, transparent); }
 
 /* ── DAQ row enter animation ────────────────────────────────────── */
 @keyframes daq-row-enter-anim {
@@ -314,6 +326,34 @@ select {
   animation: daq-row-enter-anim 280ms cubic-bezier(0.34,1.20,0.64,1) both;
 }
 
+/* ── DAQ tree add/remove animations ─────────────────────────────── */
+@keyframes daq-enter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes daq-exit {
+  from { opacity: 1; transform: translateX(0); max-height: 200px; }
+  to   { opacity: 0; transform: translateX(-8px); max-height: 0; }
+}
+.daq-exiting {
+  animation: daq-exit 160ms ease-in forwards !important;
+  pointer-events: none;
+  overflow: hidden;
+}
+@keyframes daq-moved-flash {
+  0%   { background-color: rgb(59 130 246 / 0.20); }
+  100% { background-color: transparent; }
+}
+.daq-moved {
+  animation: daq-moved-flash 450ms ease-out;
+}
+.daq-drag-over-above {
+  box-shadow: 0 -2px 0 0 #3b82f6;
+}
+.daq-drag-over-below {
+  box-shadow: 0 2px 0 0 #3b82f6;
+}
+
 /* ── Tab panel transitions ───────────────────────────────────────── */
 
 .tab-panel {
@@ -322,17 +362,15 @@ select {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: opacity 200ms ease, transform 200ms ease;
+  transition: opacity 200ms ease;
 }
 .tab-panel-active {
   opacity: 1;
-  transform: translateY(0);
   pointer-events: all;
   z-index: 1;
 }
 .tab-panel-inactive {
   opacity: 0;
-  transform: translateY(8px);
   pointer-events: none;
   z-index: 0;
 }
