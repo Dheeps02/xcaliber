@@ -117,15 +117,16 @@ export function Header() {
             <span className={`w-2 h-2 rounded-full shrink-0 ${connected ? 'blinker-on' : 'blinker-off'}`} />
             <button
               onClick={handleToggle}
-              style={{ minWidth: '90px' }}
-              className={`py-1 px-2 rounded-md text-xs font-medium border transition-colors active:scale-95 flex items-center gap-1.5 ${
+              className={`w-[112px] py-1 px-2 rounded-md text-xs font-medium border transition-colors active:scale-95 flex items-center gap-1.5 ${
                 connected
                   ? 'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20'
                   : 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20'
               }`}
             >
-              {connected ? <LinkBreak size={14} /> : <Link size={14} />}
-              {connected ? 'Disconnect' : 'Connect'}
+              {connected ? <LinkBreak size={14} className="shrink-0" /> : <Link size={14} className="shrink-0" />}
+              <span key={connected ? 'disc' : 'conn'} className="text-blur-in">
+                {connected ? 'Disconnect' : 'Connect'}
+              </span>
             </button>
           </div>
 
