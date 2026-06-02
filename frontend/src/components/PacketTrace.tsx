@@ -18,6 +18,7 @@ import {
   CaretDown,
   CaretUp,
   CaretRight,
+  Timer,
 } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { formatLabel, toTitleCase, formatTime } from '../lib/utils';
@@ -676,7 +677,7 @@ export function PacketTrace() {
                               {isTimedOut && (
                                 <div className="flex items-center border-b border-amber-900/30 bg-amber-950/20">
                                   <div className="px-2 py-1.5 pl-7 shrink-0" style={{ width: colWidths[0] }}>
-                                    <span className="text-amber-500 text-[10px]">⏱ Timeout</span>
+                                    <span className="text-amber-500 text-[10px] flex items-center gap-1"><Timer size={11} />Timeout</span>
                                   </div>
                                   <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
                                     <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-500/50">TO</span>
