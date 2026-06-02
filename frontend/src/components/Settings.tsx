@@ -78,6 +78,7 @@ function AppearanceTab() {
   const setTheme = useAppStore((s) => s.setTheme);
   const uiZoom = useAppStore((s) => s.uiZoom);
   const setUiZoom = useAppStore((s) => s.setUiZoom);
+  const [draftZoom, setDraftZoom] = useState(uiZoom);
 
   function handleSelect(id: string) {
     setTheme(id);
@@ -144,15 +145,16 @@ function AppearanceTab() {
       <div>
         <div className="flex items-center justify-between mb-2">
           <p className="text-[11px] text-gray-500 font-medium">UI Zoom</p>
-          <span className="text-[11px] font-mono text-gray-400">{Math.round(uiZoom * 100)}%</span>
+          <span className="text-[11px] font-mono text-gray-400">{Math.round(draftZoom * 100)}%</span>
         </div>
         <input
           type="range"
           min={0.7}
           max={1.5}
           step={0.05}
-          value={uiZoom}
-          onChange={(e) => setUiZoom(Number(e.target.value))}
+          value={draftZoom}
+          onChange={(e) => setDraftZoom(Number(e.target.value))}
+          onPointerUp={(e) => setUiZoom(Number((e.target as HTMLInputElement).value))}
           className="w-full accent-blue-500"
         />
         <div className="flex justify-between text-[10px] text-gray-700 mt-1">
