@@ -1,11 +1,33 @@
 import { useRef, useState } from 'react';
-import { FileCode, Link, LinkBreak, Broadcast, ArrowsClockwise, GearSix, X, FolderOpen } from '@phosphor-icons/react';
+import { FileCode, Link, LinkBreak, ArrowsClockwise, GearSix, X, FolderOpen } from '@phosphor-icons/react';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import { Settings } from './Settings';
 import { ToastContainer } from './Toast';
 import type { DaqEntryType } from '../lib/types';
+
+function BroadcastCustom({ size, pulsing, pulseKey }: { size: number; pulsing: boolean; pulseKey: number }) {
+  return (
+    <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" aria-hidden="true">
+      <g key={`dot-${pulseKey}`}>
+        <circle cx="128" cy="128" r="24" className={pulsing ? 'broadcast-dot-pulse' : ''} />
+      </g>
+      <g key={`inner-${pulseKey}`}>
+        {/* right inner arc */}
+        <path className={pulsing ? 'broadcast-arc-inner' : ''} d="M201.71,159.14a80,80,0,0,1-14.08,22.2,8,8,0,0,1-11.92-10.67,63.95,63.95,0,0,0,0-85.33,8,8,0,1,1,11.92-10.67,80.08,80.08,0,0,1,14.08,84.47Z" />
+        {/* left inner arc */}
+        <path className={pulsing ? 'broadcast-arc-inner' : ''} d="M69,103.09a64,64,0,0,0,11.26,67.58,8,8,0,0,1-11.92,10.67,79.93,79.93,0,0,1,0-106.67A8,8,0,1,1,80.29,85.34,63.77,63.77,0,0,0,69,103.09Z" />
+      </g>
+      <g key={`outer-${pulseKey}`}>
+        {/* right outer arc */}
+        <path className={pulsing ? 'broadcast-arc-outer' : ''} d="M248,128a119.58,119.58,0,0,1-34.29,84,8,8,0,1,1-11.42-11.2,103.9,103.9,0,0,0,0-145.56A8,8,0,1,1,213.71,44,119.58,119.58,0,0,1,248,128Z" />
+        {/* left outer arc */}
+        <path className={pulsing ? 'broadcast-arc-outer' : ''} d="M53.71,200.78A8,8,0,1,1,42.29,212a119.87,119.87,0,0,1,0-168,8,8,0,1,1,11.42,11.2,103.9,103.9,0,0,0,0,145.56Z" />
+      </g>
+    </svg>
+  );
+}
 
 export function Header() {
   const connected          = useAppStore((s) => s.connected);
@@ -21,6 +43,7 @@ export function Header() {
   const [a2lFileName, setA2lFileName] = useState<string | null>(null);
   const [a2lFilePath, setA2lFilePath] = useState<string | null>(null);
   const [broadcastPulsing, setBroadcastPulsing] = useState(false);
+  const [broadcastPulseKey, setBroadcastPulseKey] = useState(0);
   const [syncSpinning, setSyncSpinning] = useState(false);
 
   async function handleToggle() {
@@ -55,8 +78,9 @@ export function Header() {
   }
 
   function handleGetStatus() {
+    setBroadcastPulseKey(k => k + 1);
     setBroadcastPulsing(true);
-    setTimeout(() => setBroadcastPulsing(false), 700);
+    setTimeout(() => setBroadcastPulsing(false), 750);
     api.getStatus().catch(() => {});
   }
 
@@ -152,9 +176,7 @@ export function Header() {
             disabled={!connected}
             className="px-2 py-1 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-gray-800 text-gray-400 border border-gray-700 transition-colors active:scale-95 disabled:active:scale-100 flex items-center gap-1.5"
           >
-            <span key={broadcastPulsing ? 'pulsing' : 'idle'} className={broadcastPulsing ? 'broadcast-pulse' : ''}>
-              <Broadcast size={16} weight={broadcastPulsing ? 'fill' : 'regular'} />
-            </span>
+            <BroadcastCustom size={16} pulsing={broadcastPulsing} pulseKey={broadcastPulseKey} />
             Get Status
           </button>
 
