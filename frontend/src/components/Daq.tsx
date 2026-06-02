@@ -2,6 +2,7 @@ import {
   useRef,
   useState,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useMemo,
   memo,
@@ -12,7 +13,7 @@ import {
 import { createPortal } from 'react-dom';
 import {
   Trash, Wrench, Play, Stop, Pulse, ArrowSquareOut, FolderOpen,
-  FileText, Database, Plus, PencilSimple, X, DotsSixVertical, ChartLine,
+  Database, Plus, PencilSimple, X, DotsSixVertical, ChartLine,
   Rows, FloppyDisk, MagnifyingGlass, Waveform,
 } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
@@ -382,6 +383,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   const [recentlyMoved, setRecentlyMoved] = useState<string | null>(null);
   const listsRef    = useRef(lists);
   const entryElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const snapshotRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (renamingKey && renameInputRef.current) {
@@ -443,6 +445,18 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
       const name = odt?.entries[fromIdx]?.name ?? '';
       setRecentlyMoved(`${de.listId}:${de.odtId}:${name}`);
       setTimeout(() => setRecentlyMoved(null), 450);
+      // Snapshot Y positions of all entries in the affected ODT before React re-renders
+      const snap = new Map<string, number>();
+      const snapLst = listsRef.current.find(l => l.id === de.listId);
+      const snapOdt = snapLst?.odts.find(o => o.id === de.odtId);
+      if (snapOdt) {
+        for (const e of snapOdt.entries) {
+          const k = `${de.listId}:${de.odtId}:${e.name}`;
+          const el = entryElsRef.current.get(k);
+          if (el) snap.set(k, el.getBoundingClientRect().top);
+        }
+      }
+      snapshotRef.current = snap;
       onMoveEntry(de.listId, de.odtId, fromIdx, toIdx);
     }
 
@@ -453,6 +467,25 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
       window.removeEventListener('pointerup',   onPointerUp);
     };
   }, [onMoveEntry]);
+
+  // FLIP: runs after React commits the reordered list, before the browser paints.
+  // Applies an inverse translateY so entries appear to start at their old positions,
+  // then animates to zero (their real new position).
+  useLayoutEffect(() => {
+    if (snapshotRef.current.size === 0) return;
+    for (const [key, prevY] of snapshotRef.current) {
+      const el = entryElsRef.current.get(key);
+      if (!el) continue;
+      const dy = prevY - el.getBoundingClientRect().top;
+      if (Math.abs(dy) < 1) continue;
+      el.style.transition = 'none';
+      el.style.transform  = `translateY(${dy}px)`;
+      void el.offsetHeight; // force synchronous reflow so the browser registers the "from" state
+      el.style.transition = 'transform 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      el.style.transform  = '';
+    }
+    snapshotRef.current = new Map();
+  }, [lists]);
 
   function toggleCollapse(key: string) {
     setCollapsed(prev => {
@@ -520,8 +553,8 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5"><FileText size={18} />DAQ Lists</span>
-        <button onClick={onAddList} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5"><Database size={18} />DAQ Lists</span>
+        <button onClick={onAddList} className="flex items-center gap-1 text-[10px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 px-2 py-0.5 rounded transition-colors">
           <Plus size={12} /> Add List
         </button>
       </div>
