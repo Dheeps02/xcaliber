@@ -2,7 +2,6 @@ import {
   useRef,
   useState,
   useEffect,
-  useLayoutEffect,
   useCallback,
   useMemo,
   memo,
@@ -383,7 +382,6 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   const [recentlyMoved, setRecentlyMoved] = useState<string | null>(null);
   const listsRef    = useRef(lists);
   const entryElsRef = useRef<Map<string, HTMLElement>>(new Map());
-  const snapshotRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (renamingKey && renameInputRef.current) {
@@ -403,27 +401,6 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
 
   // Keep listsRef in sync so the pointer-up handler can read entry names
   useEffect(() => { listsRef.current = lists; }, [lists]);
-
-  // FLIP animation: runs synchronously after DOM commits the new order
-  useLayoutEffect(() => {
-    if (snapshotRef.current.size === 0) return;
-    for (const [key, prevY] of snapshotRef.current) {
-      const el = entryElsRef.current.get(key);
-      if (!el) continue;
-      const dy = prevY - el.getBoundingClientRect().top;
-      if (Math.abs(dy) < 1) continue;
-      // Place element visually at its old position (no transition)
-      el.style.transition = 'none';
-      el.style.transform  = `translateY(${dy}px)`;
-      // Two rAFs: first commits the style, second starts the transition
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        el.style.transition = 'transform 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-        el.style.transform  = '';
-        setTimeout(() => { el.style.transition = ''; }, 240);
-      }));
-    }
-    snapshotRef.current.clear();
-  }, [lists]);
 
   // Pointer-event based drag (replaces HTML5 drag-and-drop which is unreliable in webkit2gtk)
   useEffect(() => {
@@ -464,10 +441,6 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
       const lst  = listsRef.current.find(l => l.id === de.listId);
       const odt  = lst?.odts.find(o => o.id === de.odtId);
       const name = odt?.entries[fromIdx]?.name ?? '';
-      // Snapshot Y positions NOW (before React re-renders) for FLIP animation
-      for (const [key, el] of entryElsRef.current) {
-        snapshotRef.current.set(key, el.getBoundingClientRect().top);
-      }
       setRecentlyMoved(`${de.listId}:${de.odtId}:${name}`);
       setTimeout(() => setRecentlyMoved(null), 450);
       onMoveEntry(de.listId, de.odtId, fromIdx, toIdx);
@@ -678,11 +651,40 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                             }}
                           >
                             <div style={{ minHeight: 0, overflow: 'hidden' }}>
-                              <div className="daq-odt-body">
+                              <div className="daq-odt-body" style={{ position: 'relative' }}>
+                                {/* Sliding drop indicator — glides between positions as you drag */}
+                                {(() => {
+                                  if (!dragEntry || dragEntry.listId !== list.id || dragEntry.odtId !== odt.id) return null;
+                                  if (!dropOver  || dropOver.listId  !== list.id || dropOver.odtId  !== odt.id) return null;
+                                  const { fromIdx } = dragEntry;
+                                  const raw = dropOver.above ? dropOver.toIdx : dropOver.toIdx + 1;
+                                  const effectiveToIdx = raw > fromIdx ? raw - 1 : raw;
+                                  if (effectiveToIdx === fromIdx) return null;
+                                  const lineIdx = fromIdx < effectiveToIdx ? effectiveToIdx + 1 : effectiveToIdx;
+                                  const firstKey = `${list.id}:${odt.id}:${odt.entries[0]?.name ?? ''}`;
+                                  const entryH   = entryElsRef.current.get(firstKey)?.offsetHeight ?? 24;
+                                  return (
+                                    <div style={{
+                                      position: 'absolute', left: 0, right: 0,
+                                      top: lineIdx * entryH,
+                                      height: 2,
+                                      background: '#60a5fa',
+                                      borderRadius: 1,
+                                      transition: 'top 130ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                                      pointerEvents: 'none',
+                                      zIndex: 10,
+                                    }}>
+                                      <div style={{
+                                        position: 'absolute', left: 2, top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        width: 7, height: 7, borderRadius: '50%',
+                                        background: '#60a5fa',
+                                      }} />
+                                    </div>
+                                  );
+                                })()}
                                 {odt.entries.map((entry, ei) => {
                                   const isDragging = dragEntry?.listId === list.id && dragEntry?.odtId === odt.id && dragEntry?.fromIdx === ei;
-                                  const isDropAbove = dropOver?.listId === list.id && dropOver?.odtId === odt.id && dropOver?.toIdx === ei && dropOver?.above;
-                                  const isDropBelow = dropOver?.listId === list.id && dropOver?.odtId === odt.id && dropOver?.toIdx === ei && !dropOver?.above;
                                   const movedKey = `${list.id}:${odt.id}:${entry.name}`;
                                   return (
                                   <div
@@ -695,7 +697,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                                     data-entry-list={list.id}
                                     data-entry-odt={odt.id}
                                     data-entry-idx={ei}
-                                    className={`daq-entry-row group${exitingEntries.has(`${list.id}:${odt.id}:${ei}`) ? ' daq-exiting' : ''}${isDragging ? ' opacity-40' : ''}${isDropAbove ? ' daq-drag-over-above' : ''}${isDropBelow ? ' daq-drag-over-below' : ''}${recentlyMoved === movedKey ? ' daq-moved' : ''}`}
+                                    className={`daq-entry-row group${exitingEntries.has(`${list.id}:${odt.id}:${ei}`) ? ' daq-exiting' : ''}${isDragging ? ' opacity-40' : ''}${recentlyMoved === movedKey ? ' daq-moved' : ''}`}
                                     onClick={(e) => {
                                       if (dragEntryRef.current) return;
                                       setPopover({ listId: list.id, odtId: odt.id, entryIdx: ei, initial: entry, anchor: { x: e.clientX, y: e.clientY } });
@@ -1025,6 +1027,26 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
   const connected = useAppStore(s => s.connected);
   const daqDtoRate = useAppStore(s => s.daqDtoRate);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [wrenchKey,         setWrenchKey]         = useState(0);
+  const [playPopKey,        setPlayPopKey]         = useState(0);
+  const [stopPopKey,        setStopPopKey]         = useState(0);
+  const [freeConfirmOpen,   setFreeConfirmOpen]    = useState(false);
+  const [freeConfirmExiting,setFreeConfirmExiting] = useState(false);
+
+  const CONFIRM_EXIT_MS = 130;
+  function closeConfirm() {
+    setFreeConfirmExiting(true);
+    setTimeout(() => { setFreeConfirmOpen(false); setFreeConfirmExiting(false); }, CONFIRM_EXIT_MS);
+  }
+  const prevStatusRef = useRef(daqStatus);
+
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = daqStatus;
+    if (prev === 'idle'       && daqStatus === 'configured') setWrenchKey(k => k + 1);
+    if (prev === 'configured' && daqStatus === 'running')    setPlayPopKey(k => k + 1);
+    if (prev === 'running'    && daqStatus === 'configured') setStopPopKey(k => k + 1);
+  }, [daqStatus]);
 
   const canConfigure = !configuring && daqStatus === 'idle' && connected && lists.some(l => l.odts.some(o => o.entries.length > 0));
   const canStart     = daqStatus === 'configured';
@@ -1067,7 +1089,7 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
 
       {/* Free All */}
       <button
-        onClick={onFree}
+        onClick={() => setFreeConfirmOpen(true)}
         disabled={!canFree}
         className={`h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors ${
           canFree
@@ -1095,7 +1117,7 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
             </svg>
             Configuring DAQ
           </>
-        ) : <><Wrench size={18} />Configure</>}
+        ) : <><Wrench key={wrenchKey} size={18} className={wrenchKey > 0 ? 'icon-wrench-crank' : ''} />Configure</>}
       </button>
 
       {/* Play */}
@@ -1106,7 +1128,7 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
         className={`w-6 h-6 rounded flex items-center justify-center border transition-colors text-green-400 border-green-500/30 bg-green-500/10 ${
           canStart ? 'hover:bg-green-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
         }`}
-      ><Play size={14} /></button>
+      ><Play key={playPopKey} size={14} className={playPopKey > 0 ? 'icon-pop' : ''} /></button>
 
       {/* Stop */}
       <button
@@ -1116,7 +1138,7 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
         className={`w-6 h-6 rounded flex items-center justify-center border transition-colors text-red-400 border-red-500/30 bg-red-500/10 ${
           canStop ? 'hover:bg-red-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
         }`}
-      ><Stop size={14} /></button>
+      ><Stop key={stopPopKey} size={14} className={stopPopKey > 0 ? 'icon-pop' : ''} /></button>
 
       <div className="flex-1" />
 
@@ -1142,6 +1164,35 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
       >
         <FolderOpen size={14} />Import
       </button>
+
+      {/* Free All confirm dialog */}
+      {freeConfirmOpen && createPortal(
+        <div
+          className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 ${freeConfirmExiting ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
+          onMouseDown={e => { if (e.target === e.currentTarget) closeConfirm(); }}
+        >
+          <div className={`bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-72 p-5 flex flex-col gap-4 ${freeConfirmExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}>
+            <p className="text-sm text-gray-200 leading-relaxed">
+              Free all DAQ resources on the slave? This will stop acquisition and release all configured lists.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={closeConfirm}
+                className="px-3 py-1.5 rounded text-xs text-gray-400 hover:text-gray-200 border border-gray-700 hover:bg-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { closeConfirm(); onFree(); }}
+                className="px-4 py-1.5 rounded text-xs font-medium bg-red-600 hover:bg-red-500 text-white transition-colors active:scale-95 flex items-center gap-1.5"
+              >
+                <Trash size={18} />Free All
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
