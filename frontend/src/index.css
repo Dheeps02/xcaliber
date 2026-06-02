@@ -153,6 +153,170 @@ body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; ba
   animation: tab-fade-in 180ms ease-out;
 }
 
+/* Pin drop — falls in with slight bounce */
+@keyframes icon-pin-drop {
+  0%   { transform: translateY(-6px); opacity: 0.4; }
+  60%  { transform: translateY(2px);  opacity: 1; }
+  80%  { transform: translateY(-1px); }
+  100% { transform: translateY(0); }
+}
+.icon-pin-drop { animation: icon-pin-drop 300ms cubic-bezier(0.34,1.3,0.64,1) both; }
+
+/* Upload cycle — arrow exits upward, re-enters from below */
+@keyframes icon-upload-cycle {
+  0%   { transform: translateY(0);     opacity: 1; }
+  40%  { transform: translateY(-10px); opacity: 0; }
+  41%  { transform: translateY(10px);  opacity: 0; }
+  100% { transform: translateY(0);     opacity: 1; }
+}
+.icon-upload-cycle { animation: icon-upload-cycle 500ms cubic-bezier(0.4,0,0.2,1) both; }
+
+/* Download cycle — arrow exits downward, re-enters from above */
+@keyframes icon-download-cycle {
+  0%   { transform: translateY(0);    opacity: 1; }
+  40%  { transform: translateY(10px); opacity: 0; }
+  41%  { transform: translateY(-10px);opacity: 0; }
+  100% { transform: translateY(0);    opacity: 1; }
+}
+.icon-download-cycle { animation: icon-download-cycle 500ms cubic-bezier(0.4,0,0.2,1) both; }
+
+/* Send cycle — wind-up scale → shoot out → slide in → bounce settle */
+@keyframes icon-send-cycle {
+  0%   { transform: translate(0, 0) scale(1);          opacity: 1; }
+  18%  { transform: translate(0, 0) scale(0.7);        opacity: 1; }
+  42%  { transform: translate(12px, -12px) scale(0.7); opacity: 0; }
+  43%  { transform: translate(-12px, 12px) scale(0.7); opacity: 0; }
+  78%  { transform: translate(0, 0) scale(0.7);        opacity: 1; }
+  100% { transform: translate(0, 0) scale(1);          opacity: 1; }
+}
+.icon-send-cycle { animation: icon-send-cycle 600ms cubic-bezier(0.34,1.2,0.64,1) both; }
+
+/* Eraser wiggle */
+@keyframes icon-wiggle {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(-2px); }
+  35%  { transform: translateX(2px); }
+  55%  { transform: translateX(-2px); }
+  75%  { transform: translateX(1px); }
+  90%  { transform: translateX(-1px); }
+  100% { transform: translateX(0); }
+}
+.icon-wiggle { animation: icon-wiggle 380ms cubic-bezier(0.36,0.07,0.19,0.97) both; }
+
+/* Button jiggle — invalid action feedback. scale(1) in every frame beats the active:scale rule. */
+@keyframes btn-jiggle {
+  0%   { transform: translateX(0)    scale(1); }
+  25%  { transform: translateX(-4px) scale(1); }
+  55%  { transform: translateX(4px)  scale(1); }
+  80%  { transform: translateX(-2px) scale(1); }
+  100% { transform: translateX(0)    scale(1); }
+}
+.btn-jiggle { animation: btn-jiggle 260ms cubic-bezier(0.36,0.07,0.19,0.97) both; }
+
+@keyframes icon-rotate-in {
+  from { transform: rotate(-35deg); opacity: 0; }
+  to   { transform: rotate(0deg);   opacity: 1; }
+}
+.icon-rotate-in { animation: icon-rotate-in 220ms cubic-bezier(0.34,1.3,0.64,1) both; }
+
+@keyframes broadcast-dot-pulse {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+.broadcast-dot-pulse {
+  animation: broadcast-dot-pulse 500ms ease-out both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes broadcast-arc-radiate {
+  0%   { opacity: 0.2; }
+  55%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+.broadcast-arc-inner { animation: broadcast-arc-radiate 550ms ease-out both; }
+.broadcast-arc-outer { animation: broadcast-arc-radiate 550ms ease-out 200ms both; }
+
+@keyframes icon-spin-once {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.icon-spin-once { animation: icon-spin-once 550ms cubic-bezier(0.4,0,0.2,1) both; }
+
+@keyframes icon-spin-reverse {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+.icon-spin-reverse { animation: icon-spin-reverse 550ms cubic-bezier(0.4,0,0.2,1) both; }
+
+@keyframes icon-spin-90 {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(90deg); }
+}
+.icon-spin-90 { animation: icon-spin-90 350ms cubic-bezier(0.4,0,0.2,1) both; }
+
+@keyframes icon-spin-90-reverse {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-90deg); }
+}
+.icon-spin-90-reverse { animation: icon-spin-90-reverse 350ms cubic-bezier(0.4,0,0.2,1) both; }
+
+@keyframes text-blur-in {
+  from { filter: blur(6px); opacity: 0; }
+  to   { filter: blur(0px); opacity: 1; }
+}
+.text-blur-in { animation: text-blur-in 180ms ease-out both; }
+
+@keyframes icon-pop {
+  from { transform: scale(0.65); opacity: 0.4; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.icon-pop { animation: icon-pop 140ms cubic-bezier(0.34,1.4,0.64,1) both; }
+
+@keyframes icon-flip-expand {
+  0%   { transform: perspective(160px) rotateY(-90deg) scale(0.7);  opacity: 0.2; }
+  65%  { transform: perspective(160px) rotateY(0deg)   scale(1.1);  opacity: 1; }
+  100% { transform: perspective(160px) rotateY(0deg)   scale(1);    opacity: 1; }
+}
+@keyframes icon-flip-collapse {
+  0%   { transform: perspective(160px) rotateY(-90deg) scale(0.7);  opacity: 0.2; }
+  65%  { transform: perspective(160px) rotateY(0deg)   scale(0.88); opacity: 1; }
+  100% { transform: perspective(160px) rotateY(0deg)   scale(1);    opacity: 1; }
+}
+.icon-flip-expand   { animation: icon-flip-expand   240ms cubic-bezier(0.34,1.1,0.64,1) both; }
+.icon-flip-collapse { animation: icon-flip-collapse  240ms cubic-bezier(0.34,1.1,0.64,1) both; }
+
+/* ── Blocking modal backdrop + panel animations ─────────────────── */
+@keyframes modal-backdrop-in {
+  from { opacity: 0; backdrop-filter: blur(0px); }
+  to   { opacity: 1; backdrop-filter: blur(6px); }
+}
+@keyframes modal-backdrop-out {
+  from { opacity: 1; backdrop-filter: blur(6px); }
+  to   { opacity: 0; backdrop-filter: blur(0px); }
+}
+@keyframes modal-panel-in {
+  from { opacity: 0; transform: scale(0.95) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+@keyframes modal-panel-out {
+  from { opacity: 1; transform: scale(1)    translateY(0); }
+  to   { opacity: 0; transform: scale(0.95) translateY(-6px); }
+}
+.modal-backdrop-enter { animation: modal-backdrop-in  160ms ease-out both; }
+.modal-backdrop-exit  { animation: modal-backdrop-out 130ms ease-in  both; }
+.modal-panel-enter    { animation: modal-panel-in  200ms cubic-bezier(0.34,1.1,0.64,1) both; }
+.modal-panel-exit     { animation: modal-panel-out 120ms ease-in both; }
+
+@keyframes icon-wrench-crank {
+  0%   { transform: rotate(0deg); }
+  30%  { transform: rotate(15deg); }
+  70%  { transform: rotate(-8deg); }
+  100% { transform: rotate(0deg); }
+}
+.icon-wrench-crank { animation: icon-wrench-crank 960ms cubic-bezier(0.4,0,0.2,1) both; }
+
 /* Disable all animations */
 .no-animations *,
 .no-animations *::before,
@@ -190,12 +354,12 @@ button:active:not(:disabled) { transform: scale(0.95); }
   to   { opacity: 0; transform: scale(0.95) translateY(4px); }
 }
 @keyframes modal-backdrop-in-anim {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from { opacity: 0; backdrop-filter: blur(0px); }
+  to   { opacity: 1; backdrop-filter: blur(6px); }
 }
 @keyframes modal-backdrop-out-anim {
-  from { opacity: 1; }
-  to   { opacity: 0; }
+  from { opacity: 1; backdrop-filter: blur(6px); }
+  to   { opacity: 0; backdrop-filter: blur(0px); }
 }
 .modal-in  { animation: modal-in-anim  180ms cubic-bezier(0.34,1.20,0.64,1) both; }
 .modal-out { animation: modal-out-anim 160ms ease-in both; }
@@ -256,9 +420,13 @@ select {
 }
 
 /* ── DAQ LED states ─────────────────────────────────────────────── */
+@keyframes blink-pulse-yellow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px 2px rgba(251,191,36,.6); }
+  50%       { opacity: 0.6; box-shadow: none; }
+}
 .blinker-yellow {
   background: #fbbf24;
-  box-shadow: 0 0 6px 2px rgba(251,191,36,.5), 0 0 12px 2px rgba(251,191,36,.2);
+  animation: blink-pulse-yellow 2.5s ease-in-out infinite;
 }
 .blinker-grey {
   background: #4b5563;
@@ -313,7 +481,6 @@ select {
   cursor: pointer;
   border-radius: 3px;
   transition: background 100ms ease;
-  animation: daq-enter 140ms ease-out;
 }
 .daq-entry-row:hover { background: color-mix(in srgb, var(--color-gray-700) 40%, transparent); }
 
@@ -324,6 +491,16 @@ select {
 }
 .daq-row-enter {
   animation: daq-row-enter-anim 280ms cubic-bezier(0.34,1.20,0.64,1) both;
+}
+
+@keyframes daq-row-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes daq-plot-reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0% 0 0); }
 }
 
 /* ── DAQ tree add/remove animations ─────────────────────────────── */
@@ -404,6 +581,7 @@ select {
   --color-gray-300: #9daec2;
   --color-gray-200: #c8d3dd;
   --color-gray-100: #eceff4;   /* nord6 */
+  --color-blue-900: #1a3553;   /* dark frost for bg tints */
   --color-blue-600: #4275a0;
   --color-blue-500: #5e81ac;   /* nord10 */
   --color-blue-400: #81a1c1;   /* nord9 */
@@ -426,9 +604,10 @@ select {
   --color-gray-300: #3b4252;   /* nord1 */
   --color-gray-200: #2e3440;   /* nord0 */
   --color-gray-100: #222730;   /* darker heading */
-  --color-blue-600: #4275a0;
-  --color-blue-500: #5e81ac;   /* nord10 — button bg */
-  --color-blue-400: #5e81ac;   /* same — readable on light bg */
+  --color-blue-900: #1a3553;   /* dark frost for bg tints */
+  --color-blue-600: #3a6a94;   /* darker button bg for light theme */
+  --color-blue-500: #5e81ac;   /* nord10 — primary accent */
+  --color-blue-400: #7498bc;   /* lighter hover state */
   --color-blue-300: #81a1c1;   /* nord9 */
   --color-green-400: #4d8c38;  /* darkened aurora green */
   --color-red-400:   #bf616a;  /* nord11 */
@@ -449,6 +628,7 @@ select {
   --color-gray-300: #9399b2;   /* Overlay2 */
   --color-gray-200: #bac2de;   /* Subtext1 */
   --color-gray-100: #cdd6f4;   /* Text */
+  --color-blue-900: #0d1e3f;   /* dark blue for bg tints */
   --color-blue-600: #3a5db5;   /* darkened Blue for button bg */
   --color-blue-500: #89b4fa;   /* Blue */
   --color-blue-400: #74c7ec;   /* Sapphire */
@@ -471,9 +651,10 @@ select {
   --color-gray-300: #6c6f85;   /* Subtext0 */
   --color-gray-200: #5c5f77;   /* Subtext1 */
   --color-gray-100: #4c4f69;   /* Text */
-  --color-blue-600: #1e66f5;   /* Blue */
-  --color-blue-500: #1e66f5;
-  --color-blue-400: #1e66f5;   /* same — readable on light bg */
+  --color-blue-900: #0d1e3f;   /* dark blue for bg tints */
+  --color-blue-600: #1652ca;   /* darker pressed/button bg */
+  --color-blue-500: #1e66f5;   /* Blue — official primary */
+  --color-blue-400: #4f80f7;   /* lighter hover state */
   --color-blue-300: #7287fd;   /* Lavender */
   --color-green-400: #40a02b;  /* Green */
   --color-red-400:   #d20f39;  /* Red */
@@ -494,13 +675,14 @@ select {
   --color-gray-300: #a89984;   /* fg3 */
   --color-gray-200: #d5c4a1;   /* fg2 */
   --color-gray-100: #ebdbb2;   /* fg1 */
-  --color-blue-600: #1d6c6c;   /* darkened aqua for button bg */
-  --color-blue-500: #458588;   /* blue neutral */
-  --color-blue-400: #83a598;   /* blue bright */
-  --color-blue-300: #8ec07c;   /* aqua bright */
-  --color-green-400: #b8bb26;  /* green bright */
-  --color-red-400:   #fb4934;  /* red bright */
-  --color-amber-500: #fabd2f;  /* yellow bright */
+  --color-blue-900: #132e2e;   /* dark teal for bg tints */
+  --color-blue-600: #1d6c6c;   /* darkened teal for button bg */
+  --color-blue-500: #458588;   /* neutral_blue */
+  --color-blue-400: #83a598;   /* bright_blue */
+  --color-blue-300: #8ec07c;   /* bright_aqua */
+  --color-green-400: #b8bb26;  /* bright_green */
+  --color-red-400:   #fb4934;  /* bright_red */
+  --color-amber-500: #fabd2f;  /* bright_yellow */
 }
 [data-theme="gruvbox-dark"] body { background: #1d2021; }
 
@@ -516,13 +698,14 @@ select {
   --color-gray-300: #665c54;   /* fg1 */
   --color-gray-200: #504945;   /* fg */
   --color-gray-100: #3c3836;   /* fg0 — darkest text */
-  --color-blue-600: #076678;   /* bright_blue dark */
-  --color-blue-500: #458588;   /* blue neutral */
-  --color-blue-400: #458588;
-  --color-blue-300: #83a598;   /* blue bright */
-  --color-green-400: #79740e;  /* green bright light */
-  --color-red-400:   #9d0006;  /* red bright light */
-  --color-amber-500: #b57614;  /* yellow bright light */
+  --color-blue-900: #132e2e;   /* dark teal for bg tints */
+  --color-blue-600: #076678;   /* faded_blue — button bg */
+  --color-blue-500: #458588;   /* neutral_blue */
+  --color-blue-400: #5c9ea0;   /* lighter hover state */
+  --color-blue-300: #83a598;   /* bright_blue */
+  --color-green-400: #79740e;  /* faded_green */
+  --color-red-400:   #9d0006;  /* faded_red */
+  --color-amber-500: #b57614;  /* faded_yellow */
 }
 [data-theme="gruvbox-light"] body { background: #f9f5d7; color: #3c3836; }
 [data-theme="gruvbox-light"] ::-webkit-scrollbar-thumb { background: #d5c4a1; }
@@ -539,10 +722,11 @@ select {
   --color-gray-300: #9da9a0;   /* grey2 */
   --color-gray-200: #c0c9c0;
   --color-gray-100: #d3c6aa;   /* fg */
-  --color-blue-600: #3d7d74;   /* darkened aqua */
+  --color-blue-900: #122e2c;   /* dark teal for bg tints */
+  --color-blue-600: #3d7d74;   /* darkened teal for button bg */
   --color-blue-500: #7fbbb3;   /* blue */
   --color-blue-400: #83c092;   /* aqua */
-  --color-blue-300: #a7c080;   /* green */
+  --color-blue-300: #9ecfcb;   /* light teal — was green, fixed */
   --color-green-400: #a7c080;  /* green */
   --color-red-400:   #e67e80;  /* red */
   --color-amber-500: #dbbc7f;  /* yellow */
@@ -561,10 +745,11 @@ select {
   --color-gray-300: #6b7472;
   --color-gray-200: #5c6a72;   /* fg */
   --color-gray-100: #4a5560;   /* darker heading */
-  --color-blue-600: #3a7da0;   /* darkened blue */
-  --color-blue-500: #3a94c5;   /* blue */
-  --color-blue-400: #3a94c5;
-  --color-blue-300: #35a77c;   /* aqua */
+  --color-blue-900: #0e3550;   /* dark blue for bg tints */
+  --color-blue-600: #2a6d90;   /* darker button bg */
+  --color-blue-500: #3a94c5;   /* blue — official */
+  --color-blue-400: #5aacd4;   /* lighter hover state */
+  --color-blue-300: #35a77c;   /* aqua/cyan */
   --color-green-400: #6f8b26;  /* darkened green */
   --color-red-400:   #e05050;  /* red */
   --color-amber-500: #c08a00;  /* darkened yellow */

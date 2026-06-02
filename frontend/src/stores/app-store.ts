@@ -27,6 +27,7 @@ interface AppStore {
   activeCmd: string | null;
   byteValues: string[];
   theme: string;
+  uiZoom: number;
   displayTimeoutMs: number;
   animationsEnabled: boolean;
   toasts: Toast[];
@@ -43,6 +44,7 @@ interface AppStore {
   setActiveCmd: (cmd: string | null) => void;
   setByteValue: (idx: number, val: string) => void;
   setTheme: (theme: string) => void;
+  setUiZoom: (zoom: number) => void;
   setDisplayTimeoutMs: (ms: number) => void;
   setAnimationsEnabled: (v: boolean) => void;
   showToast: (message: string, type?: Toast['type'], detail?: string) => void;
@@ -145,6 +147,7 @@ export const useAppStore = create<AppStore>((set) => ({
   activeCmd: null,
   byteValues: Array<string>(NUM_CELLS).fill(''),
   theme: 'default',
+  uiZoom: Number(localStorage.getItem('uiZoom') ?? 1.2),
   displayTimeoutMs: 2000,
   animationsEnabled: true,
   toasts: [],
@@ -232,6 +235,7 @@ export const useAppStore = create<AppStore>((set) => ({
     }),
 
   setTheme: (theme) => set({ theme }),
+  setUiZoom: (uiZoom) => { localStorage.setItem('uiZoom', String(uiZoom)); set({ uiZoom }); },
   setDisplayTimeoutMs: (displayTimeoutMs) => set({ displayTimeoutMs }),
   setAnimationsEnabled: (animationsEnabled) => set({ animationsEnabled }),
   showToast: (message, type = 'info', detail) =>

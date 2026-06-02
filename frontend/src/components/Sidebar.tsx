@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { Terminal, Sliders } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { CMD_CATEGORIES } from '../lib/cmd-defs';
 
@@ -136,6 +137,7 @@ export function Sidebar() {
   const [filteredSysCats, setFilteredSysCats] = useState<Set<string>>(new Set());
   const [filteredUserGroups, setFilteredUserGroups] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'system' | 'user'>('system');
+  const [tabAnimKey, setTabAnimKey] = useState(0);
   const [expandKeys, setExpandKeys] = useState<Record<string, number>>({});
   const [enteringCats, setEnteringCats] = useState<Set<string>>(new Set());
   const [exitingData, setExitingData] = useState<Map<string, ExitData>>(new Map());
@@ -377,7 +379,7 @@ export function Sidebar() {
               }}
             >
               <div style={{ minHeight: 0, overflow: 'hidden' }}>
-                <div key={expandKey} className="px-2.5 pb-2.5 space-y-1">
+                <div key={expandKey} className="px-2.5 pt-1.5 pb-2.5 space-y-1">
                   {commands.map((cmd, i) => {
                     const cmdStyle: React.CSSProperties = isExiting
                       ? { animation: `sidebar-cmd-out 80ms ease-in ${(n - 1 - i) * 20}ms forwards` }
@@ -415,12 +417,31 @@ export function Sidebar() {
             {(['system', 'user'] as const).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => { setActiveTab(tab); setTabAnimKey(k => k + 1); }}
                 className={`flex-1 pb-1 text-[10px] font-semibold uppercase tracking-widest transition-colors ${
                   activeTab === tab ? 'text-blue-400' : 'text-gray-600 hover:text-gray-400'
                 }`}
               >
-                {tab === 'system' ? 'System' : 'User'}
+                <span className="flex items-center justify-center gap-1">
+                  <span className="relative inline-flex shrink-0" style={{ width: 18, height: 18 }}>
+                    <span
+                      className={activeTab === tab ? 'text-gray-700' : ''}
+                      style={{ transition: 'color 320ms ease' }}
+                    >
+                      {tab === 'system' ? <Terminal size={18} weight="regular" /> : <Sliders size={18} weight="regular" />}
+                    </span>
+                    <span
+                      className="absolute inset-0"
+                      style={{
+                        clipPath: activeTab === tab ? 'inset(0% 0 0 0)' : 'inset(100% 0 0 0)',
+                        transition: 'clip-path 320ms ease',
+                      }}
+                    >
+                      {tab === 'system' ? <Terminal size={18} weight="fill" /> : <Sliders size={18} weight="fill" />}
+                    </span>
+                  </span>
+                  {tab === 'system' ? 'System' : 'User'}
+                </span>
               </button>
             ))}
             <div className="absolute bottom-0 left-0 right-0 h-px bg-gray-800" />

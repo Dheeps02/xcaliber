@@ -4,6 +4,8 @@
   "description": "Default capability",
   "windows": ["main"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:webview:allow-set-webview-zoom",
+    "opener:allow-reveal-item-in-dir"
   ]
 }

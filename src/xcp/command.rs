@@ -8,7 +8,7 @@ pub enum XcpCommand {
     GetStatus,
     GetCommModeInfo,
     GetId     { id_type: u8 },
-    SetMta    { addr_ext: u8, addr: u32 },
+    SetMta    { addr_ext: u8, addr: u32, big_endian: bool },
     Upload    { size: u8 },
     Download  { data: Vec<u8> },
     Raw       { bytes: Vec<u8> },
@@ -34,8 +34,8 @@ impl XcpCommand {
             Self::GetStatus              => vec![0xFD],
             Self::GetCommModeInfo        => vec![0xFB],
             Self::GetId { id_type }      => vec![0xFA, *id_type],
-            Self::SetMta { addr_ext, addr } => {
-                let a = addr.to_le_bytes();
+            Self::SetMta { addr_ext, addr, big_endian } => {
+                let a = if *big_endian { addr.to_be_bytes() } else { addr.to_le_bytes() };
                 vec![0xF6, 0x00, 0x00, *addr_ext, a[0], a[1], a[2], a[3]]
             }
             Self::Upload { size }        => vec![0xF5, *size],
@@ -91,7 +91,7 @@ impl XcpCommand {
             Self::GetStatus                => "GET_STATUS",
             Self::GetCommModeInfo          => "GET_COMM_MODE_INFO",
             Self::GetId { .. }             => "GET_ID",
-            Self::SetMta { .. }            => "SET_MTA",
+            Self::SetMta { .. }             => "SET_MTA",
             Self::Upload { .. }            => "UPLOAD",
             Self::Download { .. }          => "DOWNLOAD",
             Self::Raw { .. }               => "RAW",
@@ -126,9 +126,16 @@ mod tests {
 
     #[test]
     fn set_mta_encode() {
-        let bytes = XcpCommand::SetMta { addr_ext: 0, addr: 0x0000_1234 }.encode();
+        let bytes = XcpCommand::SetMta { addr_ext: 0, addr: 0x0000_1234, big_endian: false }.encode();
         assert_eq!(bytes[0], 0xF6);
         assert_eq!(&bytes[4..8], &0x0000_1234u32.to_le_bytes());
+    }
+
+    #[test]
+    fn set_mta_encode_be() {
+        let bytes = XcpCommand::SetMta { addr_ext: 0, addr: 0x0000_1234, big_endian: true }.encode();
+        assert_eq!(bytes[0], 0xF6);
+        assert_eq!(&bytes[4..8], &0x0000_1234u32.to_be_bytes());
     }
 
     #[test]

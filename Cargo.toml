@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 # ---- Tauri (window shell) ----
 tauri = { version = "2", features = ["devtools"] }
+tauri-plugin-opener = "2"
 
 # ---- HTTP server ----
 axum = { version = "0.8", features = ["macros"] }

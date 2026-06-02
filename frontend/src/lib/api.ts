@@ -13,8 +13,14 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   } catch {
     throw new Error('Cannot reach XCP client backend. Is the Tauri app running?');
   }
-  if (!res.ok) throw new Error('Cannot reach XCP client backend. Is the Tauri app running?');
-  const data = await res.json().catch(() => ({ ok: false, error: 'Invalid response from backend' })) as Record<string, unknown>;
+  const data = await res.json().catch(() => null) as Record<string, unknown> | null;
+  if (!res.ok) {
+    const msg = (data?.['error'] as string | undefined)
+      ?? (data?.['message'] as string | undefined)
+      ?? `Backend error (HTTP ${res.status})`;
+    throw new Error(msg);
+  }
+  if (data === null) throw new Error('Invalid response from backend');
   if (data['ok'] === false) throw new Error((data['error'] as string | undefined) ?? 'Request failed');
   return data as T;
 }
@@ -44,8 +50,8 @@ export const api = {
     post<{ ok: boolean; response: unknown }>('/api/command/set-mta', { addr_ext, addr }),
   upload: (size: number) =>
     post<{ ok: boolean; response: unknown }>('/api/command/upload', { size }),
-  download: (data: number[]) =>
-    post<{ ok: boolean; response: unknown }>('/api/command/download', { data }),
+  download: (tokens: string[]) =>
+    post<{ ok: boolean; response: unknown }>('/api/command/download', { tokens }),
   raw: (bytes: number[]) =>
     post<{ ok: boolean; response: unknown }>('/api/command/raw', { bytes }),
   userCmd: (name: string, sub_cmd: number, data: number[]) =>
@@ -65,6 +71,7 @@ export const api = {
     src_mac?: string;
     dst_mac?: string;
     events?: EventDef[];
+    endian?: string;
   }) => post<{ ok: boolean }>('/api/config', body),
   getNetworkInterfaces: () =>
     get<{ interfaces: NetworkInterface[] }>('/api/network-interfaces'),

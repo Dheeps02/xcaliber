@@ -1,4 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import {
+  Palette, PlugsConnected, Scroll, Lightning, Terminal, Eye, Info,
+  Globe, Stack, Circuitry, WifiHigh,
+  ArrowCounterClockwise, Plus, X, ArrowSquareOut, ArrowsClockwise, ArrowsLeftRight,
+} from '@phosphor-icons/react';
 
 const GITHUB_URL = 'https://github.com/Dheeps02/xcaliber';
 const RELEASES_URL = `${GITHUB_URL}/releases`;
@@ -58,6 +63,7 @@ const CONN_DEFAULTS = {
   bind_ip: '',
   src_mac: '',
   dst_mac: '',
+  endian: 'little',
 };
 
 interface ConnDraft {
@@ -69,6 +75,7 @@ interface ConnDraft {
   bind_ip: string;
   src_mac: string;
   dst_mac: string;
+  endian: string;
 }
 
 // ── Tab content components ────────────────────────────────────────
@@ -76,6 +83,9 @@ interface ConnDraft {
 function AppearanceTab() {
   const theme = useAppStore((s) => s.theme);
   const setTheme = useAppStore((s) => s.setTheme);
+  const uiZoom = useAppStore((s) => s.uiZoom);
+  const setUiZoom = useAppStore((s) => s.setUiZoom);
+  const [draftZoom, setDraftZoom] = useState(uiZoom);
 
   function handleSelect(id: string) {
     setTheme(id);
@@ -83,9 +93,10 @@ function AppearanceTab() {
   }
 
   return (
-    <div>
-      <p className="text-[11px] text-gray-500 mb-4">Choose a colour theme. Changes apply instantly.</p>
-      <div className="grid grid-cols-3 gap-3">
+    <div className="space-y-6">
+      <div>
+        <p className="text-[11px] text-gray-500 mb-4">Choose a colour theme. Changes apply instantly.</p>
+        <div className="grid grid-cols-3 gap-3">
         {THEMES.map((t) => {
           const active = theme === t.id;
           const { bg, sidebar, accent, text } = t.preview;
@@ -134,6 +145,30 @@ function AppearanceTab() {
             </button>
           );
         })}
+        </div>
+      </div>
+
+      {/* Zoom */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[11px] text-gray-500 font-medium">UI Zoom</p>
+          <span className="text-[11px] font-mono text-gray-400">{Math.round(draftZoom * 100)}%</span>
+        </div>
+        <input
+          type="range"
+          min={0.7}
+          max={1.5}
+          step={0.05}
+          value={draftZoom}
+          onChange={(e) => setDraftZoom(Number(e.target.value))}
+          onPointerUp={(e) => setUiZoom(Number((e.target as HTMLInputElement).value))}
+          className="w-full accent-blue-500"
+        />
+        <div className="flex justify-between text-[10px] text-gray-700 mt-1">
+          <span>70%</span>
+          <span>100%</span>
+          <span>150%</span>
+        </div>
       </div>
     </div>
   );
@@ -152,6 +187,7 @@ function ConnectionTab() {
     bind_ip: config?.connection.bind_ip ?? CONN_DEFAULTS.bind_ip,
     src_mac: config?.connection.src_mac ?? CONN_DEFAULTS.src_mac,
     dst_mac: config?.connection.dst_mac ?? CONN_DEFAULTS.dst_mac,
+    endian: config?.endian ?? CONN_DEFAULTS.endian,
   });
   const [draft, setDraft] = useState<ConnDraft>({ ...initial });
   const [saving, setSaving] = useState(false);
@@ -186,6 +222,7 @@ function ConnectionTab() {
         bind_ip: draft.bind_ip || undefined,
         src_mac: draft.src_mac || undefined,
         dst_mac: draft.dst_mac || undefined,
+        endian: draft.endian,
       });
       if (config) {
         setConfig({
@@ -201,6 +238,7 @@ function ConnectionTab() {
             dst_mac: draft.dst_mac || undefined,
           },
           server: { ...config.server, listen_port: draft.listen_port },
+          endian: draft.endian,
         });
       }
       setInitial({ ...draft });
@@ -225,7 +263,7 @@ function ConnectionTab() {
       <p className="text-[11px] text-gray-500">Restart the connection after saving for changes to take effect.</p>
 
       {/* ── IP ── */}
-      <ConnSection label="IP" />
+      <ConnSection label="IP" icon={Globe} />
       <div className="space-y-2">
         {/* Column headers */}
         <div className={ipRowCls} style={ipGridStyle}>
@@ -238,7 +276,7 @@ function ConnectionTab() {
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-gray-400 font-medium">Source</span>
             {(isDirty('bind_ip') || isDirty('listen_port')) && (
-              <button onClick={() => { resetField('bind_ip'); resetField('listen_port'); }} className="text-[9px] text-amber-500 hover:text-amber-300 transition-colors" title="Reset row">↺</button>
+              <button onClick={() => { resetField('bind_ip'); resetField('listen_port'); }} className="text-amber-500 hover:text-amber-300 transition-colors flex items-center" title="Reset row"><ArrowCounterClockwise size={20} /></button>
             )}
           </div>
           <input type="text" placeholder="0.0.0.0 (any)" value={draft.bind_ip} onChange={(e) => set('bind_ip', e.target.value)} className={inputCls('bind_ip')} />
@@ -249,7 +287,7 @@ function ConnectionTab() {
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-gray-400 font-medium">Destination</span>
             {(isDirty('server_ip') || isDirty('server_port')) && (
-              <button onClick={() => { resetField('server_ip'); resetField('server_port'); }} className="text-[9px] text-amber-500 hover:text-amber-300 transition-colors" title="Reset row">↺</button>
+              <button onClick={() => { resetField('server_ip'); resetField('server_port'); }} className="text-amber-500 hover:text-amber-300 transition-colors flex items-center" title="Reset row"><ArrowCounterClockwise size={20} /></button>
             )}
           </div>
           <input type="text" placeholder="127.0.0.1" value={draft.server_ip} onChange={(e) => set('server_ip', e.target.value)} className={inputCls('server_ip')} />
@@ -258,7 +296,7 @@ function ConnectionTab() {
       </div>
 
       {/* ── Protocol ── */}
-      <ConnSection label="Protocol" />
+      <ConnSection label="Protocol" icon={Stack} />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Protocol" dirty={isDirty('protocol')} onReset={() => resetField('protocol')}>
           <select value={draft.protocol} onChange={(e) => set('protocol', e.target.value)} className={inputCls('protocol')}>
@@ -272,8 +310,29 @@ function ConnectionTab() {
         </Field>
       </div>
 
+      {/* ── Byte Order ── */}
+      <ConnSection label="Byte Order" icon={ArrowsLeftRight} />
+      <div className="flex items-center gap-3">
+        {(['little', 'big'] as const).map((opt) => (
+          <button
+            key={opt}
+            onClick={() => set('endian', opt)}
+            className={`flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+              draft.endian === opt
+                ? 'bg-blue-600 border-blue-500 text-white'
+                : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'
+            }`}
+          >
+            {opt === 'little' ? 'Little Endian' : 'Big Endian'}
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-gray-600 -mt-2">
+        Byte order for SET_MTA addresses and multi-byte DOWNLOAD values. Match your target ECU.
+      </p>
+
       {/* ── MAC Addresses ── */}
-      <ConnSection label="MAC Addresses" />
+      <ConnSection label="MAC Addresses" icon={Circuitry} />
       <div className={`grid grid-cols-2 gap-3 ${draft.protocol !== 'ethernet' ? 'opacity-40 pointer-events-none' : ''}`}>
         <Field label="Source MAC" dirty={isDirty('src_mac')} onReset={() => resetField('src_mac')}>
           <input type="text" placeholder="AA:BB:CC:DD:EE:FF" value={draft.src_mac} onChange={(e) => set('src_mac', e.target.value)} className={inputCls('src_mac')} />
@@ -287,7 +346,7 @@ function ConnectionTab() {
       )}
 
       {/* ── Network Interface ── */}
-      <ConnSection label="Network Interface" />
+      <ConnSection label="Network Interface" icon={WifiHigh} />
       <Field label="Interface" dirty={isDirty('bind_ip')} onReset={() => resetField('bind_ip')}>
         <select value={draft.bind_ip} onChange={(e) => set('bind_ip', e.target.value)} className={inputCls('bind_ip')}>
           <option value="">Any (all interfaces)</option>
@@ -315,10 +374,12 @@ function ConnectionTab() {
   );
 }
 
-function ConnSection({ label }: { label: string }) {
+function ConnSection({ label, icon: Icon }: { label: string; icon?: React.ElementType }) {
   return (
     <div className="flex items-center gap-2.5 pt-1">
-      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest whitespace-nowrap">{label}</span>
+      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest whitespace-nowrap flex items-center gap-1.5">
+        {Icon && <Icon size={20} />}{label}
+      </span>
       <div className="flex-1 h-px bg-gray-800" />
     </div>
   );
@@ -331,7 +392,7 @@ function Field({ label, dirty, onReset, children }: { label: string; dirty: bool
         <label className="text-[10px] text-gray-400 font-medium">{label}</label>
         {dirty && (
           <button onClick={onReset} title="Reset to default" className="text-[10px] text-amber-500 hover:text-amber-300 transition-colors flex items-center gap-0.5">
-            <span>↺</span> <span>reset</span>
+            <ArrowCounterClockwise size={20} /> <span>reset</span>
           </button>
         )}
       </div>
@@ -490,9 +551,9 @@ function EventsTab() {
                 <td className="px-3 py-1.5 text-center">
                   <button
                     onClick={() => removeEvent(i)}
-                    className="text-gray-600 hover:text-red-400 transition-colors text-[11px]"
+                    className="text-gray-600 hover:text-red-400 transition-colors flex items-center justify-center"
                     title="Remove"
-                  >✕</button>
+                  ><X size={20} /></button>
                 </td>
               </tr>
             ))}
@@ -503,7 +564,7 @@ function EventsTab() {
         onClick={addEvent}
         className="text-[11px] text-gray-500 hover:text-blue-400 transition-colors flex items-center gap-1"
       >
-        <span style={{ fontSize: 14 }}>+</span> Add Event
+        <Plus size={20} /> Add Event
       </button>
       <div className="flex items-center gap-2 pt-1">
         <button
@@ -568,9 +629,9 @@ function AboutTab() {
         <Row label="Source">
           <button
             onClick={() => window.open(GITHUB_URL, '_blank')}
-            className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors font-mono"
+            className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors font-mono flex items-center gap-1"
           >
-            github.com/Dheeps02/xcaliber ↗
+            github.com/Dheeps02/xcaliber <ArrowSquareOut size={20} />
           </button>
         </Row>
       </div>
@@ -581,8 +642,9 @@ function AboutTab() {
           <button
             onClick={checkForUpdates}
             disabled={status === 'checking'}
-            className="px-3 py-1.5 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-50 border border-gray-700 text-gray-300 transition-colors active:scale-95"
+            className="px-3 py-1.5 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-50 border border-gray-700 text-gray-300 transition-colors active:scale-95 flex items-center gap-1.5"
           >
+            <ArrowsClockwise size={20} className={status === 'checking' ? 'animate-spin' : ''} />
             {status === 'checking' ? 'Checking…' : 'Check for Updates'}
           </button>
           {status === 'up-to-date' && (
@@ -622,14 +684,14 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 // ── Tab config ────────────────────────────────────────────────────
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'appearance',    label: 'Appearance',    icon: '🎨' },
-  { id: 'connection',    label: 'Connection',    icon: '🔌' },
-  { id: 'trace',         label: 'Trace',         icon: '📋' },
-  { id: 'events',        label: 'Events',        icon: '⚡' },
-  { id: 'usercmd',       label: 'USER_CMDs',     icon: '🔧' },
-  { id: 'accessibility', label: 'Accessibility', icon: '♿' },
-  { id: 'about',         label: 'About',         icon: 'ℹ️' },
+const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: 'appearance',    label: 'Appearance',    icon: Palette },
+  { id: 'connection',    label: 'Connection',    icon: PlugsConnected },
+  { id: 'trace',         label: 'Trace',         icon: Scroll },
+  { id: 'events',        label: 'Events',        icon: Lightning },
+  { id: 'usercmd',       label: 'USER_CMDs',     icon: Terminal },
+  { id: 'accessibility', label: 'Accessibility', icon: Eye },
+  { id: 'about',         label: 'About',         icon: Info },
 ];
 
 // ── Modal ─────────────────────────────────────────────────────────
@@ -662,7 +724,7 @@ export function Settings({ onClose, initialTab }: Props) {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-      <div className={`absolute inset-0 bg-black/60 backdrop-blur-sm ${closing ? 'modal-backdrop-out' : 'modal-backdrop-in'}`} onClick={handleClose} />
+      <div className={`absolute inset-0 bg-black/60 ${closing ? 'modal-backdrop-out' : 'modal-backdrop-in'}`} onClick={handleClose} />
       <div
         className={`relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl flex overflow-hidden w-[90vw] max-w-5xl h-[85vh] max-h-[800px] ${closing ? 'modal-out' : 'modal-in'}`}
       >
@@ -682,7 +744,23 @@ export function Settings({ onClose, initialTab }: Props) {
                     : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
                 }`}
               >
-                <span className="text-sm leading-none">{t.icon}</span>
+                <span className="relative inline-flex shrink-0" style={{ width: 20, height: 20 }}>
+                  <span
+                    className={tab === t.id ? 'text-gray-700' : ''}
+                    style={{ transition: 'color 320ms ease' }}
+                  >
+                    <t.icon size={20} weight="regular" />
+                  </span>
+                  <span
+                    className="absolute inset-0"
+                    style={{
+                      clipPath: tab === t.id ? 'inset(0% 0 0 0)' : 'inset(100% 0 0 0)',
+                      transition: 'clip-path 320ms ease',
+                    }}
+                  >
+                    <t.icon size={20} weight="fill" />
+                  </span>
+                </span>
                 {t.label}
               </button>
             ))}
@@ -690,9 +768,9 @@ export function Settings({ onClose, initialTab }: Props) {
           <div className="p-2 border-t border-gray-800">
             <button
               onClick={handleClose}
-              className="w-full px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors text-left active:scale-95"
+              className="w-full px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors text-left active:scale-95 flex items-center gap-1.5"
             >
-              ✕ Close
+              <X size={20} /> Close
             </button>
           </div>
         </div>

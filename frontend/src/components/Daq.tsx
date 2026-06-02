@@ -2,6 +2,7 @@ import {
   useRef,
   useState,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useMemo,
   memo,
@@ -10,6 +11,11 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  Trash, Wrench, Play, Stop, Pulse, ArrowSquareOut, FolderOpen,
+  Database, Plus, PencilSimple, X, DotsSixVertical, ChartLine,
+  Rows, FloppyDisk, MagnifyingGlass, Waveform,
+} from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import type { DaqList, DaqOdt, DaqEntry, DaqEntryType, A2lVariable } from '../lib/types';
@@ -69,13 +75,6 @@ const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 4
     + points.slice(1).map(p => `L ${p.x},${p.y}`).join(' ')
     + ` L ${last.x},${H} L ${first.x},${H} Z`;
 
-  // Vertical grid lines: ~5 columns, spacing scales with zoom
-  const gridStep = Math.max(1, Math.round(slice.length / 5));
-  const vertLines: number[] = [];
-  for (let i = gridStep; i < slice.length - 1; i += gridStep) {
-    vertLines.push((i / (slice.length - 1)) * (W - 4) + 2);
-  }
-
   return (
     <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" className="block">
       <defs>
@@ -88,11 +87,6 @@ const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 4
       {/* Background */}
       <rect width={W} height={H} fill={color} fillOpacity={0.06} />
 
-      {/* Grid */}
-      <line x1={2} y1={H / 2} x2={W - 2} y2={H / 2} stroke="#374151" strokeWidth={0.5} />
-      {vertLines.map((x, i) => (
-        <line key={i} x1={x} y1={0} x2={x} y2={H} stroke="#374151" strokeWidth={0.5} />
-      ))}
 
       {/* Gradient fill */}
       <path d={fillPath} fill={`url(#${gradId})`} />
@@ -146,7 +140,7 @@ function resolveEntryAddr(input: string, a2lVars: A2lVariable[]): number | null 
 
 function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClose }: EntryPopoverProps) {
   const a2lVars  = useAppStore((s) => s.a2lVariables);
-  const showAlert = useAppStore((s) => s.showAlert);
+  const showToast = useAppStore((s) => s.showToast);
   const [name, setName] = useState(initial?.name ?? '');
   const [addr, setAddr] = useState(initial ? `0x${initial.addr.toString(16).padStart(8, '0').toUpperCase()}` : '');
   const [ext, setExt] = useState(String(initial?.addr_ext ?? 0));
@@ -204,14 +198,20 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
   function handleSave() {
     const addrTrim = addr.trim();
     const isHex = /^(?:0x)?[0-9a-fA-F]+$/i.test(addrTrim);
-    if (!isHex && a2lVars.length === 0) {
-      showAlert('No A2L file loaded.\n\nLoad an A2L JSON file first to resolve variable names.');
-      return;
-    }
     const resolvedAddr = resolveEntryAddr(addr, a2lVars);
     const errs: { name?: boolean; addr?: boolean } = {};
     if (!name.trim()) errs.name = true;
-    if (resolvedAddr === null) errs.addr = true;
+    if (resolvedAddr === null) {
+      errs.addr = true;
+      if (!isHex) {
+        showToast(
+          a2lVars.length === 0
+            ? 'No A2L file loaded — load one to resolve variable names'
+            : 'Unknown variable name',
+          'error'
+        );
+      }
+    }
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     onSave(
       { name: name.trim(), addr: resolvedAddr!, addr_ext: Number(ext) || 0, size: TYPE_SIZES[typeName], type_name: typeName },
@@ -244,7 +244,7 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
 
   return createPortal(
     <div ref={popRef} style={style} className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">ODT Entry</p>
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2 flex items-center gap-1.5"><Rows size={13} />ODT Entry</p>
       <div className="space-y-2">
         <div className="relative">
           <label className="text-[10px] text-gray-500 block mb-0.5">Label</label>
@@ -319,8 +319,8 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
       </div>
       <div className="flex gap-1.5 mt-3">
         <button onClick={handleSave}
-          className="flex-1 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">
-          Save
+          className="flex-1 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center justify-center gap-1.5">
+          <FloppyDisk size={14} />Save
         </button>
         <button onClick={onClose}
           className="px-3 py-1 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700 transition-colors">
@@ -346,7 +346,7 @@ interface TreeProps {
   onDeleteEntry: (listId: number, odtId: number, entryIdx: number) => void;
   onRenameList: (listId: number, name: string | undefined) => void;
   onRenameOdt: (listId: number, odtId: number, name: string | undefined) => void;
-  onMoveEntry: (listId: number, odtId: number, fromIdx: number, toIdx: number) => void;
+  onMoveEntry: (fromListId: number, fromOdtId: number, fromIdx: number, toListId: number, toOdtId: number, toIdx: number) => void;
 }
 
 function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, onDeleteOdt, onSetEvent, onAddOdt, onSaveEntry, onDeleteEntry, onRenameList, onRenameOdt, onMoveEntry }: TreeProps) {
@@ -365,8 +365,13 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [colorPicker, setColorPicker] = useState<{ listId: number; odtId: number; x: number; y: number } | null>(null);
   const [dragEntry, setDragEntry] = useState<{ listId: number; odtId: number; fromIdx: number } | null>(null);
+  const dragEntryRef = useRef<{ listId: number; odtId: number; fromIdx: number } | null>(null);
   const [dropOver, setDropOver] = useState<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
+  const dropOverRef = useRef<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const [recentlyMoved, setRecentlyMoved] = useState<string | null>(null);
+  const listsRef    = useRef(lists);
+  const entryElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const snapshotRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (renamingKey && renameInputRef.current) {
@@ -383,6 +388,117 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [colorPicker]);
+
+  // Keep listsRef in sync so the pointer-up handler can read entry names
+  useEffect(() => { listsRef.current = lists; }, [lists]);
+
+  // Pointer-event based drag (replaces HTML5 drag-and-drop which is unreliable in webkit2gtk)
+  useEffect(() => {
+    function onPointerMove(e: PointerEvent) {
+      if (!dragEntryRef.current) return;
+      const els = document.elementsFromPoint(e.clientX, e.clientY);
+
+      // Try to find an entry row first
+      const entryEl = els.find(
+        (el) => (el as HTMLElement).dataset?.entryIdx !== undefined
+      ) as HTMLElement | undefined;
+      if (entryEl) {
+        const lId  = parseInt(entryEl.dataset.entryList ?? '');
+        const oId  = parseInt(entryEl.dataset.entryOdt  ?? '');
+        const eIdx = parseInt(entryEl.dataset.entryIdx  ?? '');
+        if (isNaN(lId) || isNaN(oId) || isNaN(eIdx)) return;
+        const rect  = entryEl.getBoundingClientRect();
+        const above = e.clientY < rect.top + rect.height / 2;
+        const val   = { listId: lId, odtId: oId, toIdx: eIdx, above };
+        dropOverRef.current = val;
+        setDropOver(val);
+        return;
+      }
+
+      // Fallback: hovering over an empty ODT body
+      const odtEl = els.find(
+        (el) => (el as HTMLElement).dataset?.odtBody !== undefined
+      ) as HTMLElement | undefined;
+      if (odtEl) {
+        const lId = parseInt(odtEl.dataset.odtBodyList ?? '');
+        const oId = parseInt(odtEl.dataset.odtBodyOdt  ?? '');
+        if (isNaN(lId) || isNaN(oId)) return;
+        const targetOdt = listsRef.current.find(l => l.id === lId)?.odts.find(o => o.id === oId);
+        const entryCount = targetOdt?.entries.length ?? 0;
+        const val = { listId: lId, odtId: oId, toIdx: entryCount, above: true };
+        dropOverRef.current = val;
+        setDropOver(val);
+      }
+    }
+
+    function onPointerUp() {
+      if (!dragEntryRef.current) return;
+      const de  = dragEntryRef.current;
+      const dov = dropOverRef.current;
+      dragEntryRef.current = null;
+      dropOverRef.current  = null;
+      document.body.style.cursor    = '';
+      document.body.style.userSelect = '';
+      setDragEntry(null);
+      setDropOver(null);
+      if (!dov) return;
+      const { fromIdx } = de;
+      const isSameOdt = dov.listId === de.listId && dov.odtId === de.odtId;
+      const raw   = dov.above ? dov.toIdx : dov.toIdx + 1;
+      // When staying in the same ODT we account for the removed slot; cross-ODT we don't.
+      const toIdx = isSameOdt && raw > fromIdx ? raw - 1 : raw;
+      if (isSameOdt && toIdx === fromIdx) return;
+      const lst  = listsRef.current.find(l => l.id === de.listId);
+      const odt  = lst?.odts.find(o => o.id === de.odtId);
+      const name = odt?.entries[fromIdx]?.name ?? '';
+      setRecentlyMoved(`${de.listId}:${de.odtId}:${name}`);
+      setTimeout(() => setRecentlyMoved(null), 450);
+      // Snapshot both ODTs so the FLIP can animate entries in both source and target
+      const snap = new Map<string, number>();
+      const snapshotOdt = (lId: number, oId: number) => {
+        const o = listsRef.current.find(l => l.id === lId)?.odts.find(o => o.id === oId);
+        o?.entries.forEach(e => {
+          const k = `${lId}:${oId}:${e.name}`;
+          const el = entryElsRef.current.get(k);
+          if (el) snap.set(k, el.getBoundingClientRect().top);
+        });
+      };
+      snapshotOdt(de.listId, de.odtId);
+      if (!isSameOdt) snapshotOdt(dov.listId, dov.odtId);
+      snapshotRef.current = snap;
+      onMoveEntry(de.listId, de.odtId, fromIdx, dov.listId, dov.odtId, toIdx);
+    }
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup',   onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup',   onPointerUp);
+    };
+  }, [onMoveEntry]);
+
+  // FLIP: snapshot taken in onPointerUp right before onMoveEntry (positions are always current,
+  // never stale from an initial render mid-transition). transitionend cleans up inline styles.
+  useLayoutEffect(() => {
+    if (snapshotRef.current.size === 0) return;
+    for (const [key, prevY] of snapshotRef.current) {
+      const el = entryElsRef.current.get(key);
+      if (!el) continue;
+      const dy = prevY - el.getBoundingClientRect().top;
+      if (Math.abs(dy) < 1) continue;
+      el.style.transition = 'none';
+      el.style.transform  = `translateY(${dy}px)`;
+      void el.offsetHeight;
+      el.style.transition = 'transform 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      el.style.transform  = '';
+      el.addEventListener('transitionend', function onEnd(ev: Event) {
+        if ((ev as TransitionEvent).propertyName !== 'transform') return;
+        el.style.transition = '';
+        el.removeEventListener('transitionend', onEnd);
+      });
+    }
+    snapshotRef.current = new Map();
+  }, [lists]);
 
   function toggleCollapse(key: string) {
     setCollapsed(prev => {
@@ -450,9 +566,9 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600">DAQ Lists</span>
-        <button onClick={onAddList} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors">
-          <span style={{ fontSize: 14, lineHeight: '14px' }}>+</span> Add List
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5"><Database size={18} />DAQ Lists</span>
+        <button onClick={onAddList} className="flex items-center gap-1 text-[10px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 px-2 py-0.5 rounded transition-colors">
+          <Plus size={12} /> Add List
         </button>
       </div>
 
@@ -489,9 +605,9 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                     </span>
                     <button
                       onClick={e => { e.stopPropagation(); startRename(lKey, list.name ?? `List ${list.id}`); }}
-                      className="text-gray-700 hover:text-blue-400 text-[10px] transition-colors shrink-0 opacity-0 group-hover:opacity-100"
+                      className="text-gray-700 hover:text-blue-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
                       title="Rename list"
-                    >✎</button>
+                    ><PencilSimple size={12} /></button>
                   </div>
                 )}
                 <select
@@ -507,8 +623,8 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                 </select>
                 <button
                   onClick={e => { e.stopPropagation(); handleDeleteList(list.id); }}
-                  className="ml-1 text-gray-600 hover:text-red-400 text-[10px] transition-colors shrink-0"
-                >✕</button>
+                  className="ml-1 text-gray-600 hover:text-red-400 transition-colors shrink-0"
+                ><X size={12} /></button>
               </div>
 
               {/* Animated list body */}
@@ -558,17 +674,17 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                                 </span>
                                 <button
                                   onClick={e => { e.stopPropagation(); startRename(oRenameKey, odt.name ?? `ODT ${odt.id}`); }}
-                                  className="text-gray-700 hover:text-blue-400 text-[10px] transition-colors shrink-0 opacity-0 group-hover:opacity-100"
+                                  className="text-gray-700 hover:text-blue-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
                                   title="Rename ODT"
-                                >✎</button>
+                                ><PencilSimple size={12} /></button>
                               </div>
                             )}
                             <span className="text-gray-600 shrink-0">{odt.entries.length} entries</span>
                             <button
                               onClick={e => { e.stopPropagation(); handleDeleteOdt(list.id, odt.id); }}
-                              className="ml-1 text-gray-600 hover:text-red-400 text-[10px] transition-colors shrink-0"
+                              className="ml-1 text-gray-600 hover:text-red-400 transition-colors shrink-0"
                               title="Delete ODT"
-                            >✕</button>
+                            ><X size={12} /></button>
                           </div>
 
                           {/* Animated ODT body */}
@@ -581,56 +697,90 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                             }}
                           >
                             <div style={{ minHeight: 0, overflow: 'hidden' }}>
-                              <div className="daq-odt-body">
+                              <div
+                                className="daq-odt-body"
+                                style={{ position: 'relative' }}
+                                data-odt-body=""
+                                data-odt-body-list={list.id}
+                                data-odt-body-odt={odt.id}
+                              >
+                                {/* Sliding drop indicator — always rendered in the TARGET ODT */}
+                                {(() => {
+                                  if (!dragEntry || !dropOver) return null;
+                                  if (dropOver.listId !== list.id || dropOver.odtId !== odt.id) return null;
+                                  const isSameOdt = dragEntry.listId === list.id && dragEntry.odtId === odt.id;
+                                  const raw = dropOver.above ? dropOver.toIdx : dropOver.toIdx + 1;
+                                  let lineIdx: number;
+                                  if (isSameOdt) {
+                                    const { fromIdx } = dragEntry;
+                                    const effectiveToIdx = raw > fromIdx ? raw - 1 : raw;
+                                    if (effectiveToIdx === fromIdx) return null;
+                                    lineIdx = fromIdx < effectiveToIdx ? effectiveToIdx + 1 : effectiveToIdx;
+                                  } else {
+                                    lineIdx = raw; // cross-ODT: no slot adjustment needed
+                                  }
+                                  const firstKey = `${list.id}:${odt.id}:${odt.entries[0]?.name ?? ''}`;
+                                  const entryH   = entryElsRef.current.get(firstKey)?.offsetHeight ?? 24;
+                                  return (
+                                    <div style={{
+                                      position: 'absolute', left: 0, right: 0,
+                                      top: lineIdx * entryH,
+                                      height: 2,
+                                      background: '#60a5fa',
+                                      borderRadius: 1,
+                                      transition: 'top 130ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                                      pointerEvents: 'none',
+                                      zIndex: 10,
+                                    }}>
+                                      <div style={{
+                                        position: 'absolute', left: 2, top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        width: 7, height: 7, borderRadius: '50%',
+                                        background: '#60a5fa',
+                                      }} />
+                                    </div>
+                                  );
+                                })()}
                                 {odt.entries.map((entry, ei) => {
                                   const isDragging = dragEntry?.listId === list.id && dragEntry?.odtId === odt.id && dragEntry?.fromIdx === ei;
-                                  const isDropAbove = dropOver?.listId === list.id && dropOver?.odtId === odt.id && dropOver?.toIdx === ei && dropOver?.above;
-                                  const isDropBelow = dropOver?.listId === list.id && dropOver?.odtId === odt.id && dropOver?.toIdx === ei && !dropOver?.above;
                                   const movedKey = `${list.id}:${odt.id}:${entry.name}`;
                                   return (
                                   <div
-                                    key={ei}
-                                    draggable
-                                    onDragStart={(e) => {
-                                      e.dataTransfer.effectAllowed = 'move';
-                                      setDragEntry({ listId: list.id, odtId: odt.id, fromIdx: ei });
+                                    key={entry.name}
+                                    ref={(el) => {
+                                      const k = `${list.id}:${odt.id}:${entry.name}`;
+                                      if (el) entryElsRef.current.set(k, el);
+                                      else    entryElsRef.current.delete(k);
                                     }}
-                                    onDragEnd={() => { setDragEntry(null); setDropOver(null); }}
-                                    onDragOver={(e) => {
-                                      if (dragEntry?.listId !== list.id || dragEntry?.odtId !== odt.id) return;
-                                      e.preventDefault();
-                                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                      const above = e.clientY < rect.top + rect.height / 2;
-                                      setDropOver({ listId: list.id, odtId: odt.id, toIdx: ei, above });
-                                    }}
-                                    onDrop={(e) => {
-                                      e.preventDefault();
-                                      if (!dragEntry || dragEntry.listId !== list.id || dragEntry.odtId !== odt.id) return;
-                                      const { fromIdx } = dragEntry;
-                                      const raw = dropOver?.above ? ei : ei + 1;
-                                      const toIdx = raw > fromIdx ? raw - 1 : raw;
-                                      const name = odt.entries[fromIdx]?.name ?? '';
-                                      setDragEntry(null);
-                                      setDropOver(null);
-                                      if (toIdx !== fromIdx) {
-                                        setRecentlyMoved(`${list.id}:${odt.id}:${name}`);
-                                        setTimeout(() => setRecentlyMoved(null), 450);
-                                        onMoveEntry(list.id, odt.id, fromIdx, toIdx);
-                                      }
-                                    }}
-                                    className={`daq-entry-row group${exitingEntries.has(`${list.id}:${odt.id}:${ei}`) ? ' daq-exiting' : ''}${isDragging ? ' opacity-40' : ''}${isDropAbove ? ' daq-drag-over-above' : ''}${isDropBelow ? ' daq-drag-over-below' : ''}${recentlyMoved === movedKey ? ' daq-moved' : ''}`}
+                                    data-entry-list={list.id}
+                                    data-entry-odt={odt.id}
+                                    data-entry-idx={ei}
+                                    className={`daq-entry-row group${exitingEntries.has(`${list.id}:${odt.id}:${ei}`) ? ' daq-exiting' : ''}${isDragging ? ' opacity-40' : ''}${recentlyMoved === movedKey ? ' daq-moved' : ''}`}
                                     onClick={(e) => {
-                                      if (dragEntry) return;
+                                      if (dragEntryRef.current) return;
                                       setPopover({ listId: list.id, odtId: odt.id, entryIdx: ei, initial: entry, anchor: { x: e.clientX, y: e.clientY } });
                                     }}
                                   >
-                                    <span className="w-3 text-gray-700 shrink-0 cursor-grab active:cursor-grabbing text-[10px] leading-none select-none">⠿</span>
+                                    <span
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 shrink-0 cursor-grab active:cursor-grabbing select-none leading-none"
+                                      onPointerDown={(e) => {
+                                        if (e.button !== 0) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const val = { listId: list.id, odtId: odt.id, fromIdx: ei };
+                                        dragEntryRef.current = val;
+                                        setDragEntry(val);
+                                        document.body.style.cursor    = 'grabbing';
+                                        document.body.style.userSelect = 'none';
+                                      }}
+                                    ><DotsSixVertical size={13} /></span>
+                                    <span className="shrink-0 leading-none" style={{ color: odtColors[`${list.id}:${odt.id}`] ?? ODT_COLORS[0] }}><Waveform size={12} /></span>
                                     <span className="text-gray-300 text-[11px] flex-1 truncate">{entry.name}</span>
                                     <span className="font-mono text-gray-500 text-[10px] shrink-0">{entry.type_name}</span>
                                     <button
-                                      className="ml-0.5 text-gray-700 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                                      className="ml-0.5 text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
                                       onClick={e => { e.stopPropagation(); handleDeleteEntry(list.id, odt.id, ei); }}
-                                    >✕</button>
+                                    ><X size={12} /></button>
                                   </div>
                                   );
                                 })}
@@ -639,7 +789,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                                     onClick={e => setPopover({ listId: list.id, odtId: odt.id, entryIdx: null, anchor: { x: e.clientX, y: e.clientY } })}
                                     className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-blue-400 transition-colors"
                                   >
-                                    <span style={{ fontSize: 12, lineHeight: '12px' }}>+</span> Add Entry
+                                    <Plus size={12} /> Add Entry
                                   </button>
                                 </div>
                               </div>
@@ -649,8 +799,8 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                       );
                     })}
                     <button onClick={() => onAddOdt(list.id)}
-                      className="text-[10px] text-gray-600 hover:text-blue-400 transition-colors px-1 py-0.5 mt-0.5">
-                      + Add ODT
+                      className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-blue-400 transition-colors px-1 py-0.5 mt-0.5">
+                      <Plus size={12} /> Add ODT
                     </button>
                   </div>
                 </div>
@@ -724,13 +874,22 @@ interface LiveRow {
   isNew: boolean;
 }
 
+const EXPAND_STAGGER  = 55;   // ms between each row fading in
+const EXPAND_FADE_DUR = 200;  // row fade-in duration
+const PLOT_REVEAL_DUR = 420;  // plot clip-reveal duration
+const PLOT_OFFSET     = 120;  // extra ms before plot starts (after row begins)
+const ROW_ENTER_DUR   = 280;  // daq-row-enter animation duration
+
 function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
   const liveValues = useAppStore(s => s.daqLiveValues);
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS);
   const [animatedKeys, setAnimatedKeys] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(40);
   const [collapsedLists, setCollapsedLists] = useState<Set<number>>(new Set());
-  const prevKeysRef = useRef<Set<string>>(new Set());
+  const [expandingLists, setExpandingLists] = useState<Set<number>>(new Set());
+  const prevKeysRef  = useRef<Set<string>>(new Set());
+  const rowElsRef    = useRef<Map<string, HTMLElement>>(new Map());
+  const prevRowYRef  = useRef<Map<string, number>>(new Map());
 
   // Stable zoom handler passed to each Sparkline
   const handleZoom = useCallback((dir: number) => {
@@ -784,6 +943,31 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
     return () => clearTimeout(t);
   }, [rows.map(r => r.key).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // FLIP for live-table rows — same prevYRef pattern as DaqTree
+  useLayoutEffect(() => {
+    const prev = prevRowYRef.current;
+    const next = new Map<string, number>();
+    for (const [key, el] of rowElsRef.current) {
+      const currentY = el.getBoundingClientRect().top;
+      next.set(key, currentY);
+      const oldY = prev.get(key);
+      if (oldY === undefined) continue;
+      const dy = oldY - currentY;
+      if (Math.abs(dy) < 1) continue;
+      el.style.transition = 'none';
+      el.style.transform  = `translateY(${dy}px)`;
+      void el.offsetHeight;
+      el.style.transition = 'transform 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      el.style.transform  = '';
+      el.addEventListener('transitionend', function onEnd(ev: Event) {
+        if ((ev as TransitionEvent).propertyName !== 'transform') return;
+        el.style.transition = '';
+        el.removeEventListener('transitionend', onEnd);
+      });
+    }
+    prevRowYRef.current = next;
+  }, [lists]);
+
   function startResize(col: keyof typeof DEFAULT_COL_WIDTHS, e: ReactMouseEvent) {
     e.preventDefault();
     const startX = e.clientX;
@@ -812,15 +996,13 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600">Live Values</span>
-        <span className="text-[10px] text-gray-600 font-mono">zoom: {zoom}pts · scroll on plot to adjust</span>
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5"><ChartLine size={18} />Live Values</span>
+        <span className="text-[10px] text-gray-600 font-mono flex items-center gap-1"><MagnifyingGlass size={12} />{zoom} pts</span>
       </div>
       <div className="flex-1 overflow-auto">
         {rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-gray-700 text-xs">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.2} className="w-8 h-8 mb-2 opacity-40">
-              <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18" />
-            </svg>
+            <Database size={32} className="mb-2 opacity-40" />
             Add signals to a DAQ list, then Configure → Start
           </div>
         ) : (
@@ -865,11 +1047,20 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
                       <td
                         colSpan={6}
                         className={`px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-800 cursor-pointer select-none hover:bg-gray-800/40 transition-colors bg-gray-900/70 ${gi > 0 ? 'border-t border-t-gray-700' : ''}`}
-                        onClick={() => setCollapsedLists(prev => {
-                          const next = new Set(prev);
-                          if (next.has(list.id)) next.delete(list.id); else next.add(list.id);
-                          return next;
-                        })}
+                        onClick={() => {
+                          const wasCollapsed = collapsedLists.has(list.id);
+                          setCollapsedLists(prev => {
+                            const next = new Set(prev);
+                            if (next.has(list.id)) next.delete(list.id); else next.add(list.id);
+                            return next;
+                          });
+                          if (wasCollapsed) {
+                            setExpandingLists(e => new Set([...e, list.id]));
+                            setTimeout(() => {
+                              setExpandingLists(e => { const n = new Set(e); n.delete(list.id); return n; });
+                            }, 50 + listRows.length * EXPAND_STAGGER + EXPAND_FADE_DUR + PLOT_REVEAL_DUR + 100);
+                          }
+                        }}
                       >
                         <span className="mr-1 inline-block">{isCollapsed ? '▸' : '▾'}</span>
                         {list.name ?? `List ${list.id}`}
@@ -887,20 +1078,32 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
                         >
                           <div style={{ minHeight: 0, overflow: 'hidden' }}>
                             {listRows.map((row, ri) => {
-                              const isAnimating = animatedKeys.has(row.key);
-                              const rowColor = odtColors[`${row.listId}:${row.odtId}`] ?? ODT_COLORS[0];
+                              const isAnimating  = animatedKeys.has(row.key);
+                              const isExpanding  = expandingLists.has(list.id);
+                              const rowColor     = odtColors[`${row.listId}:${row.odtId}`] ?? ODT_COLORS[0];
+                              const rowBaseDelay = isExpanding ? 50 + ri * EXPAND_STAGGER : ri * 40;
+                              const rowStyle: React.CSSProperties | undefined =
+                                isAnimating ? { animationDelay: `${ri * 40}ms` } :
+                                isExpanding ? { animation: `daq-row-fade-in ${EXPAND_FADE_DUR}ms ease-out both`, animationDelay: `${rowBaseDelay}ms` } :
+                                undefined;
+                              const plotStyle: React.CSSProperties | undefined =
+                                (isAnimating || isExpanding) ? {
+                                  animation: `daq-plot-reveal ${PLOT_REVEAL_DUR}ms ease-out both`,
+                                  animationDelay: `${rowBaseDelay + (isAnimating ? ROW_ENTER_DUR - 30 : PLOT_OFFSET)}ms`,
+                                } : undefined;
                               return (
                                 <div
                                   key={row.key}
+                                  ref={(el) => { if (el) rowElsRef.current.set(row.key, el); else rowElsRef.current.delete(row.key); }}
                                   className={`flex border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors text-xs font-mono ${isAnimating ? 'daq-row-enter' : ''}`}
-                                  style={isAnimating ? { animationDelay: `${ri * 40}ms` } : undefined}
+                                  style={rowStyle}
                                 >
                                   <div className="px-3 py-1.5 text-gray-300 truncate overflow-hidden" style={{ width: colWidths.signal, flexShrink: 0 }}>{row.entry.name}</div>
                                   <div className={`px-3 py-1.5 tabular-nums ${row.value !== null ? 'text-green-400' : 'text-gray-600'}`} style={{ width: colWidths.value, flexShrink: 0 }}>{formatValue(row.value, row.entry.type_name)}</div>
                                   <div className="px-3 py-1.5 text-gray-500" style={{ width: colWidths.type, flexShrink: 0 }}>{row.entry.type_name}</div>
                                   <div className="px-3 py-1.5 text-gray-500" style={{ width: colWidths.address, flexShrink: 0 }}>0x{row.entry.addr.toString(16).padStart(8, '0').toUpperCase()}</div>
                                   <div className="px-3 py-1.5 text-gray-600" style={{ width: colWidths.listOdt, flexShrink: 0 }}>{row.listId}/{row.odtId}</div>
-                                  <div className="px-2 py-1 flex-1 min-w-0">
+                                  <div className="px-2 py-1 flex-1 min-w-0" style={plotStyle}>
                                     <Sparkline history={row.history} color={rowColor} zoom={zoom} onZoomChange={handleZoom} />
                                   </div>
                                 </div>
@@ -921,6 +1124,34 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
     </div>
   );
 }
+// ── Directional animated DTO rate counter ────────────────────────
+function DtoRateCount({ value }: { value: number }) {
+  const [displayed, setDisplayed] = useState(value);
+  const [animKey,   setAnimKey]   = useState(0);
+  const [animCls,   setAnimCls]   = useState('');
+  const prevRef = useRef(value);
+  const timer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (value === prevRef.current) return;
+    const up = value > prevRef.current;
+    prevRef.current = value;
+    setDisplayed(value);
+    setAnimKey(k => k + 1);
+    setAnimCls(up ? 'count-tick' : 'count-enter-from-top');
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setAnimCls(''), 260);
+  }, [value]);
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  return (
+    <span key={animKey} className={animCls} style={{ display: 'inline-block', overflow: 'hidden' }}>
+      {displayed}
+    </span>
+  );
+}
+
 interface ToolbarProps {
   lists: DaqList[];
   configuring: boolean;
@@ -937,6 +1168,26 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
   const connected = useAppStore(s => s.connected);
   const daqDtoRate = useAppStore(s => s.daqDtoRate);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [wrenchKey,         setWrenchKey]         = useState(0);
+  const [playPopKey,        setPlayPopKey]         = useState(0);
+  const [stopPopKey,        setStopPopKey]         = useState(0);
+  const [freeConfirmOpen,   setFreeConfirmOpen]    = useState(false);
+  const [freeConfirmExiting,setFreeConfirmExiting] = useState(false);
+
+  const CONFIRM_EXIT_MS = 130;
+  function closeConfirm() {
+    setFreeConfirmExiting(true);
+    setTimeout(() => { setFreeConfirmOpen(false); setFreeConfirmExiting(false); }, CONFIRM_EXIT_MS);
+  }
+  const prevStatusRef = useRef(daqStatus);
+
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = daqStatus;
+    if (prev === 'idle'       && daqStatus === 'configured') setWrenchKey(k => k + 1);
+    if (prev === 'configured' && daqStatus === 'running')    setPlayPopKey(k => k + 1);
+    if (prev === 'running'    && daqStatus === 'configured') setStopPopKey(k => k + 1);
+  }, [daqStatus]);
 
   const canConfigure = !configuring && daqStatus === 'idle' && connected && lists.some(l => l.odts.some(o => o.entries.length > 0));
   const canStart     = daqStatus === 'configured';
@@ -979,15 +1230,15 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
 
       {/* Free All */}
       <button
-        onClick={onFree}
+        onClick={() => setFreeConfirmOpen(true)}
         disabled={!canFree}
-        className={`h-6 px-2.5 rounded text-[10px] font-medium flex items-center border transition-colors ${
+        className={`h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors ${
           canFree
             ? 'text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer'
             : 'text-gray-600 border-gray-800 bg-gray-900 cursor-not-allowed opacity-40'
         }`}
       >
-        Free All
+        <Trash size={18} />Free All
       </button>
       <div className="w-px h-4 bg-gray-800" />
 
@@ -1007,7 +1258,7 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
             </svg>
             Configuring DAQ
           </>
-        ) : 'Configure'}
+        ) : <><Wrench key={wrenchKey} size={18} className={wrenchKey > 0 ? 'icon-wrench-crank' : ''} />Configure</>}
       </button>
 
       {/* Play */}
@@ -1015,25 +1266,27 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
         onClick={onStart}
         disabled={!canStart}
         title="Start DAQ"
-        className={`w-6 h-6 rounded flex items-center justify-center text-xs border transition-colors text-green-400 border-green-500/30 bg-green-500/10 ${
+        className={`w-6 h-6 rounded flex items-center justify-center border transition-colors text-green-400 border-green-500/30 bg-green-500/10 ${
           canStart ? 'hover:bg-green-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
         }`}
-      >▶</button>
+      ><Play key={playPopKey} size={14} className={playPopKey > 0 ? 'icon-pop' : ''} /></button>
 
       {/* Stop */}
       <button
         onClick={onStop}
         disabled={!canStop}
         title="Stop DAQ"
-        className={`w-6 h-6 rounded flex items-center justify-center text-xs border transition-colors text-red-400 border-red-500/30 bg-red-500/10 ${
+        className={`w-6 h-6 rounded flex items-center justify-center border transition-colors text-red-400 border-red-500/30 bg-red-500/10 ${
           canStop ? 'hover:bg-red-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
         }`}
-      >■</button>
+      ><Stop key={stopPopKey} size={14} className={stopPopKey > 0 ? 'icon-pop' : ''} /></button>
 
       <div className="flex-1" />
 
       {/* DTO rate */}
-      <span className="text-[10px] text-gray-600 font-mono">{daqDtoRate} DTOs / s</span>
+      <span className="text-[10px] text-gray-600 font-mono flex items-center gap-1">
+        <Pulse size={13} /><DtoRateCount value={daqDtoRate} /> DTOs / s
+      </span>
 
       <div className="w-px h-4 bg-gray-800" />
 
@@ -1041,17 +1294,46 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
       <button
         onClick={onSave}
         title="Export DAQ lists to .daq file"
-        className="h-6 px-2.5 rounded text-[10px] font-medium flex items-center border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer"
+        className="h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer"
       >
-        Export
+        <ArrowSquareOut size={14} />Export
       </button>
       <button
         onClick={() => fileInputRef.current?.click()}
         title="Import DAQ lists from .daq file"
-        className="h-6 px-2.5 rounded text-[10px] font-medium flex items-center border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer"
+        className="h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer"
       >
-        Import
+        <FolderOpen size={14} />Import
       </button>
+
+      {/* Free All confirm dialog */}
+      {freeConfirmOpen && createPortal(
+        <div
+          className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 ${freeConfirmExiting ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
+          onMouseDown={e => { if (e.target === e.currentTarget) closeConfirm(); }}
+        >
+          <div className={`bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-72 p-5 flex flex-col gap-4 ${freeConfirmExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}>
+            <p className="text-sm text-gray-200 leading-relaxed">
+              Free all DAQ resources on the slave? This will stop acquisition and release all configured lists.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={closeConfirm}
+                className="px-3 py-1.5 rounded text-xs text-gray-400 hover:text-gray-200 border border-gray-700 hover:bg-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { closeConfirm(); onFree(); }}
+                className="px-4 py-1.5 rounded text-xs font-medium bg-red-600 hover:bg-red-500 text-white transition-colors active:scale-95 flex items-center gap-1.5"
+              >
+                <Trash size={18} />Free All
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -1196,20 +1478,43 @@ export function Daq() {
     ));
   }
 
-  function handleMoveEntry(listId: number, odtId: number, fromIdx: number, toIdx: number) {
-    setDaqLists(daqLists.map(l => {
-      if (l.id !== listId) return l;
-      return {
-        ...l,
-        odts: l.odts.map(o => {
-          if (o.id !== odtId) return o;
-          const entries = [...o.entries];
-          const [removed] = entries.splice(fromIdx, 1);
-          entries.splice(toIdx, 0, removed);
-          return { ...o, entries };
-        }),
-      };
-    }));
+  function handleMoveEntry(fromListId: number, fromOdtId: number, fromIdx: number, toListId: number, toOdtId: number, toIdx: number) {
+    if (fromListId === toListId && fromOdtId === toOdtId) {
+      // Same ODT: reorder in place
+      setDaqLists(daqLists.map(l => {
+        if (l.id !== fromListId) return l;
+        return {
+          ...l,
+          odts: l.odts.map(o => {
+            if (o.id !== fromOdtId) return o;
+            const entries = [...o.entries];
+            const [removed] = entries.splice(fromIdx, 1);
+            entries.splice(toIdx, 0, removed);
+            return { ...o, entries };
+          }),
+        };
+      }));
+    } else {
+      // Cross-ODT or cross-list: remove from source, insert into target atomically
+      const entry = daqLists.find(l => l.id === fromListId)?.odts.find(o => o.id === fromOdtId)?.entries[fromIdx];
+      if (!entry) return;
+      setDaqLists(daqLists.map(l => {
+        if (l.id === fromListId && l.id === toListId) {
+          // Same list, different ODT
+          return {
+            ...l,
+            odts: l.odts.map(o => {
+              if (o.id === fromOdtId) return { ...o, entries: o.entries.filter((_, i) => i !== fromIdx) };
+              if (o.id === toOdtId)   { const e = [...o.entries]; e.splice(toIdx, 0, entry); return { ...o, entries: e }; }
+              return o;
+            }),
+          };
+        }
+        if (l.id === fromListId) return { ...l, odts: l.odts.map(o => o.id !== fromOdtId ? o : { ...o, entries: o.entries.filter((_, i) => i !== fromIdx) }) };
+        if (l.id === toListId)   { return { ...l, odts: l.odts.map(o => { if (o.id !== toOdtId) return o; const e = [...o.entries]; e.splice(toIdx, 0, entry); return { ...o, entries: e }; }) }; }
+        return l;
+      }));
+    }
   }
 
   function handleSaveDaq() {

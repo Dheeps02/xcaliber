@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useSSE } from './hooks/useSSE';
 import { TooltipProvider } from './context/TooltipContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -15,6 +16,7 @@ import { useAppStore } from './stores/app-store';
 function AppInner() {
   useSSE();
   const theme = useAppStore((s) => s.theme);
+  const uiZoom = useAppStore((s) => s.uiZoom);
   const animationsEnabled = useAppStore((s) => s.animationsEnabled);
   const activeMainTab = useAppStore((s) => s.activeMainTab);
   const setActiveMainTab = useAppStore((s) => s.setActiveMainTab);
@@ -31,6 +33,10 @@ function AppInner() {
   useEffect(() => {
     document.documentElement.classList.toggle('no-animations', !animationsEnabled);
   }, [animationsEnabled]);
+
+  useEffect(() => {
+    getCurrentWebviewWindow().setZoom(uiZoom).catch(() => {});
+  }, [uiZoom]);
 
   return (
     <div className="bg-gray-950 text-gray-100 h-screen flex flex-col overflow-hidden">

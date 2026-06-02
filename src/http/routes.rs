@@ -80,8 +80,8 @@ fn log_tx(state: &AppState, cmd: &XcpCommand, ctr: u16) -> PacketEntry {
             json!({ "command": "GET_COMM_MODE_INFO" }),
         XcpCommand::GetId { id_type } =>
             json!({ "command": "GET_ID", "id_type": id_type }),
-        XcpCommand::SetMta { addr_ext, addr } =>
-            json!({ "command": "SET_MTA", "addr_ext": addr_ext, "addr": addr }),
+        XcpCommand::SetMta { addr_ext, addr, big_endian } =>
+            json!({ "command": "SET_MTA", "addr_ext": addr_ext, "addr": addr, "big_endian": big_endian }),
         XcpCommand::Upload { size } =>
             json!({ "command": "UPLOAD", "size": size }),
         XcpCommand::Download { data } =>
@@ -334,7 +334,8 @@ pub async fn cmd_set_mta(
     State(state): State<Arc<AppState>>,
     Json(body): Json<SetMtaBody>,
 ) -> impl IntoResponse {
-    match run_cmd(&state, XcpCommand::SetMta { addr_ext: body.addr_ext, addr: body.addr }).await {
+    let big_endian = state.config.lock().unwrap().endian == "big";
+    match run_cmd(&state, XcpCommand::SetMta { addr_ext: body.addr_ext, addr: body.addr, big_endian }).await {
         Ok(r)  => Json(json!({ "ok": true, "response": r })).into_response(),
         Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
@@ -428,6 +429,7 @@ pub struct UpdateConfigBody {
     pub listen_port: u16,
     pub bind_ip: Option<String>,
     pub events: Option<Vec<crate::config::EventDef>>,
+    pub endian: Option<String>,
 }
 
 pub async fn update_config(
@@ -453,6 +455,11 @@ pub async fn update_config(
             return Json(json!({ "ok": false, "error": "event names must not be empty" })).into_response();
         }
     }
+    if let Some(ref endian) = body.endian {
+        if endian != "little" && endian != "big" {
+            return Json(json!({ "ok": false, "error": "endian must be \"little\" or \"big\"" })).into_response();
+        }
+    }
 
     let result = {
         let mut cfg = state.config.lock().unwrap();
@@ -463,6 +470,7 @@ pub async fn update_config(
         cfg.connection.bind_ip = body.bind_ip.filter(|s| !s.is_empty());
         cfg.server.listen_port = body.listen_port;
         if let Some(events) = body.events { cfg.events = events; }
+        if let Some(endian) = body.endian { cfg.endian = endian; }
         cfg.save(&state.config_path)
     };
     match result {
@@ -471,14 +479,64 @@ pub async fn update_config(
     }
 }
 
+/// Expand a numeric value into the minimum number of bytes (1/2/4/8) required
+/// to hold it, respecting byte order.
+fn value_to_bytes(val: u64, big_endian: bool) -> Vec<u8> {
+    let size: usize = if val <= 0xFF { 1 } else if val <= 0xFFFF { 2 } else if val <= 0xFFFF_FFFF { 4 } else { 8 };
+    if size == 1 {
+        return vec![val as u8];
+    }
+    let raw = val.to_le_bytes();
+    let slice = &raw[..size];
+    if big_endian {
+        slice.iter().rev().cloned().collect()
+    } else {
+        slice.to_vec()
+    }
+}
+
+/// Parse a list of string tokens into bytes.
+///
+/// Rules:
+/// - `0x…` prefix → hex value, expanded to min bytes, endian applied
+/// - All ASCII digits → decimal value, expanded to min bytes, endian applied
+/// - Otherwise → raw hex byte (1 byte, no endian needed)
+fn parse_tokens(tokens: &[String], big_endian: bool) -> Result<Vec<u8>, String> {
+    let mut result = Vec::new();
+    for token in tokens {
+        let t = token.trim();
+        if t.is_empty() { continue; }
+        if let Some(hex_str) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
+            let val = u64::from_str_radix(hex_str, 16)
+                .map_err(|_| format!("Invalid hex value: {t}"))?;
+            result.extend_from_slice(&value_to_bytes(val, big_endian));
+        } else if t.chars().all(|c| c.is_ascii_digit()) {
+            let val = t.parse::<u64>()
+                .map_err(|_| format!("Invalid decimal value: {t}"))?;
+            result.extend_from_slice(&value_to_bytes(val, big_endian));
+        } else {
+            let val = u8::from_str_radix(t, 16)
+                .map_err(|_| format!("Invalid byte: {t}"))?;
+            result.push(val);
+        }
+    }
+    Ok(result)
+}
+
 #[derive(Deserialize)]
-pub struct DownloadBody { pub data: Vec<u8> }
+pub struct DownloadBody { pub tokens: Vec<String> }
 
 pub async fn cmd_download(
     State(state): State<Arc<AppState>>,
     Json(body): Json<DownloadBody>,
 ) -> impl IntoResponse {
-    match run_cmd(&state, XcpCommand::Download { data: body.data }).await {
+    let big_endian = state.config.lock().unwrap().endian == "big";
+    let data = match parse_tokens(&body.tokens, big_endian) {
+        Ok(b) if b.is_empty() => return Json(json!({ "ok": false, "error": "No bytes to write" })).into_response(),
+        Ok(b)  => b,
+        Err(e) => return Json(json!({ "ok": false, "error": e })).into_response(),
+    };
+    match run_cmd(&state, XcpCommand::Download { data }).await {
         Ok(r)  => Json(json!({ "ok": true, "response": r })).into_response(),
         Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }

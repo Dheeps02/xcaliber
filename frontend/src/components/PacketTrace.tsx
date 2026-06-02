@@ -7,10 +7,24 @@ import {
   type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  PaperPlaneTilt,
+  DownloadSimple,
+  WarningCircle,
+  Funnel,
+  ExcludeSquare,
+  IntersectSquare,
+  Eraser,
+  CaretDown,
+  CaretUp,
+  CaretRight,
+  Timer,
+} from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { formatLabel, toTitleCase, formatTime } from '../lib/utils';
 import type { PacketEntry, UserCmdDef } from '../lib/types';
 import { AnimatedCount } from './AnimatedCount';
+import { Toggle } from './Toggle';
 
 type DirFilter = 'all' | 'tx' | 'rx';
 
@@ -141,7 +155,12 @@ function ExpandDetail({ p, colSpan, open }: { p: PacketEntry; colSpan: number; o
       <td colSpan={colSpan} className="overflow-hidden p-0">
         <div className={`expand-content ${open ? 'px-6 pb-3 pt-1' : 'closed'}`} style={{ maxHeight: open ? '300px' : undefined }}>
           <div className={`text-[10px] mb-1.5 uppercase tracking-wider ${isErr ? 'text-red-500' : 'text-gray-500'}`}>
-            {p.direction === 'tx' ? `→ TX · PID 0x${p.pid}` : isErr ? `✕ ERR · PID 0x${p.pid}` : `← RX · PID 0x${p.pid}`}
+            {p.direction === 'tx'
+            ? <><PaperPlaneTilt size={11} className="inline mr-1" />TX · PID 0x{p.pid}</>
+            : isErr
+            ? <><WarningCircle size={11} className="inline mr-1" />ERR · PID 0x{p.pid}</>
+            : <><DownloadSimple size={11} className="inline mr-1" />RX · PID 0x{p.pid}</>
+          }
           </div>
           <div className="space-y-0.5 text-xs">
             {rows.length > 0 ? (
@@ -178,7 +197,12 @@ function ExpandDetailFlat({ p, open, extraFields }: { p: PacketEntry; open: bool
     <div className="bg-gray-900/60 overflow-hidden">
       <div className={`expand-content ${open ? 'px-6 pb-3 pt-1' : 'closed'}`} style={{ maxHeight: open ? '300px' : undefined }}>
         <div className={`text-[10px] mb-1.5 uppercase tracking-wider ${isErr ? 'text-red-500' : 'text-gray-500'}`}>
-          {p.direction === 'tx' ? `→ TX · PID 0x${p.pid}` : isErr ? `✕ ERR · PID 0x${p.pid}` : `← RX · PID 0x${p.pid}`}
+          {p.direction === 'tx'
+            ? <><PaperPlaneTilt size={11} className="inline mr-1" />TX · PID 0x{p.pid}</>
+            : isErr
+            ? <><WarningCircle size={11} className="inline mr-1" />ERR · PID 0x{p.pid}</>
+            : <><DownloadSimple size={11} className="inline mr-1" />RX · PID 0x{p.pid}</>
+          }
         </div>
         <div className="space-y-0.5 text-xs">
           {rows.length > 0 ? (
@@ -308,6 +332,10 @@ export function PacketTrace() {
   const [colWidths, setColWidths] = useState([160, 60, 52, 120]);
   const [traceVisible, setTraceVisible] = useState(true);
   const [pidAnchor, setPidAnchor] = useState<HTMLElement | null>(null);
+  const [eraserHovered, setEraserHovered] = useState(false);
+  const [eraserWiggling, setEraserWiggling] = useState(false);
+  const [collapseAllAnimKey, setCollapseAllAnimKey] = useState(0);
+  const [collapseAllAnimCls, setCollapseAllAnimCls] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // IDs whose entry animation has already completed — used to suppress re-animation on re-render
@@ -408,10 +436,14 @@ export function PacketTrace() {
 
   function collapseAll() {
     setCollapsedGroups(new Set(allPairKeys));
+    setCollapseAllAnimKey(k => k + 1);
+    setCollapseAllAnimCls('icon-flip-collapse');
   }
 
   function expandAll() {
     setCollapsedGroups(new Set());
+    setCollapseAllAnimKey(k => k + 1);
+    setCollapseAllAnimCls('icon-flip-expand');
   }
 
   function handleClear() {
@@ -463,6 +495,15 @@ export function PacketTrace() {
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 h-9 border-b border-gray-800 bg-gray-900 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
+          <button
+            onClick={allCollapsed ? expandAll : collapseAll}
+            title={allCollapsed ? 'Expand All' : 'Collapse All'}
+            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors shrink-0"
+          >
+            <span key={collapseAllAnimKey} className={collapseAllAnimCls}>
+              {allCollapsed ? <ExcludeSquare size={18} weight="fill" /> : <IntersectSquare size={18} weight="fill" />}
+            </span>
+          </button>
           <div className="flex items-center gap-1">
             {(['all', 'tx', 'rx'] as DirFilter[]).map((d) => (
               <button
@@ -485,20 +526,12 @@ export function PacketTrace() {
             }`}
             title="Filter by PID"
           >
-            <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-              <path d="M1 2.5A.5.5 0 0 1 1.5 2h13a.5.5 0 0 1 .35.854L10 7.707V13.5a.5.5 0 0 1-.223.416l-3 2A.5.5 0 0 1 6 15.5V7.707L1.15 2.854A.5.5 0 0 1 1 2.5z" />
-            </svg>
+            <Funnel size={18} weight={selectedPids.size > 0 ? 'fill' : 'regular'} />
             {selectedPids.size > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full text-[7px] text-white flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-blue-500 rounded-full text-[8px] font-bold text-white leading-none flex items-center justify-center">
                 {selectedPids.size}
               </span>
             )}
-          </button>
-          <button
-            onClick={allCollapsed ? expandAll : collapseAll}
-            className="h-6 px-2 rounded text-[10px] flex items-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors shrink-0"
-          >
-            {allCollapsed ? '⊞ Expand All' : '⊟ Collapse All'}
           </button>
         </div>
 
@@ -508,21 +541,27 @@ export function PacketTrace() {
             <span className="text-gray-700 text-[10px]">|</span>
             <AnimatedCount value={rxCount} label="RX" colorCls="text-green-400" />
           </div>
-          <label className="flex items-center gap-1.5 text-[10px] text-gray-500 cursor-pointer select-none">
-            <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} className="accent-blue-500" />
-            Auto-scroll
-          </label>
+          <Toggle active={autoScroll} onClick={() => setAutoScroll(!autoScroll)} label="Auto-scroll" />
           <button
-            onClick={handleClear}
-            className="h-6 px-2 rounded text-[10px] flex items-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors"
+            onClick={() => {
+              setEraserWiggling(true);
+              setTimeout(() => setEraserWiggling(false), 400);
+              handleClear();
+            }}
+            onMouseEnter={() => setEraserHovered(true)}
+            onMouseLeave={() => setEraserHovered(false)}
+            title="Clear"
+            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors"
           >
-            Clear
+            <span className={eraserWiggling ? 'icon-wiggle' : ''}>
+              <Eraser size={18} weight={eraserHovered || eraserWiggling ? 'fill' : 'regular'} />
+            </span>
           </button>
           <button
             onClick={() => setTraceVisible(!traceVisible)}
-            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 text-xs transition-colors"
+            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
           >
-            {traceVisible ? '▼' : '▲'}
+            {traceVisible ? <CaretDown size={18} /> : <CaretUp size={18} />}
           </button>
         </div>
       </div>
@@ -578,35 +617,37 @@ export function PacketTrace() {
 
                   return (
                     <Fragment key={g.key}>
-                      {/* ── Group title row ──────────────────────── */}
+                      {/* ── Group header row ──────────────────────── */}
                       <tr
-                        className={`border-t border-gray-800/60 cursor-pointer select-none ${altBg} ${newTx ? 'packet-new' : ''} ${isClearing ? 'row-out' : ''}`}
+                        className={`cursor-pointer select-none group ${newTx ? 'packet-new' : ''} ${isClearing ? 'row-out' : ''}`}
                         style={newTx ? { animationDelay: `${groupDelay}ms` } : undefined}
                         onClick={(e) => toggleGroup(g.key, e)}
                       >
-                        <td className="px-2 py-1">
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              className="text-gray-500 hover:text-gray-300 text-[10px] w-3 shrink-0 leading-none transition-colors"
-                              onClick={(e) => toggleGroup(g.key, e)}
-                              title={isGroupCollapsed ? 'Expand' : 'Collapse'}
-                            >
-                              {isGroupCollapsed ? '▸' : '▾'}
-                            </button>
-                            <span className="text-gray-300 font-medium text-[11px]">{cmdLabel}</span>
-                            {!isGroupCollapsed && <div className="flex-1 h-px bg-gray-800/60 ml-1" />}
+                        <td
+                          className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 border-y border-gray-800/60 bg-gray-900/70 group-hover:bg-gray-800/50 transition-colors"
+                          style={{ width: colWidths[0] }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <CaretRight
+                              size={10}
+                              className={`transition-transform duration-150 shrink-0 ${isGroupCollapsed ? '' : 'rotate-90'}`}
+                            />
+                            <span>{cmdLabel}</span>
                           </div>
                         </td>
-                        <td className="px-3 py-1">
+                        <td
+                          className="px-3 py-1.5 border-y border-gray-800/60 bg-gray-900/70 group-hover:bg-gray-800/50 transition-colors"
+                          style={{ width: colWidths[1] }}
+                        >
                           {isGroupCollapsed && (
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1.5">
                               <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${dirBadgeCls(tx)}`}>TX</span>
                               {rx && <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${dirBadgeCls(rx)}`}>RX</span>}
                               {isTimedOut && <span className="px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-500/50">TO</span>}
                             </div>
                           )}
                         </td>
-                        <td /><td /><td />
+                        <td colSpan={3} className="border-y border-gray-800/60 bg-gray-900/70 group-hover:bg-gray-800/50 transition-colors" />
                       </tr>
 
                       {/* ── Sub-rows — single TR/TD with grid wrapper for smooth height animation ── */}
@@ -626,7 +667,7 @@ export function PacketTrace() {
                                 onClick={() => toggleRow(tx)}
                               >
                                 <div className="px-2 py-1.5 pl-7 shrink-0 overflow-hidden" style={{ width: colWidths[0] }}>
-                                  <span className="text-gray-500 text-[10px]">Request</span>
+                                  <span className="text-blue-400 text-[10px] flex items-center gap-1"><PaperPlaneTilt size={11} />Request</span>
                                 </div>
                                 <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(tx)}`}>TX</span>
@@ -641,7 +682,7 @@ export function PacketTrace() {
                               {isTimedOut && (
                                 <div className="flex items-center border-b border-amber-900/30 bg-amber-950/20">
                                   <div className="px-2 py-1.5 pl-7 shrink-0" style={{ width: colWidths[0] }}>
-                                    <span className="text-amber-500 text-[10px]">⏱ Timeout</span>
+                                    <span className="text-amber-500 text-[10px] flex items-center gap-1"><Timer size={11} />Timeout</span>
                                   </div>
                                   <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
                                     <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-500/50">TO</span>
@@ -661,7 +702,9 @@ export function PacketTrace() {
                                     onClick={() => toggleRow(rx)}
                                   >
                                     <div className="px-2 py-1.5 pl-7 shrink-0 overflow-hidden" style={{ width: colWidths[0] }}>
-                                      <span className="text-gray-500 text-[10px]">Response</span>
+                                      <span className={`text-[10px] flex items-center gap-1 ${rx.pid === 'FE' ? 'text-red-400' : 'text-green-400'}`}>
+                                        <DownloadSimple size={11} />Response
+                                      </span>
                                     </div>
                                     <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
                                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(rx)}`}>RX</span>
