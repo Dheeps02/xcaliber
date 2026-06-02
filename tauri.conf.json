@@ -20,7 +20,9 @@
         "title": "XCaliber",
         "width": 1440,
         "height": 860,
-        "resizable": true
+        "resizable": true,
+        "decorations": false,
+        "zoom": 1.2
       }
     ],
     "security": {
