@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { FileCode, Link, LinkBreak, Broadcast, ArrowsClockwise, GearSix, X } from '@phosphor-icons/react';
+import { FileCode, Link, LinkBreak, Broadcast, ArrowsClockwise, GearSix, X, FolderOpen } from '@phosphor-icons/react';
+import { revealItemInFileExplorer } from '@tauri-apps/plugin-opener';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import { Settings } from './Settings';
@@ -18,6 +19,7 @@ export function Header() {
   const closeSettings      = useAppStore((s) => s.closeSettings);
   const a2lInputRef = useRef<HTMLInputElement>(null);
   const [a2lFileName, setA2lFileName] = useState<string | null>(null);
+  const [a2lFilePath, setA2lFilePath] = useState<string | null>(null);
 
   async function handleToggle() {
     if (connected) {
@@ -43,6 +45,7 @@ export function Header() {
       if (!Array.isArray(arr)) throw new Error();
       setA2lVariables(arr as { name: string; addr: number; type?: DaqEntryType }[]);
       setA2lFileName(file.name);
+      setA2lFilePath((file as File & { path?: string }).path ?? null);
       showToast(`Loaded ${(arr as unknown[]).length} A2L variable(s)`, 'success');
     } catch {
       showToast('Invalid A2L JSON. Expected [{name, addr, type?}]', 'error');
@@ -52,6 +55,7 @@ export function Header() {
   function handleUnloadA2l() {
     setA2lVariables([]);
     setA2lFileName(null);
+    setA2lFilePath(null);
   }
 
   return (
@@ -83,13 +87,18 @@ export function Header() {
           </button>
           {a2lFileName && (
             <div className="flex items-center gap-1 min-w-0">
-              <button
-                onClick={() => a2lInputRef.current?.click()}
-                title="Click to replace A2L file"
-                className="text-[10px] text-gray-500 hover:text-gray-300 truncate max-w-[160px] transition-colors"
-              >
-                {a2lFileName}
-              </button>
+              {a2lFilePath ? (
+                <button
+                  onClick={() => revealItemInFileExplorer(a2lFilePath).catch(() => {})}
+                  title="Reveal in file explorer"
+                  className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300 truncate max-w-[160px] transition-colors"
+                >
+                  <FolderOpen size={11} />
+                  {a2lFileName}
+                </button>
+              ) : (
+                <span className="text-[10px] text-gray-500 truncate max-w-[160px]">{a2lFileName}</span>
+              )}
               <button
                 onClick={handleUnloadA2l}
                 title="Unload A2L"

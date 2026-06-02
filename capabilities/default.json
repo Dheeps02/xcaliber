@@ -4,6 +4,7 @@
   "description": "Default capability",
   "windows": ["main"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "opener:allow-reveal-item-in-file-explorer"
   ]
 }
