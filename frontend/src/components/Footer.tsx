@@ -1,5 +1,6 @@
 import { useAppStore } from '../stores/app-store';
 import { AnimatedCount } from './AnimatedCount';
+import { Stack } from '@phosphor-icons/react';
 
 export function Footer() {
   const slaveInfo    = useAppStore((s) => s.slaveInfo);
@@ -12,7 +13,7 @@ export function Footer() {
     <footer className="flex items-center justify-between px-4 h-6 border-t border-gray-800 bg-gray-900 shrink-0 text-[10px] text-gray-600">
       {/* Left: protocol pill + address */}
       <div className="flex items-center gap-2">
-        <span className="text-gray-600">Protocol:</span>
+        <span className="text-gray-600 flex items-center gap-1"><Stack size={11} />Protocol:</span>
         {protocol ? (
           <button
             onClick={() => openSettings('connection')}

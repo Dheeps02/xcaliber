@@ -662,7 +662,7 @@ export function PacketTrace() {
                                 onClick={() => toggleRow(tx)}
                               >
                                 <div className="px-2 py-1.5 pl-7 shrink-0 overflow-hidden" style={{ width: colWidths[0] }}>
-                                  <span className="text-gray-500 text-[10px]">Request</span>
+                                  <span className="text-blue-400 text-[10px] flex items-center gap-1"><PaperPlaneTilt size={11} />Request</span>
                                 </div>
                                 <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(tx)}`}>TX</span>
@@ -697,7 +697,9 @@ export function PacketTrace() {
                                     onClick={() => toggleRow(rx)}
                                   >
                                     <div className="px-2 py-1.5 pl-7 shrink-0 overflow-hidden" style={{ width: colWidths[0] }}>
-                                      <span className="text-gray-500 text-[10px]">Response</span>
+                                      <span className={`text-[10px] flex items-center gap-1 ${rx.pid === 'FE' ? 'text-red-400' : 'text-green-400'}`}>
+                                        <DownloadSimple size={11} />Response
+                                      </span>
                                     </div>
                                     <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
                                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(rx)}`}>RX</span>

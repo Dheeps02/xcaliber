@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { Terminal, Sliders } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { CMD_CATEGORIES } from '../lib/cmd-defs';
 
@@ -136,6 +137,7 @@ export function Sidebar() {
   const [filteredSysCats, setFilteredSysCats] = useState<Set<string>>(new Set());
   const [filteredUserGroups, setFilteredUserGroups] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'system' | 'user'>('system');
+  const [tabAnimKey, setTabAnimKey] = useState(0);
   const [expandKeys, setExpandKeys] = useState<Record<string, number>>({});
   const [enteringCats, setEnteringCats] = useState<Set<string>>(new Set());
   const [exitingData, setExitingData] = useState<Map<string, ExitData>>(new Map());
@@ -415,12 +417,17 @@ export function Sidebar() {
             {(['system', 'user'] as const).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => { setActiveTab(tab); setTabAnimKey(k => k + 1); }}
                 className={`flex-1 pb-1 text-[10px] font-semibold uppercase tracking-widest transition-colors ${
                   activeTab === tab ? 'text-blue-400' : 'text-gray-600 hover:text-gray-400'
                 }`}
               >
-                {tab === 'system' ? 'System' : 'User'}
+                <span className="flex items-center justify-center gap-1">
+                  <span key={activeTab === tab ? tabAnimKey : -1} className={activeTab === tab ? 'icon-pop' : ''}>
+                    {tab === 'system' ? <Terminal size={14} /> : <Sliders size={14} />}
+                  </span>
+                  {tab === 'system' ? 'System' : 'User'}
+                </span>
               </button>
             ))}
             <div className="absolute bottom-0 left-0 right-0 h-px bg-gray-800" />

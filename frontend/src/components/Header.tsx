@@ -8,10 +8,16 @@ import { ToastContainer } from './Toast';
 import type { DaqEntryType } from '../lib/types';
 
 function BroadcastCustom({ size, pulsing, pulseKey }: { size: number; pulsing: boolean; pulseKey: number }) {
+  // Exact Phosphor bold-weight broadcast paths, split into three groups for animation.
   return (
     <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" aria-hidden="true">
       <g key={`dot-${pulseKey}`}>
-        <circle cx="128" cy="128" r="28" className={pulsing ? 'broadcast-dot-pulse' : ''} />
+        {/* Bold ring center: outer r=44, inner r=20, fillRule punches the hole */}
+        <path
+          fillRule="evenodd"
+          className={pulsing ? 'broadcast-dot-pulse' : ''}
+          d="M128,84a44,44,0,1,0,44,44A44.05,44.05,0,0,0,128,84Zm0,64a20,20,0,1,1,20-20A20,20,0,0,1,128,148Z"
+        />
       </g>
       <g key={`inner-${pulseKey}`}>
         <path className={pulsing ? 'broadcast-arc-inner' : ''} d="M205.39,160.7A83.94,83.94,0,0,1,190.61,184a12,12,0,0,1-17.89-16,59.92,59.92,0,0,0,0-80,12,12,0,0,1,17.89-16,84.07,84.07,0,0,1,14.78,88.7Z" />
@@ -41,6 +47,8 @@ export function Header() {
   const [broadcastPulsing, setBroadcastPulsing] = useState(false);
   const [broadcastPulseKey, setBroadcastPulseKey] = useState(0);
   const [syncSpinning, setSyncSpinning] = useState(false);
+  const [gearKey, setGearKey] = useState(0);
+  const [gearReverse, setGearReverse] = useState(false);
 
   async function handleToggle() {
     if (connected) {
@@ -104,7 +112,7 @@ export function Header() {
           if (file) { handleLoadA2l(file); e.target.value = ''; }
         }}
       />
-      <header className="flex items-center justify-between px-4 h-11 border-b border-gray-800 bg-gray-900 shrink-0">
+      <header className="flex items-center justify-between px-4 h-11 border-b border-gray-800 bg-gray-900 shrink-0" data-tauri-drag-region>
         {/* A2L loader — far left */}
         <div className="flex items-center gap-2 min-w-0">
           <button
@@ -160,7 +168,7 @@ export function Header() {
               <span key={connected ? 'break' : 'link'} className="icon-rotate-in shrink-0 flex items-center">
                 {connected ? <LinkBreak size={14} /> : <Link size={14} />}
               </span>
-              <span key={connected ? 'disc' : 'conn'} className="text-blur-in">
+              <span key={connected ? 'disc' : 'conn'} className="text-blur-in flex-1 text-center">
                 {connected ? 'Disconnect' : 'Connect'}
               </span>
             </button>
@@ -192,15 +200,19 @@ export function Header() {
 
           {/* Settings — always last */}
           <button
-            onClick={() => openSettings()}
+            onClick={() => { setGearKey(k => k + 1); setGearReverse(false); openSettings(); }}
             title="Settings"
             className="w-7 h-7 rounded flex items-center justify-center text-gray-500 hover:text-gray-200 hover:bg-gray-800 transition-colors active:scale-95"
           >
-            <GearSix size={16} />
+            <GearSix
+              key={gearKey}
+              size={16}
+              className={gearKey > 0 ? (gearReverse ? 'icon-spin-90-reverse' : 'icon-spin-90') : ''}
+            />
           </button>
         </div>
       </header>
-      {settingsOpen && <Settings onClose={closeSettings} initialTab={settingsInitialTab} />}
+      {settingsOpen && <Settings onClose={() => { setGearKey(k => k + 1); setGearReverse(true); closeSettings(); }} initialTab={settingsInitialTab} />}
       <ToastContainer />
     </>
   );

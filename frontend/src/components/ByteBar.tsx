@@ -6,6 +6,7 @@ import {
   type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { PaperPlaneTilt } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { useTooltip } from '../context/TooltipContext';
 import { CMD_DEFS } from '../lib/cmd-defs';
@@ -76,6 +77,7 @@ export function ByteBar() {
   const [spanPhase, setSpanPhase] = useState<'idle' | 'exit' | 'enter'>('idle');
   const [phaseKey, setPhaseKey] = useState(0);
   const [typeKeys, setTypeKeys] = useState<number[]>(Array(BASE_CELLS).fill(0));
+  const [sendFlying, setSendFlying] = useState(false);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   // Always-fresh reference to shownValues, avoids stale closure in useEffect
@@ -442,10 +444,10 @@ export function ByteBar() {
       </div>
 
       <button
-        onClick={handleSend}
-        className="w-full mt-2 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+        onClick={() => { setSendFlying(true); setTimeout(() => setSendFlying(false), 550); handleSend(); }}
+        className="w-full mt-2 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center justify-center gap-1.5"
       >
-        Send
+        <span className={sendFlying ? 'icon-send-cycle' : ''}><PaperPlaneTilt size={15} /></span>Send
       </button>
 
           </div>{/* /px-4 pb-2 */}

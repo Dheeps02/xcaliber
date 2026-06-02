@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import type { A2lVariable } from '../lib/types';
+import { Info, MapPin, ArrowLineUp, ArrowLineDown } from '@phosphor-icons/react';
 import { Toggle } from './Toggle';
 
 function resolveAddr(input: string, a2lVars: A2lVariable[]): number | null {
@@ -17,13 +18,19 @@ function resolveAddr(input: string, a2lVars: A2lVariable[]): number | null {
 export function MtaBar() {
   const a2lVars   = useAppStore((s) => s.a2lVariables);
   const showToast = useAppStore((s) => s.showToast);
-  const showAlert = useAppStore((s) => s.showAlert);
+  const connected = useAppStore((s) => s.connected);
 
   const [mta, setMta]         = useState('');
   const [size, setSize]       = useState(8);
   const [autoMta, setAutoMta] = useState(true);
   const [suggestions, setSuggestions] = useState<A2lVariable[]>([]);
   const [suggOpen, setSuggOpen]       = useState(false);
+  const [mtaPinning, setMtaPinning]             = useState(false);
+  const [mtaJiggling, setMtaJiggling]           = useState(false);
+  const [uploadFlying, setUploadFlying]         = useState(false);
+  const [uploadJiggling, setUploadJiggling]     = useState(false);
+  const [downloadFlying, setDownloadFlying]     = useState(false);
+  const [downloadJiggling, setDownloadJiggling] = useState(false);
 
   useEffect(() => {
     const t = mta.trim();
@@ -41,25 +48,51 @@ export function MtaBar() {
 
   function resolveOrWarn(input: string): number | null {
     const t = input.trim();
+    if (!t) {
+      showToast('Enter an address or variable name first', 'info');
+      return null;
+    }
     const isHex = /^(?:0x)?[0-9a-fA-F]+$/i.test(t);
     if (!isHex && a2lVars.length === 0) {
-      showAlert('No A2L file loaded.\n\nLoad an A2L JSON file first to resolve variable names.');
+      showToast('No A2L file loaded — load one to resolve variable names', 'error');
       return null;
     }
     const addr = resolveAddr(t, a2lVars);
-    if (addr === null) { showToast('Invalid address or unknown variable', 'error'); }
+    if (addr === null) {
+      showToast(isHex ? 'Invalid hex address' : 'Unknown variable name', 'error');
+    }
     return addr;
   }
 
+  function jiggle(set: (v: boolean) => void) {
+    set(true);
+    setTimeout(() => set(false), 380);
+  }
+
   async function handleSetMta() {
+    if (!connected) {
+      showToast('Not connected to slave', 'error');
+      jiggle(setMtaJiggling);
+      return;
+    }
     const addr = resolveOrWarn(mta);
-    if (addr === null) return;
+    if (addr === null) { jiggle(setMtaJiggling); return; }
+    setMtaPinning(true);
+    setTimeout(() => setMtaPinning(false), 300);
     await api.setMta(0, addr).catch((e: Error) => showToast(e.message, 'error'));
   }
 
   async function handleUpload() {
+    if (!connected) {
+      showToast('Not connected to slave', 'error');
+      jiggle(setUploadJiggling);
+      return;
+    }
     const addr = resolveOrWarn(mta);
-    if (addr === null) return;
+    if (addr === null) { jiggle(setUploadJiggling); return; }
+
+    setUploadFlying(true);
+    setTimeout(() => setUploadFlying(false), 500);
     try {
       if (autoMta) await api.setMta(0, addr);
       await api.upload(size);
@@ -103,9 +136,10 @@ export function MtaBar() {
 
       <button
         onClick={handleSetMta}
-        className="px-2.5 py-1 rounded text-xs font-medium bg-purple-600/15 text-purple-400 border border-purple-500/30 hover:bg-purple-600/25 transition-colors active:scale-95"
+        disabled={autoMta}
+        className={`px-2.5 py-1 rounded text-xs font-medium bg-purple-600/15 text-purple-400 border border-purple-500/30 hover:bg-purple-600/25 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none ${mtaJiggling ? 'btn-jiggle' : ''}`}
       >
-        Set MTA
+        <span className={mtaPinning ? 'icon-pin-drop' : ''}><MapPin size={14} /></span>Set MTA
       </button>
 
       <div className="w-px h-4 bg-gray-800" />
@@ -126,20 +160,29 @@ export function MtaBar() {
       <div className="flex items-center gap-1.5">
         <button
           onClick={handleUpload}
-          className="px-3 py-1 rounded text-xs font-medium bg-green-600/15 text-green-400 border border-green-500/30 hover:bg-green-600/25 transition-colors active:scale-95"
+          className={`px-3 py-1 rounded text-xs font-medium bg-green-600/15 text-green-400 border border-green-500/30 hover:bg-green-600/25 transition-colors active:scale-95 flex items-center gap-1.5 ${uploadJiggling ? 'btn-jiggle' : ''}`}
         >
-          Upload
+          <span className={uploadFlying ? 'icon-upload-cycle' : ''}><ArrowLineUp size={14} /></span>Upload
         </button>
         <button
           disabled
           title="Download (write to slave) — not yet implemented"
-          className="px-3 py-1 rounded text-xs font-medium bg-orange-600/15 text-orange-400 border border-orange-500/30 opacity-40 cursor-not-allowed"
+          className={`px-3 py-1 rounded text-xs font-medium bg-orange-600/15 text-orange-400 border border-orange-500/30 opacity-40 cursor-not-allowed flex items-center gap-1.5 ${downloadJiggling ? 'btn-jiggle' : ''}`}
         >
-          Download
+          <span className={downloadFlying ? 'icon-download-cycle' : ''}><ArrowLineDown size={14} /></span>Download
         </button>
       </div>
 
-      <Toggle active={autoMta} onClick={() => setAutoMta(!autoMta)} label="Auto SET_MTA" />
+      <div className="flex items-center gap-1">
+        <Toggle active={autoMta} onClick={() => setAutoMta(!autoMta)} label="Auto SET_MTA" />
+        <div className="relative group">
+          <Info size={12} className="text-gray-600 hover:text-gray-400 transition-colors cursor-default shrink-0" />
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-gray-800 border border-gray-700 rounded shadow-xl px-2.5 py-2 text-[10px] text-gray-300 leading-relaxed opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-[9999]">
+            When enabled, a SET_MTA is sent automatically using the address above before every Upload — no need to click Set MTA manually each time.
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-700" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
