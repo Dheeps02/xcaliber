@@ -346,7 +346,7 @@ interface TreeProps {
   onDeleteEntry: (listId: number, odtId: number, entryIdx: number) => void;
   onRenameList: (listId: number, name: string | undefined) => void;
   onRenameOdt: (listId: number, odtId: number, name: string | undefined) => void;
-  onMoveEntry: (listId: number, odtId: number, fromIdx: number, toIdx: number) => void;
+  onMoveEntry: (fromListId: number, fromOdtId: number, fromIdx: number, toListId: number, toOdtId: number, toIdx: number) => void;
 }
 
 function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, onDeleteOdt, onSetEvent, onAddOdt, onSaveEntry, onDeleteEntry, onRenameList, onRenameOdt, onMoveEntry }: TreeProps) {
@@ -396,21 +396,39 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   useEffect(() => {
     function onPointerMove(e: PointerEvent) {
       if (!dragEntryRef.current) return;
-      const ds = dragEntryRef.current;
       const els = document.elementsFromPoint(e.clientX, e.clientY);
+
+      // Try to find an entry row first
       const entryEl = els.find(
         (el) => (el as HTMLElement).dataset?.entryIdx !== undefined
       ) as HTMLElement | undefined;
-      if (!entryEl) return;
-      const lId  = parseInt(entryEl.dataset.entryList ?? '');
-      const oId  = parseInt(entryEl.dataset.entryOdt  ?? '');
-      const eIdx = parseInt(entryEl.dataset.entryIdx  ?? '');
-      if (isNaN(lId) || isNaN(oId) || isNaN(eIdx) || lId !== ds.listId || oId !== ds.odtId) return;
-      const rect  = entryEl.getBoundingClientRect();
-      const above = e.clientY < rect.top + rect.height / 2;
-      const val   = { listId: lId, odtId: oId, toIdx: eIdx, above };
-      dropOverRef.current = val;
-      setDropOver(val);
+      if (entryEl) {
+        const lId  = parseInt(entryEl.dataset.entryList ?? '');
+        const oId  = parseInt(entryEl.dataset.entryOdt  ?? '');
+        const eIdx = parseInt(entryEl.dataset.entryIdx  ?? '');
+        if (isNaN(lId) || isNaN(oId) || isNaN(eIdx)) return;
+        const rect  = entryEl.getBoundingClientRect();
+        const above = e.clientY < rect.top + rect.height / 2;
+        const val   = { listId: lId, odtId: oId, toIdx: eIdx, above };
+        dropOverRef.current = val;
+        setDropOver(val);
+        return;
+      }
+
+      // Fallback: hovering over an empty ODT body
+      const odtEl = els.find(
+        (el) => (el as HTMLElement).dataset?.odtBody !== undefined
+      ) as HTMLElement | undefined;
+      if (odtEl) {
+        const lId = parseInt(odtEl.dataset.odtBodyList ?? '');
+        const oId = parseInt(odtEl.dataset.odtBodyOdt  ?? '');
+        if (isNaN(lId) || isNaN(oId)) return;
+        const targetOdt = listsRef.current.find(l => l.id === lId)?.odts.find(o => o.id === oId);
+        const entryCount = targetOdt?.entries.length ?? 0;
+        const val = { listId: lId, odtId: oId, toIdx: entryCount, above: true };
+        dropOverRef.current = val;
+        setDropOver(val);
+      }
     }
 
     function onPointerUp() {
@@ -423,28 +441,32 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
       document.body.style.userSelect = '';
       setDragEntry(null);
       setDropOver(null);
-      if (!dov || dov.listId !== de.listId || dov.odtId !== de.odtId) return;
+      if (!dov) return;
       const { fromIdx } = de;
+      const isSameOdt = dov.listId === de.listId && dov.odtId === de.odtId;
       const raw   = dov.above ? dov.toIdx : dov.toIdx + 1;
-      const toIdx = raw > fromIdx ? raw - 1 : raw;
-      if (toIdx === fromIdx) return;
+      // When staying in the same ODT we account for the removed slot; cross-ODT we don't.
+      const toIdx = isSameOdt && raw > fromIdx ? raw - 1 : raw;
+      if (isSameOdt && toIdx === fromIdx) return;
       const lst  = listsRef.current.find(l => l.id === de.listId);
       const odt  = lst?.odts.find(o => o.id === de.odtId);
       const name = odt?.entries[fromIdx]?.name ?? '';
       setRecentlyMoved(`${de.listId}:${de.odtId}:${name}`);
       setTimeout(() => setRecentlyMoved(null), 450);
-      // Snapshot current Y positions right now — after any container animations have settled
+      // Snapshot both ODTs so the FLIP can animate entries in both source and target
       const snap = new Map<string, number>();
-      const snapOdt = listsRef.current.find(l => l.id === de.listId)?.odts.find(o => o.id === de.odtId);
-      if (snapOdt) {
-        for (const e of snapOdt.entries) {
-          const k = `${de.listId}:${de.odtId}:${e.name}`;
+      const snapshotOdt = (lId: number, oId: number) => {
+        const o = listsRef.current.find(l => l.id === lId)?.odts.find(o => o.id === oId);
+        o?.entries.forEach(e => {
+          const k = `${lId}:${oId}:${e.name}`;
           const el = entryElsRef.current.get(k);
           if (el) snap.set(k, el.getBoundingClientRect().top);
-        }
-      }
+        });
+      };
+      snapshotOdt(de.listId, de.odtId);
+      if (!isSameOdt) snapshotOdt(dov.listId, dov.odtId);
       snapshotRef.current = snap;
-      onMoveEntry(de.listId, de.odtId, fromIdx, toIdx);
+      onMoveEntry(de.listId, de.odtId, fromIdx, dov.listId, dov.odtId, toIdx);
     }
 
     window.addEventListener('pointermove', onPointerMove);
@@ -675,16 +697,28 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                             }}
                           >
                             <div style={{ minHeight: 0, overflow: 'hidden' }}>
-                              <div className="daq-odt-body" style={{ position: 'relative' }}>
-                                {/* Sliding drop indicator — glides between positions as you drag */}
+                              <div
+                                className="daq-odt-body"
+                                style={{ position: 'relative' }}
+                                data-odt-body=""
+                                data-odt-body-list={list.id}
+                                data-odt-body-odt={odt.id}
+                              >
+                                {/* Sliding drop indicator — always rendered in the TARGET ODT */}
                                 {(() => {
-                                  if (!dragEntry || dragEntry.listId !== list.id || dragEntry.odtId !== odt.id) return null;
-                                  if (!dropOver  || dropOver.listId  !== list.id || dropOver.odtId  !== odt.id) return null;
-                                  const { fromIdx } = dragEntry;
+                                  if (!dragEntry || !dropOver) return null;
+                                  if (dropOver.listId !== list.id || dropOver.odtId !== odt.id) return null;
+                                  const isSameOdt = dragEntry.listId === list.id && dragEntry.odtId === odt.id;
                                   const raw = dropOver.above ? dropOver.toIdx : dropOver.toIdx + 1;
-                                  const effectiveToIdx = raw > fromIdx ? raw - 1 : raw;
-                                  if (effectiveToIdx === fromIdx) return null;
-                                  const lineIdx = fromIdx < effectiveToIdx ? effectiveToIdx + 1 : effectiveToIdx;
+                                  let lineIdx: number;
+                                  if (isSameOdt) {
+                                    const { fromIdx } = dragEntry;
+                                    const effectiveToIdx = raw > fromIdx ? raw - 1 : raw;
+                                    if (effectiveToIdx === fromIdx) return null;
+                                    lineIdx = fromIdx < effectiveToIdx ? effectiveToIdx + 1 : effectiveToIdx;
+                                  } else {
+                                    lineIdx = raw; // cross-ODT: no slot adjustment needed
+                                  }
                                   const firstKey = `${list.id}:${odt.id}:${odt.entries[0]?.name ?? ''}`;
                                   const entryH   = entryElsRef.current.get(firstKey)?.offsetHeight ?? 24;
                                   return (
@@ -1444,20 +1478,43 @@ export function Daq() {
     ));
   }
 
-  function handleMoveEntry(listId: number, odtId: number, fromIdx: number, toIdx: number) {
-    setDaqLists(daqLists.map(l => {
-      if (l.id !== listId) return l;
-      return {
-        ...l,
-        odts: l.odts.map(o => {
-          if (o.id !== odtId) return o;
-          const entries = [...o.entries];
-          const [removed] = entries.splice(fromIdx, 1);
-          entries.splice(toIdx, 0, removed);
-          return { ...o, entries };
-        }),
-      };
-    }));
+  function handleMoveEntry(fromListId: number, fromOdtId: number, fromIdx: number, toListId: number, toOdtId: number, toIdx: number) {
+    if (fromListId === toListId && fromOdtId === toOdtId) {
+      // Same ODT: reorder in place
+      setDaqLists(daqLists.map(l => {
+        if (l.id !== fromListId) return l;
+        return {
+          ...l,
+          odts: l.odts.map(o => {
+            if (o.id !== fromOdtId) return o;
+            const entries = [...o.entries];
+            const [removed] = entries.splice(fromIdx, 1);
+            entries.splice(toIdx, 0, removed);
+            return { ...o, entries };
+          }),
+        };
+      }));
+    } else {
+      // Cross-ODT or cross-list: remove from source, insert into target atomically
+      const entry = daqLists.find(l => l.id === fromListId)?.odts.find(o => o.id === fromOdtId)?.entries[fromIdx];
+      if (!entry) return;
+      setDaqLists(daqLists.map(l => {
+        if (l.id === fromListId && l.id === toListId) {
+          // Same list, different ODT
+          return {
+            ...l,
+            odts: l.odts.map(o => {
+              if (o.id === fromOdtId) return { ...o, entries: o.entries.filter((_, i) => i !== fromIdx) };
+              if (o.id === toOdtId)   { const e = [...o.entries]; e.splice(toIdx, 0, entry); return { ...o, entries: e }; }
+              return o;
+            }),
+          };
+        }
+        if (l.id === fromListId) return { ...l, odts: l.odts.map(o => o.id !== fromOdtId ? o : { ...o, entries: o.entries.filter((_, i) => i !== fromIdx) }) };
+        if (l.id === toListId)   { return { ...l, odts: l.odts.map(o => { if (o.id !== toOdtId) return o; const e = [...o.entries]; e.splice(toIdx, 0, entry); return { ...o, entries: e }; }) }; }
+        return l;
+      }));
+    }
   }
 
   function handleSaveDaq() {
