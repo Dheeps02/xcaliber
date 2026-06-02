@@ -153,6 +153,17 @@ body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; ba
   animation: tab-fade-in 180ms ease-out;
 }
 
+/* Eraser wiggle */
+@keyframes icon-wiggle {
+  0%   { transform: rotate(0deg); }
+  20%  { transform: rotate(-14deg); }
+  40%  { transform: rotate(12deg); }
+  60%  { transform: rotate(-8deg); }
+  80%  { transform: rotate(5deg); }
+  100% { transform: rotate(0deg); }
+}
+.icon-wiggle { animation: icon-wiggle 380ms cubic-bezier(0.36,0.07,0.19,0.97) both; }
+
 /* Disable all animations */
 .no-animations *,
 .no-animations *::before,

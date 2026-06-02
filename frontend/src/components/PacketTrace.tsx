@@ -7,6 +7,18 @@ import {
   type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import {
+  PaperPlaneTilt,
+  DownloadSimple,
+  WarningCircle,
+  Funnel,
+  CornersOut,
+  CornersIn,
+  Eraser,
+  CaretDown,
+  CaretUp,
+  CaretRight,
+} from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { formatLabel, toTitleCase, formatTime } from '../lib/utils';
 import type { PacketEntry, UserCmdDef } from '../lib/types';
@@ -141,7 +153,12 @@ function ExpandDetail({ p, colSpan, open }: { p: PacketEntry; colSpan: number; o
       <td colSpan={colSpan} className="overflow-hidden p-0">
         <div className={`expand-content ${open ? 'px-6 pb-3 pt-1' : 'closed'}`} style={{ maxHeight: open ? '300px' : undefined }}>
           <div className={`text-[10px] mb-1.5 uppercase tracking-wider ${isErr ? 'text-red-500' : 'text-gray-500'}`}>
-            {p.direction === 'tx' ? `→ TX · PID 0x${p.pid}` : isErr ? `✕ ERR · PID 0x${p.pid}` : `← RX · PID 0x${p.pid}`}
+            {p.direction === 'tx'
+            ? <><PaperPlaneTilt size={11} className="inline mr-1" />TX · PID 0x{p.pid}</>
+            : isErr
+            ? <><WarningCircle size={11} className="inline mr-1" />ERR · PID 0x{p.pid}</>
+            : <><DownloadSimple size={11} className="inline mr-1" />RX · PID 0x{p.pid}</>
+          }
           </div>
           <div className="space-y-0.5 text-xs">
             {rows.length > 0 ? (
@@ -178,7 +195,12 @@ function ExpandDetailFlat({ p, open, extraFields }: { p: PacketEntry; open: bool
     <div className="bg-gray-900/60 overflow-hidden">
       <div className={`expand-content ${open ? 'px-6 pb-3 pt-1' : 'closed'}`} style={{ maxHeight: open ? '300px' : undefined }}>
         <div className={`text-[10px] mb-1.5 uppercase tracking-wider ${isErr ? 'text-red-500' : 'text-gray-500'}`}>
-          {p.direction === 'tx' ? `→ TX · PID 0x${p.pid}` : isErr ? `✕ ERR · PID 0x${p.pid}` : `← RX · PID 0x${p.pid}`}
+          {p.direction === 'tx'
+            ? <><PaperPlaneTilt size={11} className="inline mr-1" />TX · PID 0x{p.pid}</>
+            : isErr
+            ? <><WarningCircle size={11} className="inline mr-1" />ERR · PID 0x{p.pid}</>
+            : <><DownloadSimple size={11} className="inline mr-1" />RX · PID 0x{p.pid}</>
+          }
         </div>
         <div className="space-y-0.5 text-xs">
           {rows.length > 0 ? (
@@ -308,6 +330,8 @@ export function PacketTrace() {
   const [colWidths, setColWidths] = useState([160, 60, 52, 120]);
   const [traceVisible, setTraceVisible] = useState(true);
   const [pidAnchor, setPidAnchor] = useState<HTMLElement | null>(null);
+  const [eraserHovered, setEraserHovered] = useState(false);
+  const [eraserWiggling, setEraserWiggling] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // IDs whose entry animation has already completed — used to suppress re-animation on re-render
@@ -485,9 +509,7 @@ export function PacketTrace() {
             }`}
             title="Filter by PID"
           >
-            <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-              <path d="M1 2.5A.5.5 0 0 1 1.5 2h13a.5.5 0 0 1 .35.854L10 7.707V13.5a.5.5 0 0 1-.223.416l-3 2A.5.5 0 0 1 6 15.5V7.707L1.15 2.854A.5.5 0 0 1 1 2.5z" />
-            </svg>
+            <Funnel size={14} weight={selectedPids.size > 0 ? 'fill' : 'regular'} />
             {selectedPids.size > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full text-[7px] text-white flex items-center justify-center">
                 {selectedPids.size}
@@ -496,9 +518,10 @@ export function PacketTrace() {
           </button>
           <button
             onClick={allCollapsed ? expandAll : collapseAll}
-            className="h-6 px-2 rounded text-[10px] flex items-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors shrink-0"
+            className="h-6 px-2 rounded text-[10px] flex items-center gap-1.5 text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors shrink-0"
           >
-            {allCollapsed ? '⊞ Expand All' : '⊟ Collapse All'}
+            {allCollapsed ? <CornersOut size={13} /> : <CornersIn size={13} />}
+            {allCollapsed ? 'Expand All' : 'Collapse All'}
           </button>
         </div>
 
@@ -513,16 +536,25 @@ export function PacketTrace() {
             Auto-scroll
           </label>
           <button
-            onClick={handleClear}
-            className="h-6 px-2 rounded text-[10px] flex items-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors"
+            onClick={() => {
+              setEraserWiggling(true);
+              setTimeout(() => setEraserWiggling(false), 400);
+              handleClear();
+            }}
+            onMouseEnter={() => setEraserHovered(true)}
+            onMouseLeave={() => setEraserHovered(false)}
+            className="h-6 px-2 rounded text-[10px] flex items-center gap-1.5 text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors"
           >
+            <span className={eraserWiggling ? 'icon-wiggle' : ''}>
+              <Eraser size={13} weight={eraserHovered || eraserWiggling ? 'fill' : 'regular'} />
+            </span>
             Clear
           </button>
           <button
             onClick={() => setTraceVisible(!traceVisible)}
-            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 text-xs transition-colors"
+            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
           >
-            {traceVisible ? '▼' : '▲'}
+            {traceVisible ? <CaretDown size={13} /> : <CaretUp size={13} />}
           </button>
         </div>
       </div>
@@ -587,11 +619,14 @@ export function PacketTrace() {
                         <td className="px-2 py-1">
                           <div className="flex items-center gap-1.5">
                             <button
-                              className="text-gray-500 hover:text-gray-300 text-[10px] w-3 shrink-0 leading-none transition-colors"
+                              className="text-gray-500 hover:text-gray-300 w-3 h-3 shrink-0 flex items-center justify-center transition-colors"
                               onClick={(e) => toggleGroup(g.key, e)}
                               title={isGroupCollapsed ? 'Expand' : 'Collapse'}
                             >
-                              {isGroupCollapsed ? '▸' : '▾'}
+                              <CaretRight
+                                size={10}
+                                className={`transition-transform duration-200 ${isGroupCollapsed ? '' : 'rotate-90'}`}
+                              />
                             </button>
                             <span className="text-gray-300 font-medium text-[11px]">{cmdLabel}</span>
                             {!isGroupCollapsed && <div className="flex-1 h-px bg-gray-800/60 ml-1" />}
