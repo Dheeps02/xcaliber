@@ -75,13 +75,6 @@ const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 4
     + points.slice(1).map(p => `L ${p.x},${p.y}`).join(' ')
     + ` L ${last.x},${H} L ${first.x},${H} Z`;
 
-  // Vertical grid lines: ~5 columns, spacing scales with zoom
-  const gridStep = Math.max(1, Math.round(slice.length / 5));
-  const vertLines: number[] = [];
-  for (let i = gridStep; i < slice.length - 1; i += gridStep) {
-    vertLines.push((i / (slice.length - 1)) * (W - 4) + 2);
-  }
-
   return (
     <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" className="block">
       <defs>
@@ -94,11 +87,6 @@ const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 4
       {/* Background */}
       <rect width={W} height={H} fill={color} fillOpacity={0.06} />
 
-      {/* Grid */}
-      <line x1={2} y1={H / 2} x2={W - 2} y2={H / 2} stroke="#374151" strokeWidth={0.5} />
-      {vertLines.map((x, i) => (
-        <line key={i} x1={x} y1={0} x2={x} y2={H} stroke="#374151" strokeWidth={0.5} />
-      ))}
 
       {/* Gradient fill */}
       <path d={fillPath} fill={`url(#${gradId})`} />
@@ -381,9 +369,9 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   const [dropOver, setDropOver] = useState<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const dropOverRef = useRef<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const [recentlyMoved, setRecentlyMoved] = useState<string | null>(null);
-  const listsRef    = useRef(lists);
-  const entryElsRef = useRef<Map<string, HTMLElement>>(new Map());
-  const snapshotRef = useRef<Map<string, number>>(new Map());
+  const listsRef      = useRef(lists);
+  const entryElsRef   = useRef<Map<string, HTMLElement>>(new Map());
+  const prevEntryYRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (renamingKey && renameInputRef.current) {
@@ -445,18 +433,6 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
       const name = odt?.entries[fromIdx]?.name ?? '';
       setRecentlyMoved(`${de.listId}:${de.odtId}:${name}`);
       setTimeout(() => setRecentlyMoved(null), 450);
-      // Snapshot Y positions of all entries in the affected ODT before React re-renders
-      const snap = new Map<string, number>();
-      const snapLst = listsRef.current.find(l => l.id === de.listId);
-      const snapOdt = snapLst?.odts.find(o => o.id === de.odtId);
-      if (snapOdt) {
-        for (const e of snapOdt.entries) {
-          const k = `${de.listId}:${de.odtId}:${e.name}`;
-          const el = entryElsRef.current.get(k);
-          if (el) snap.set(k, el.getBoundingClientRect().top);
-        }
-      }
-      snapshotRef.current = snap;
       onMoveEntry(de.listId, de.odtId, fromIdx, toIdx);
     }
 
@@ -468,23 +444,31 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
     };
   }, [onMoveEntry]);
 
-  // FLIP: runs after React commits the reordered list, before the browser paints.
-  // Applies an inverse translateY so entries appear to start at their old positions,
-  // then animates to zero (their real new position).
+  // FLIP for entry reorder: snapshot-before is stored in prevEntryYRef from the previous render.
+  // After React commits the new list order, useLayoutEffect reads old vs new Y and plays the
+  // inverse-translate trick. transitionend cleans up inline styles so they don't ghost later.
   useLayoutEffect(() => {
-    if (snapshotRef.current.size === 0) return;
-    for (const [key, prevY] of snapshotRef.current) {
-      const el = entryElsRef.current.get(key);
-      if (!el) continue;
-      const dy = prevY - el.getBoundingClientRect().top;
+    const prev = prevEntryYRef.current;
+    const next = new Map<string, number>();
+    for (const [key, el] of entryElsRef.current) {
+      const currentY = el.getBoundingClientRect().top;
+      next.set(key, currentY);
+      const oldY = prev.get(key);
+      if (oldY === undefined) continue;           // newly added entry — no animation
+      const dy = oldY - currentY;
       if (Math.abs(dy) < 1) continue;
       el.style.transition = 'none';
       el.style.transform  = `translateY(${dy}px)`;
-      void el.offsetHeight; // force synchronous reflow so the browser registers the "from" state
+      void el.offsetHeight;                       // synchronous reflow: lock in "from" state
       el.style.transition = 'transform 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
       el.style.transform  = '';
+      el.addEventListener('transitionend', function onEnd(ev: Event) {
+        if ((ev as TransitionEvent).propertyName !== 'transform') return;
+        el.style.transition = '';
+        el.removeEventListener('transitionend', onEnd);
+      });
     }
-    snapshotRef.current = new Map();
+    prevEntryYRef.current = next;
   }, [lists]);
 
   function toggleCollapse(key: string) {
@@ -849,13 +833,22 @@ interface LiveRow {
   isNew: boolean;
 }
 
+const EXPAND_STAGGER  = 55;   // ms between each row fading in
+const EXPAND_FADE_DUR = 200;  // row fade-in duration
+const PLOT_REVEAL_DUR = 420;  // plot clip-reveal duration
+const PLOT_OFFSET     = 120;  // extra ms before plot starts (after row begins)
+const ROW_ENTER_DUR   = 280;  // daq-row-enter animation duration
+
 function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
   const liveValues = useAppStore(s => s.daqLiveValues);
   const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS);
   const [animatedKeys, setAnimatedKeys] = useState<Set<string>>(new Set());
   const [zoom, setZoom] = useState(40);
   const [collapsedLists, setCollapsedLists] = useState<Set<number>>(new Set());
-  const prevKeysRef = useRef<Set<string>>(new Set());
+  const [expandingLists, setExpandingLists] = useState<Set<number>>(new Set());
+  const prevKeysRef  = useRef<Set<string>>(new Set());
+  const rowElsRef    = useRef<Map<string, HTMLElement>>(new Map());
+  const prevRowYRef  = useRef<Map<string, number>>(new Map());
 
   // Stable zoom handler passed to each Sparkline
   const handleZoom = useCallback((dir: number) => {
@@ -908,6 +901,31 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
     }, 600);
     return () => clearTimeout(t);
   }, [rows.map(r => r.key).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // FLIP for live-table rows — same prevYRef pattern as DaqTree
+  useLayoutEffect(() => {
+    const prev = prevRowYRef.current;
+    const next = new Map<string, number>();
+    for (const [key, el] of rowElsRef.current) {
+      const currentY = el.getBoundingClientRect().top;
+      next.set(key, currentY);
+      const oldY = prev.get(key);
+      if (oldY === undefined) continue;
+      const dy = oldY - currentY;
+      if (Math.abs(dy) < 1) continue;
+      el.style.transition = 'none';
+      el.style.transform  = `translateY(${dy}px)`;
+      void el.offsetHeight;
+      el.style.transition = 'transform 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      el.style.transform  = '';
+      el.addEventListener('transitionend', function onEnd(ev: Event) {
+        if ((ev as TransitionEvent).propertyName !== 'transform') return;
+        el.style.transition = '';
+        el.removeEventListener('transitionend', onEnd);
+      });
+    }
+    prevRowYRef.current = next;
+  }, [lists]);
 
   function startResize(col: keyof typeof DEFAULT_COL_WIDTHS, e: ReactMouseEvent) {
     e.preventDefault();
@@ -988,11 +1006,20 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
                       <td
                         colSpan={6}
                         className={`px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-800 cursor-pointer select-none hover:bg-gray-800/40 transition-colors bg-gray-900/70 ${gi > 0 ? 'border-t border-t-gray-700' : ''}`}
-                        onClick={() => setCollapsedLists(prev => {
-                          const next = new Set(prev);
-                          if (next.has(list.id)) next.delete(list.id); else next.add(list.id);
-                          return next;
-                        })}
+                        onClick={() => {
+                          const wasCollapsed = collapsedLists.has(list.id);
+                          setCollapsedLists(prev => {
+                            const next = new Set(prev);
+                            if (next.has(list.id)) next.delete(list.id); else next.add(list.id);
+                            return next;
+                          });
+                          if (wasCollapsed) {
+                            setExpandingLists(e => new Set([...e, list.id]));
+                            setTimeout(() => {
+                              setExpandingLists(e => { const n = new Set(e); n.delete(list.id); return n; });
+                            }, 50 + listRows.length * EXPAND_STAGGER + EXPAND_FADE_DUR + PLOT_REVEAL_DUR + 100);
+                          }
+                        }}
                       >
                         <span className="mr-1 inline-block">{isCollapsed ? '▸' : '▾'}</span>
                         {list.name ?? `List ${list.id}`}
@@ -1010,20 +1037,32 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
                         >
                           <div style={{ minHeight: 0, overflow: 'hidden' }}>
                             {listRows.map((row, ri) => {
-                              const isAnimating = animatedKeys.has(row.key);
-                              const rowColor = odtColors[`${row.listId}:${row.odtId}`] ?? ODT_COLORS[0];
+                              const isAnimating  = animatedKeys.has(row.key);
+                              const isExpanding  = expandingLists.has(list.id);
+                              const rowColor     = odtColors[`${row.listId}:${row.odtId}`] ?? ODT_COLORS[0];
+                              const rowBaseDelay = isExpanding ? 50 + ri * EXPAND_STAGGER : ri * 40;
+                              const rowStyle: React.CSSProperties | undefined =
+                                isAnimating ? { animationDelay: `${ri * 40}ms` } :
+                                isExpanding ? { animation: `daq-row-fade-in ${EXPAND_FADE_DUR}ms ease-out both`, animationDelay: `${rowBaseDelay}ms` } :
+                                undefined;
+                              const plotStyle: React.CSSProperties | undefined =
+                                (isAnimating || isExpanding) ? {
+                                  animation: `daq-plot-reveal ${PLOT_REVEAL_DUR}ms ease-out both`,
+                                  animationDelay: `${rowBaseDelay + (isAnimating ? ROW_ENTER_DUR - 30 : PLOT_OFFSET)}ms`,
+                                } : undefined;
                               return (
                                 <div
                                   key={row.key}
+                                  ref={(el) => { if (el) rowElsRef.current.set(row.key, el); else rowElsRef.current.delete(row.key); }}
                                   className={`flex border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors text-xs font-mono ${isAnimating ? 'daq-row-enter' : ''}`}
-                                  style={isAnimating ? { animationDelay: `${ri * 40}ms` } : undefined}
+                                  style={rowStyle}
                                 >
                                   <div className="px-3 py-1.5 text-gray-300 truncate overflow-hidden" style={{ width: colWidths.signal, flexShrink: 0 }}>{row.entry.name}</div>
                                   <div className={`px-3 py-1.5 tabular-nums ${row.value !== null ? 'text-green-400' : 'text-gray-600'}`} style={{ width: colWidths.value, flexShrink: 0 }}>{formatValue(row.value, row.entry.type_name)}</div>
                                   <div className="px-3 py-1.5 text-gray-500" style={{ width: colWidths.type, flexShrink: 0 }}>{row.entry.type_name}</div>
                                   <div className="px-3 py-1.5 text-gray-500" style={{ width: colWidths.address, flexShrink: 0 }}>0x{row.entry.addr.toString(16).padStart(8, '0').toUpperCase()}</div>
                                   <div className="px-3 py-1.5 text-gray-600" style={{ width: colWidths.listOdt, flexShrink: 0 }}>{row.listId}/{row.odtId}</div>
-                                  <div className="px-2 py-1 flex-1 min-w-0">
+                                  <div className="px-2 py-1 flex-1 min-w-0" style={plotStyle}>
                                     <Sparkline history={row.history} color={rowColor} zoom={zoom} onZoomChange={handleZoom} />
                                   </div>
                                 </div>
@@ -1044,6 +1083,34 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
     </div>
   );
 }
+// ── Directional animated DTO rate counter ────────────────────────
+function DtoRateCount({ value }: { value: number }) {
+  const [displayed, setDisplayed] = useState(value);
+  const [animKey,   setAnimKey]   = useState(0);
+  const [animCls,   setAnimCls]   = useState('');
+  const prevRef = useRef(value);
+  const timer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (value === prevRef.current) return;
+    const up = value > prevRef.current;
+    prevRef.current = value;
+    setDisplayed(value);
+    setAnimKey(k => k + 1);
+    setAnimCls(up ? 'count-tick' : 'count-enter-from-top');
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setAnimCls(''), 260);
+  }, [value]);
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  return (
+    <span key={animKey} className={animCls} style={{ display: 'inline-block', overflow: 'hidden' }}>
+      {displayed}
+    </span>
+  );
+}
+
 interface ToolbarProps {
   lists: DaqList[];
   configuring: boolean;
