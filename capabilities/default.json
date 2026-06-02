@@ -5,6 +5,6 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:allow-reveal-item-in-file-explorer"
+    "opener:allow-reveal-item-in-dir"
   ]
 }

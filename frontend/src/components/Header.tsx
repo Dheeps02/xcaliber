@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { FileCode, Link, LinkBreak, Broadcast, ArrowsClockwise, GearSix, X, FolderOpen } from '@phosphor-icons/react';
-import { revealItemInFileExplorer } from '@tauri-apps/plugin-opener';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import { Settings } from './Settings';
@@ -89,7 +89,7 @@ export function Header() {
             <div className="flex items-center gap-1 min-w-0">
               {a2lFilePath ? (
                 <button
-                  onClick={() => revealItemInFileExplorer(a2lFilePath).catch(() => {})}
+                  onClick={() => revealItemInDir(a2lFilePath).catch(() => {})}
                   title="Reveal in file explorer"
                   className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300 truncate max-w-[160px] transition-colors"
                 >
