@@ -73,6 +73,7 @@ export interface AppConfig {
   custom_commands?: CustomCommandConfig[];
   events: EventDef[];
   user_cmds?: UserCmdDef[];
+  endian?: string;
 }
 
 // ── USER_CMD (0xF1) types ─────────────────────────────────────────

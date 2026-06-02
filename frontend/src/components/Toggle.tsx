@@ -3,8 +3,8 @@ export function Toggle({ active, onClick, label }: { active: boolean; onClick: (
     <div onClick={onClick} className="flex items-center gap-2 select-none cursor-pointer">
       <svg
         viewBox="0 0 256 256"
-        width={22}
-        height={22}
+        width={28}
+        height={28}
         fill="currentColor"
         className={`transition-colors shrink-0 ${active ? 'text-blue-400' : 'text-gray-600'}`}
       >

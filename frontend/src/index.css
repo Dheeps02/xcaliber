@@ -274,6 +274,19 @@ body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; ba
 }
 .icon-pop { animation: icon-pop 140ms cubic-bezier(0.34,1.4,0.64,1) both; }
 
+@keyframes icon-flip-expand {
+  0%   { transform: perspective(160px) rotateY(-90deg) scale(0.7);  opacity: 0.2; }
+  65%  { transform: perspective(160px) rotateY(0deg)   scale(1.1);  opacity: 1; }
+  100% { transform: perspective(160px) rotateY(0deg)   scale(1);    opacity: 1; }
+}
+@keyframes icon-flip-collapse {
+  0%   { transform: perspective(160px) rotateY(-90deg) scale(0.7);  opacity: 0.2; }
+  65%  { transform: perspective(160px) rotateY(0deg)   scale(0.88); opacity: 1; }
+  100% { transform: perspective(160px) rotateY(0deg)   scale(1);    opacity: 1; }
+}
+.icon-flip-expand   { animation: icon-flip-expand   240ms cubic-bezier(0.34,1.1,0.64,1) both; }
+.icon-flip-collapse { animation: icon-flip-collapse  240ms cubic-bezier(0.34,1.1,0.64,1) both; }
+
 /* ── Blocking modal backdrop + panel animations ─────────────────── */
 @keyframes modal-backdrop-in {
   from { opacity: 0; backdrop-filter: blur(0px); }
@@ -568,6 +581,7 @@ select {
   --color-gray-300: #9daec2;
   --color-gray-200: #c8d3dd;
   --color-gray-100: #eceff4;   /* nord6 */
+  --color-blue-900: #1a3553;   /* dark frost for bg tints */
   --color-blue-600: #4275a0;
   --color-blue-500: #5e81ac;   /* nord10 */
   --color-blue-400: #81a1c1;   /* nord9 */
@@ -590,9 +604,10 @@ select {
   --color-gray-300: #3b4252;   /* nord1 */
   --color-gray-200: #2e3440;   /* nord0 */
   --color-gray-100: #222730;   /* darker heading */
-  --color-blue-600: #4275a0;
-  --color-blue-500: #5e81ac;   /* nord10 — button bg */
-  --color-blue-400: #5e81ac;   /* same — readable on light bg */
+  --color-blue-900: #1a3553;   /* dark frost for bg tints */
+  --color-blue-600: #3a6a94;   /* darker button bg for light theme */
+  --color-blue-500: #5e81ac;   /* nord10 — primary accent */
+  --color-blue-400: #7498bc;   /* lighter hover state */
   --color-blue-300: #81a1c1;   /* nord9 */
   --color-green-400: #4d8c38;  /* darkened aurora green */
   --color-red-400:   #bf616a;  /* nord11 */
@@ -613,6 +628,7 @@ select {
   --color-gray-300: #9399b2;   /* Overlay2 */
   --color-gray-200: #bac2de;   /* Subtext1 */
   --color-gray-100: #cdd6f4;   /* Text */
+  --color-blue-900: #0d1e3f;   /* dark blue for bg tints */
   --color-blue-600: #3a5db5;   /* darkened Blue for button bg */
   --color-blue-500: #89b4fa;   /* Blue */
   --color-blue-400: #74c7ec;   /* Sapphire */
@@ -635,9 +651,10 @@ select {
   --color-gray-300: #6c6f85;   /* Subtext0 */
   --color-gray-200: #5c5f77;   /* Subtext1 */
   --color-gray-100: #4c4f69;   /* Text */
-  --color-blue-600: #1e66f5;   /* Blue */
-  --color-blue-500: #1e66f5;
-  --color-blue-400: #1e66f5;   /* same — readable on light bg */
+  --color-blue-900: #0d1e3f;   /* dark blue for bg tints */
+  --color-blue-600: #1652ca;   /* darker pressed/button bg */
+  --color-blue-500: #1e66f5;   /* Blue — official primary */
+  --color-blue-400: #4f80f7;   /* lighter hover state */
   --color-blue-300: #7287fd;   /* Lavender */
   --color-green-400: #40a02b;  /* Green */
   --color-red-400:   #d20f39;  /* Red */
@@ -658,13 +675,14 @@ select {
   --color-gray-300: #a89984;   /* fg3 */
   --color-gray-200: #d5c4a1;   /* fg2 */
   --color-gray-100: #ebdbb2;   /* fg1 */
-  --color-blue-600: #1d6c6c;   /* darkened aqua for button bg */
-  --color-blue-500: #458588;   /* blue neutral */
-  --color-blue-400: #83a598;   /* blue bright */
-  --color-blue-300: #8ec07c;   /* aqua bright */
-  --color-green-400: #b8bb26;  /* green bright */
-  --color-red-400:   #fb4934;  /* red bright */
-  --color-amber-500: #fabd2f;  /* yellow bright */
+  --color-blue-900: #132e2e;   /* dark teal for bg tints */
+  --color-blue-600: #1d6c6c;   /* darkened teal for button bg */
+  --color-blue-500: #458588;   /* neutral_blue */
+  --color-blue-400: #83a598;   /* bright_blue */
+  --color-blue-300: #8ec07c;   /* bright_aqua */
+  --color-green-400: #b8bb26;  /* bright_green */
+  --color-red-400:   #fb4934;  /* bright_red */
+  --color-amber-500: #fabd2f;  /* bright_yellow */
 }
 [data-theme="gruvbox-dark"] body { background: #1d2021; }
 
@@ -680,13 +698,14 @@ select {
   --color-gray-300: #665c54;   /* fg1 */
   --color-gray-200: #504945;   /* fg */
   --color-gray-100: #3c3836;   /* fg0 — darkest text */
-  --color-blue-600: #076678;   /* bright_blue dark */
-  --color-blue-500: #458588;   /* blue neutral */
-  --color-blue-400: #458588;
-  --color-blue-300: #83a598;   /* blue bright */
-  --color-green-400: #79740e;  /* green bright light */
-  --color-red-400:   #9d0006;  /* red bright light */
-  --color-amber-500: #b57614;  /* yellow bright light */
+  --color-blue-900: #132e2e;   /* dark teal for bg tints */
+  --color-blue-600: #076678;   /* faded_blue — button bg */
+  --color-blue-500: #458588;   /* neutral_blue */
+  --color-blue-400: #5c9ea0;   /* lighter hover state */
+  --color-blue-300: #83a598;   /* bright_blue */
+  --color-green-400: #79740e;  /* faded_green */
+  --color-red-400:   #9d0006;  /* faded_red */
+  --color-amber-500: #b57614;  /* faded_yellow */
 }
 [data-theme="gruvbox-light"] body { background: #f9f5d7; color: #3c3836; }
 [data-theme="gruvbox-light"] ::-webkit-scrollbar-thumb { background: #d5c4a1; }
@@ -703,10 +722,11 @@ select {
   --color-gray-300: #9da9a0;   /* grey2 */
   --color-gray-200: #c0c9c0;
   --color-gray-100: #d3c6aa;   /* fg */
-  --color-blue-600: #3d7d74;   /* darkened aqua */
+  --color-blue-900: #122e2c;   /* dark teal for bg tints */
+  --color-blue-600: #3d7d74;   /* darkened teal for button bg */
   --color-blue-500: #7fbbb3;   /* blue */
   --color-blue-400: #83c092;   /* aqua */
-  --color-blue-300: #a7c080;   /* green */
+  --color-blue-300: #9ecfcb;   /* light teal — was green, fixed */
   --color-green-400: #a7c080;  /* green */
   --color-red-400:   #e67e80;  /* red */
   --color-amber-500: #dbbc7f;  /* yellow */
@@ -725,10 +745,11 @@ select {
   --color-gray-300: #6b7472;
   --color-gray-200: #5c6a72;   /* fg */
   --color-gray-100: #4a5560;   /* darker heading */
-  --color-blue-600: #3a7da0;   /* darkened blue */
-  --color-blue-500: #3a94c5;   /* blue */
-  --color-blue-400: #3a94c5;
-  --color-blue-300: #35a77c;   /* aqua */
+  --color-blue-900: #0e3550;   /* dark blue for bg tints */
+  --color-blue-600: #2a6d90;   /* darker button bg */
+  --color-blue-500: #3a94c5;   /* blue — official */
+  --color-blue-400: #5aacd4;   /* lighter hover state */
+  --color-blue-300: #35a77c;   /* aqua/cyan */
   --color-green-400: #6f8b26;  /* darkened green */
   --color-red-400:   #e05050;  /* red */
   --color-amber-500: #c08a00;  /* darkened yellow */

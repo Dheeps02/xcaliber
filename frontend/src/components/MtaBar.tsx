@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import type { A2lVariable } from '../lib/types';
 import { Info, MapPin, ArrowLineUp, ArrowLineDown } from '@phosphor-icons/react';
 import { Toggle } from './Toggle';
+import { useTooltip } from '../context/TooltipContext';
 
 function resolveAddr(input: string, a2lVars: A2lVariable[]): number | null {
   const t = input.trim();
@@ -15,23 +16,39 @@ function resolveAddr(input: string, a2lVars: A2lVariable[]): number | null {
   return v ? v.addr : null;
 }
 
+// Tiny label above an input — same typographic style as ByteBar cell labels
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="text-[9px] font-semibold uppercase tracking-widest text-gray-600 leading-none">
+      {children}
+    </span>
+  );
+}
+
 export function MtaBar() {
   const a2lVars   = useAppStore((s) => s.a2lVariables);
   const showToast = useAppStore((s) => s.showToast);
   const connected = useAppStore((s) => s.connected);
+  const { showTip, hideTip } = useTooltip();
 
   const [mta, setMta]         = useState('');
   const [size, setSize]       = useState(8);
   const [autoMta, setAutoMta] = useState(true);
   const [suggestions, setSuggestions] = useState<A2lVariable[]>([]);
   const [suggOpen, setSuggOpen]       = useState(false);
-  const [mtaPinning, setMtaPinning]             = useState(false);
-  const [mtaJiggling, setMtaJiggling]           = useState(false);
-  const [uploadFlying, setUploadFlying]         = useState(false);
-  const [uploadJiggling, setUploadJiggling]     = useState(false);
+
+  const [mtaPinning, setMtaPinning]         = useState(false);
+  const [mtaJiggling, setMtaJiggling]       = useState(false);
+  const [uploadFlying, setUploadFlying]     = useState(false);
+  const [uploadJiggling, setUploadJiggling] = useState(false);
   const [downloadFlying, setDownloadFlying]     = useState(false);
   const [downloadJiggling, setDownloadJiggling] = useState(false);
-  const [downloadData, setDownloadData]         = useState('');
+
+  const [downloadData, setDownloadData] = useState('');
+  // Animation state for the DATA overlay span — same pattern as ByteBar cells
+  const [dataAnimKey, setDataAnimKey]   = useState(0);
+  const [dataAnimCls, setDataAnimCls]   = useState('');
+  const [dataError, setDataError]       = useState(false);
 
   useEffect(() => {
     const t = mta.trim();
@@ -83,37 +100,6 @@ export function MtaBar() {
     await api.setMta(0, addr).catch((e: Error) => showToast(e.message, 'error'));
   }
 
-  async function handleDownload() {
-    if (!connected) {
-      showToast('Not connected to slave', 'error');
-      jiggle(setDownloadJiggling);
-      return;
-    }
-    const addr = resolveOrWarn(mta);
-    if (addr === null) { jiggle(setDownloadJiggling); return; }
-
-    const bytes = downloadData
-      .trim()
-      .split(/\s+/)
-      .map((b) => parseInt(b, 16))
-      .filter((n) => !isNaN(n));
-
-    if (bytes.length === 0) {
-      showToast('Enter hex bytes to write (e.g. FF 01 A3)', 'info');
-      jiggle(setDownloadJiggling);
-      return;
-    }
-
-    setDownloadFlying(true);
-    setTimeout(() => setDownloadFlying(false), 500);
-    try {
-      if (autoMta) await api.setMta(0, addr);
-      await api.download(bytes);
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Download failed', 'error');
-    }
-  }
-
   async function handleUpload() {
     if (!connected) {
       showToast('Not connected to slave', 'error');
@@ -127,25 +113,74 @@ export function MtaBar() {
     setTimeout(() => setUploadFlying(false), 500);
     try {
       if (autoMta) await api.setMta(0, addr);
-      await api.upload(size);
+      const result = await api.upload(size);
+      const resp = result.response as { Upload?: { data: number[] } } | null;
+      const bytes = resp?.Upload?.data ?? [];
+      if (bytes.length > 0) {
+        const hex = bytes.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+        setDownloadData(hex);
+        setDataAnimCls('count-tick');
+        setDataAnimKey((k) => k + 1);
+      }
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Upload failed', 'error');
     }
   }
 
+  async function handleDownload() {
+    if (!connected) {
+      showToast('Not connected to slave', 'error');
+      jiggle(setDownloadJiggling);
+      return;
+    }
+    const addr = resolveOrWarn(mta);
+    if (addr === null) { jiggle(setDownloadJiggling); return; }
+
+    const tokens = downloadData.trim().split(/\s+/).filter(Boolean);
+
+    if (tokens.length === 0) {
+      showToast('Enter bytes or values to write (e.g. FF 01 A3 or 0x1234 or 300)', 'info');
+      setDataError(true);
+      setTimeout(() => setDataError(false), 600);
+      jiggle(setDownloadJiggling);
+      return;
+    }
+
+    if (autoMta) {
+      try {
+        await api.setMta(0, addr);
+      } catch (e) {
+        showToast(`SET_MTA failed: ${e instanceof Error ? e.message : 'unknown error'}`, 'error');
+        jiggle(setDownloadJiggling);
+        return;
+      }
+    }
+
+    setDownloadFlying(true);
+    setTimeout(() => setDownloadFlying(false), 500);
+    try {
+      await api.download(tokens);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Download failed', 'error');
+    }
+  }
+
+  const hasData = downloadData.trim().length > 0;
+
   return (
-    <div className="flex items-center gap-3 px-4 h-10 border-b border-gray-800 bg-gray-900 shrink-0">
-      {/* MTA input */}
-      <div className="flex items-center gap-2">
-        <label className="text-[10px] text-gray-500 shrink-0">MTA</label>
+    <div className="flex items-end gap-3 px-4 py-2 border-b border-gray-800 bg-gray-900 shrink-0">
+
+      {/* ── MTA ───────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-1">
+        <FieldLabel>MTA</FieldLabel>
         <div className="relative">
           <input
             value={mta}
             onChange={(e) => setMta(e.target.value)}
             onFocus={() => suggestions.length > 0 && setSuggOpen(true)}
             onBlur={() => setTimeout(() => setSuggOpen(false), 120)}
-            placeholder="0x... or VarName"
-            className="w-40 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"
+            placeholder="0x… or VarName"
+            className="w-40 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500 placeholder:text-gray-700"
           />
           {suggOpen && suggestions.length > 0 && (
             <div className="absolute z-[9998] left-0 top-full mt-0.5 w-60 bg-gray-800 border border-gray-700 rounded shadow-xl max-h-40 overflow-y-auto">
@@ -166,19 +201,20 @@ export function MtaBar() {
         </div>
       </div>
 
+      {/* Set MTA button — sits at input baseline via items-end on the row */}
       <button
         onClick={handleSetMta}
         disabled={autoMta}
-        className={`px-2.5 py-1 rounded text-xs font-medium bg-purple-600/15 text-purple-400 border border-purple-500/30 hover:bg-purple-600/25 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none ${mtaJiggling ? 'btn-jiggle' : ''}`}
+        className={`px-2.5 py-1 rounded text-xs font-medium bg-purple-600/15 text-purple-400 border border-purple-500/30 hover:bg-purple-600/25 transition-colors flex items-center disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none ${mtaJiggling ? 'btn-jiggle' : ''}`}
       >
-        <span className={mtaPinning ? 'icon-pin-drop' : ''}><MapPin size={14} /></span>Set MTA
+        <span className={`mr-1 ${mtaPinning ? 'icon-pin-drop' : ''}`}><MapPin size={14} /></span>Set MTA
       </button>
 
-      <div className="w-px h-4 bg-gray-800" />
+      <div className="w-px h-4 bg-gray-800 self-center" />
 
-      {/* Size */}
-      <div className="flex items-center gap-2">
-        <label className="text-[10px] text-gray-500 shrink-0">SIZE</label>
+      {/* ── SIZE ──────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-1">
+        <FieldLabel>Size</FieldLabel>
         <input
           type="number"
           min={1}
@@ -188,40 +224,62 @@ export function MtaBar() {
         />
       </div>
 
-      {/* Download data */}
-      <input
-        value={downloadData}
-        onChange={(e) => setDownloadData(e.target.value)}
-        placeholder="hex bytes to write…"
-        className="w-36 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-orange-500 placeholder:text-gray-700"
-      />
+      {/* ── DATA ──────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-1">
+        <FieldLabel>Data</FieldLabel>
+        {/* Transparent input + animated overlay span — same pattern as ByteBar cells */}
+        <div className="relative">
+          <input
+            value={downloadData}
+            onChange={(e) => {
+              const v = e.target.value;
+              setDownloadData(v);
+              setDataAnimCls('type-fade');
+              setDataAnimKey((k) => k + 1);
+            }}
+            className={`w-44 px-2 py-1 bg-gray-800 border rounded text-xs font-mono focus:outline-none transition-colors ${
+              dataError ? 'border-red-500' : 'border-gray-700 focus:border-orange-500'
+            }`}
+            style={{ color: 'transparent', caretColor: '#9ca3af' }}
+          />
+          <span
+            key={dataAnimKey}
+            className={`absolute inset-0 flex items-center px-2 text-xs font-mono pointer-events-none select-none ${dataAnimCls} ${
+              hasData ? 'text-gray-200' : 'text-gray-600'
+            }`}
+          >
+            {downloadData || 'FF 01 A3 …'}
+          </span>
+        </div>
+      </div>
 
-      {/* Upload / Download */}
+      {/* ── Upload / Download ─────────────────────────────────────── */}
       <div className="flex items-center gap-1.5">
         <button
           onClick={handleUpload}
-          className={`px-3 py-1 rounded text-xs font-medium bg-green-600/15 text-green-400 border border-green-500/30 hover:bg-green-600/25 transition-colors active:scale-95 flex items-center gap-1.5 ${uploadJiggling ? 'btn-jiggle' : ''}`}
+          className={`px-3 py-1 rounded text-xs font-medium bg-green-600/15 text-green-400 border border-green-500/30 hover:bg-green-600/25 transition-colors active:scale-95 flex items-center ${uploadJiggling ? 'btn-jiggle' : ''}`}
         >
-          <span className={uploadFlying ? 'icon-upload-cycle' : ''}><ArrowLineUp size={14} /></span>Upload
+          <span className={`mr-1 ${uploadFlying ? 'icon-upload-cycle' : ''}`}><ArrowLineUp size={14} /></span>Upload
         </button>
         <button
           onClick={handleDownload}
-          className={`px-3 py-1 rounded text-xs font-medium bg-orange-600/15 text-orange-400 border border-orange-500/30 hover:bg-orange-600/25 transition-colors active:scale-95 flex items-center gap-1.5 ${downloadJiggling ? 'btn-jiggle' : ''}`}
+          className={`px-3 py-1 rounded text-xs font-medium bg-orange-600/15 text-orange-400 border border-orange-500/30 hover:bg-orange-600/25 transition-colors active:scale-95 flex items-center ${downloadJiggling ? 'btn-jiggle' : ''}`}
         >
-          <span className={downloadFlying ? 'icon-download-cycle' : ''}><ArrowLineDown size={14} /></span>Download
+          <span className={`mr-1 ${downloadFlying ? 'icon-download-cycle' : ''}`}><ArrowLineDown size={14} /></span>Download
         </button>
       </div>
 
+      {/* ── Auto SET_MTA toggle ───────────────────────────────────── */}
       <div className="flex items-center gap-1">
         <Toggle active={autoMta} onClick={() => setAutoMta(!autoMta)} label="Auto SET_MTA" />
-        <div className="relative group">
-          <Info size={12} className="text-gray-600 hover:text-gray-400 transition-colors cursor-default shrink-0" />
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-gray-800 border border-gray-700 rounded shadow-xl px-2.5 py-2 text-[10px] text-gray-300 leading-relaxed opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-[9999]">
-            When enabled, a SET_MTA is sent automatically using the address above before every Upload — no need to click Set MTA manually each time.
-            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-700" />
-          </div>
-        </div>
+        <Info
+          size={12}
+          className="text-gray-600 hover:text-gray-400 transition-colors cursor-default shrink-0"
+          onMouseEnter={(e) => showTip(e.currentTarget, 'When enabled, a SET_MTA is sent automatically using the address above before every Upload or Download — no need to click Set MTA manually each time.')}
+          onMouseLeave={hideTip}
+        />
       </div>
+
     </div>
   );
 }

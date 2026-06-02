@@ -379,7 +379,7 @@ export function Sidebar() {
               }}
             >
               <div style={{ minHeight: 0, overflow: 'hidden' }}>
-                <div key={expandKey} className="px-2.5 pb-2.5 space-y-1">
+                <div key={expandKey} className="px-2.5 pt-1.5 pb-2.5 space-y-1">
                   {commands.map((cmd, i) => {
                     const cmdStyle: React.CSSProperties = isExiting
                       ? { animation: `sidebar-cmd-out 80ms ease-in ${(n - 1 - i) * 20}ms forwards` }
@@ -423,8 +423,22 @@ export function Sidebar() {
                 }`}
               >
                 <span className="flex items-center justify-center gap-1">
-                  <span key={activeTab === tab ? tabAnimKey : -1} className={activeTab === tab ? 'icon-pop' : ''}>
-                    {tab === 'system' ? <Terminal size={14} /> : <Sliders size={14} />}
+                  <span className="relative inline-flex shrink-0" style={{ width: 18, height: 18 }}>
+                    <span
+                      className={activeTab === tab ? 'text-gray-700' : ''}
+                      style={{ transition: 'color 320ms ease' }}
+                    >
+                      {tab === 'system' ? <Terminal size={18} weight="regular" /> : <Sliders size={18} weight="regular" />}
+                    </span>
+                    <span
+                      className="absolute inset-0"
+                      style={{
+                        clipPath: activeTab === tab ? 'inset(0% 0 0 0)' : 'inset(100% 0 0 0)',
+                        transition: 'clip-path 320ms ease',
+                      }}
+                    >
+                      {tab === 'system' ? <Terminal size={18} weight="fill" /> : <Sliders size={18} weight="fill" />}
+                    </span>
                   </span>
                   {tab === 'system' ? 'System' : 'User'}
                 </span>

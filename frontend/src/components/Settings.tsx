@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Palette, PlugsConnected, Scroll, Lightning, Terminal, Eye, Info,
   Globe, Stack, Circuitry, WifiHigh,
-  ArrowCounterClockwise, Plus, X, ArrowSquareOut, ArrowsClockwise,
+  ArrowCounterClockwise, Plus, X, ArrowSquareOut, ArrowsClockwise, ArrowsLeftRight,
 } from '@phosphor-icons/react';
 
 const GITHUB_URL = 'https://github.com/Dheeps02/xcaliber';
@@ -63,6 +63,7 @@ const CONN_DEFAULTS = {
   bind_ip: '',
   src_mac: '',
   dst_mac: '',
+  endian: 'little',
 };
 
 interface ConnDraft {
@@ -74,6 +75,7 @@ interface ConnDraft {
   bind_ip: string;
   src_mac: string;
   dst_mac: string;
+  endian: string;
 }
 
 // ── Tab content components ────────────────────────────────────────
@@ -185,6 +187,7 @@ function ConnectionTab() {
     bind_ip: config?.connection.bind_ip ?? CONN_DEFAULTS.bind_ip,
     src_mac: config?.connection.src_mac ?? CONN_DEFAULTS.src_mac,
     dst_mac: config?.connection.dst_mac ?? CONN_DEFAULTS.dst_mac,
+    endian: config?.endian ?? CONN_DEFAULTS.endian,
   });
   const [draft, setDraft] = useState<ConnDraft>({ ...initial });
   const [saving, setSaving] = useState(false);
@@ -219,6 +222,7 @@ function ConnectionTab() {
         bind_ip: draft.bind_ip || undefined,
         src_mac: draft.src_mac || undefined,
         dst_mac: draft.dst_mac || undefined,
+        endian: draft.endian,
       });
       if (config) {
         setConfig({
@@ -234,6 +238,7 @@ function ConnectionTab() {
             dst_mac: draft.dst_mac || undefined,
           },
           server: { ...config.server, listen_port: draft.listen_port },
+          endian: draft.endian,
         });
       }
       setInitial({ ...draft });
@@ -304,6 +309,27 @@ function ConnectionTab() {
           <SpinInput value={draft.timeout_ms} onChange={(v) => set('timeout_ms', v)} min={100} step={100} inputClassName={inputCls('timeout_ms')} />
         </Field>
       </div>
+
+      {/* ── Byte Order ── */}
+      <ConnSection label="Byte Order" icon={ArrowsLeftRight} />
+      <div className="flex items-center gap-3">
+        {(['little', 'big'] as const).map((opt) => (
+          <button
+            key={opt}
+            onClick={() => set('endian', opt)}
+            className={`flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+              draft.endian === opt
+                ? 'bg-blue-600 border-blue-500 text-white'
+                : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'
+            }`}
+          >
+            {opt === 'little' ? 'Little Endian' : 'Big Endian'}
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-gray-600 -mt-2">
+        Byte order for SET_MTA addresses and multi-byte DOWNLOAD values. Match your target ECU.
+      </p>
 
       {/* ── MAC Addresses ── */}
       <ConnSection label="MAC Addresses" icon={Circuitry} />
@@ -719,7 +745,12 @@ export function Settings({ onClose, initialTab }: Props) {
                 }`}
               >
                 <span className="relative inline-flex shrink-0" style={{ width: 20, height: 20 }}>
-                  <t.icon size={20} weight="regular" className={tab === t.id ? 'text-black' : ''} />
+                  <span
+                    className={tab === t.id ? 'text-gray-700' : ''}
+                    style={{ transition: 'color 320ms ease' }}
+                  >
+                    <t.icon size={20} weight="regular" />
+                  </span>
                   <span
                     className="absolute inset-0"
                     style={{

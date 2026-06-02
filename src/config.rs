@@ -17,6 +17,8 @@ fn default_events() -> Vec<EventDef> {
     ]
 }
 
+fn default_endian() -> String { "little".into() }
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
     pub connection: ConnectionConfig,
@@ -25,6 +27,8 @@ pub struct Config {
     pub custom_commands: Vec<CustomCommand>,
     #[serde(default = "default_events")]
     pub events: Vec<EventDef>,
+    #[serde(default = "default_endian")]
+    pub endian: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -129,6 +133,7 @@ impl Default for Config {
             server: ServerConfig { listen_port: 8080 },
             custom_commands: vec![],
             events: default_events(),
+            endian: default_endian(),
         }
     }
 }
