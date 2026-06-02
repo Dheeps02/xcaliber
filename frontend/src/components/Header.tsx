@@ -20,6 +20,8 @@ export function Header() {
   const a2lInputRef = useRef<HTMLInputElement>(null);
   const [a2lFileName, setA2lFileName] = useState<string | null>(null);
   const [a2lFilePath, setA2lFilePath] = useState<string | null>(null);
+  const [broadcastPulsing, setBroadcastPulsing] = useState(false);
+  const [syncSpinning, setSyncSpinning] = useState(false);
 
   async function handleToggle() {
     if (connected) {
@@ -50,6 +52,18 @@ export function Header() {
     } catch {
       showToast('Invalid A2L JSON. Expected [{name, addr, type?}]', 'error');
     }
+  }
+
+  function handleGetStatus() {
+    setBroadcastPulsing(true);
+    setTimeout(() => setBroadcastPulsing(false), 700);
+    api.getStatus().catch(() => {});
+  }
+
+  function handleSync() {
+    setSyncSpinning(true);
+    setTimeout(() => setSyncSpinning(false), 600);
+    api.sync().catch((e: Error) => showToast(e.message, 'error'));
   }
 
   function handleUnloadA2l() {
@@ -123,7 +137,9 @@ export function Header() {
                   : 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20'
               }`}
             >
-              {connected ? <LinkBreak size={14} className="shrink-0" /> : <Link size={14} className="shrink-0" />}
+              <span key={connected ? 'break' : 'link'} className="icon-rotate-in shrink-0 flex items-center">
+                {connected ? <LinkBreak size={14} /> : <Link size={14} />}
+              </span>
               <span key={connected ? 'disc' : 'conn'} className="text-blur-in">
                 {connected ? 'Disconnect' : 'Connect'}
               </span>
@@ -132,11 +148,13 @@ export function Header() {
 
           {/* Get Status */}
           <button
-            onClick={() => api.getStatus().catch(() => {})}
+            onClick={handleGetStatus}
             disabled={!connected}
             className="px-2 py-1 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-gray-800 text-gray-400 border border-gray-700 transition-colors active:scale-95 disabled:active:scale-100 flex items-center gap-1.5"
           >
-            <Broadcast size={14} />
+            <span key={broadcastPulsing ? 'pulsing' : 'idle'} className={broadcastPulsing ? 'broadcast-pulse' : ''}>
+              <Broadcast size={16} weight={broadcastPulsing ? 'fill' : 'regular'} />
+            </span>
             Get Status
           </button>
 
@@ -144,11 +162,13 @@ export function Header() {
 
           {/* Sync — far right before settings */}
           <button
-            onClick={() => api.sync().catch((e: Error) => showToast(e.message, 'error'))}
+            onClick={handleSync}
             disabled={!connected}
             className="px-2 py-1 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-gray-800 text-gray-400 border border-gray-700 transition-colors active:scale-95 disabled:active:scale-100 flex items-center gap-1.5"
           >
-            <ArrowsClockwise size={14} />
+            <span className={syncSpinning ? 'icon-spin-once' : ''}>
+              <ArrowsClockwise size={14} />
+            </span>
             Sync
           </button>
 
