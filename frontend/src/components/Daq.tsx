@@ -1244,7 +1244,7 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
 
       {/* DTO rate */}
       <span className="text-[10px] text-gray-600 font-mono flex items-center gap-1">
-        <Pulse size={13} />{daqDtoRate} DTOs / s
+        <Pulse size={13} /><DtoRateCount value={daqDtoRate} /> DTOs / s
       </span>
 
       <div className="w-px h-4 bg-gray-800" />

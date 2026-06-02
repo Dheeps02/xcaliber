@@ -77,7 +77,7 @@ export function useSSE() {
           // Compute DTOs/s over a 2-second rolling window
           const now = Date.now();
           dtoCountRef.current.count += 1;
-          if (now - dtoCountRef.current.windowStart >= 2000) {
+          if (now - dtoCountRef.current.windowStart >= 1000) {
             const rate = Math.round(dtoCountRef.current.count / ((now - dtoCountRef.current.windowStart) / 1000));
             setDaqDtoRate(rate);
             dtoCountRef.current = { count: 0, windowStart: now };
