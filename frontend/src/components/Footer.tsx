@@ -8,10 +8,6 @@ export function Footer() {
   const openSettings = useAppStore((s) => s.openSettings);
 
   const protocol = config?.connection.protocol.toUpperCase() ?? null;
-  const connAddr = config
-    ? `${config.connection.server_ip}:${config.connection.server_port}`
-    : null;
-
   return (
     <footer className="flex items-center justify-between px-4 h-6 border-t border-gray-800 bg-gray-900 shrink-0 text-[10px] text-gray-600">
       {/* Left: protocol pill + address */}

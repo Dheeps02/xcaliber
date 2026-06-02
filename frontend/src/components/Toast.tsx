@@ -26,11 +26,6 @@ function ToastItem({ id, message, type, detail }: Toast) {
     type === 'error'   ? 'bg-red-900/95 border-red-500/40 text-red-200' :
                          'bg-gray-800/98 border-gray-600/50 text-gray-200';
 
-  const fadeBg =
-    type === 'success' ? 'rgba(5,46,22,0.95)' :
-    type === 'error'   ? 'rgba(69,10,10,0.95)' :
-                         'rgba(31,41,55,0.98)';
-
   return (
     <div
       className={`rounded-lg border shadow-2xl text-xs font-medium w-72 pointer-events-auto select-none ${colorCls} ${dying ? 'toast-out' : 'toast-in'}`}

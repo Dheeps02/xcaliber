@@ -287,7 +287,6 @@ export function ByteBar() {
         <div className="flex-1 flex gap-2 min-w-0">
           {Array.from({ length: BASE_CELLS }, (_, i) => {
             const absIdx = startByte + i;
-            const field = def?.fields[absIdx] ?? def?.fields[i]; // fields[i] for non-paginated cmds
             // Only first section uses prefilled fields from def; higher sections are free-form
             const fieldDef = section === 0 ? def?.fields[i] : undefined;
             const isLocked = !!def && section === 0 && (i === 0 || (i === 1 && !!def.isUserCmd));
