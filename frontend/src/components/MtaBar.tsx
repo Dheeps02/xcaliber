@@ -29,8 +29,9 @@ export function MtaBar() {
   const [mtaJiggling, setMtaJiggling]           = useState(false);
   const [uploadFlying, setUploadFlying]         = useState(false);
   const [uploadJiggling, setUploadJiggling]     = useState(false);
-  const [downloadFlying]     = useState(false);
-  const [downloadJiggling] = useState(false);
+  const [downloadFlying, setDownloadFlying]     = useState(false);
+  const [downloadJiggling, setDownloadJiggling] = useState(false);
+  const [downloadData, setDownloadData]         = useState('');
 
   useEffect(() => {
     const t = mta.trim();
@@ -80,6 +81,37 @@ export function MtaBar() {
     setMtaPinning(true);
     setTimeout(() => setMtaPinning(false), 300);
     await api.setMta(0, addr).catch((e: Error) => showToast(e.message, 'error'));
+  }
+
+  async function handleDownload() {
+    if (!connected) {
+      showToast('Not connected to slave', 'error');
+      jiggle(setDownloadJiggling);
+      return;
+    }
+    const addr = resolveOrWarn(mta);
+    if (addr === null) { jiggle(setDownloadJiggling); return; }
+
+    const bytes = downloadData
+      .trim()
+      .split(/\s+/)
+      .map((b) => parseInt(b, 16))
+      .filter((n) => !isNaN(n));
+
+    if (bytes.length === 0) {
+      showToast('Enter hex bytes to write (e.g. FF 01 A3)', 'info');
+      jiggle(setDownloadJiggling);
+      return;
+    }
+
+    setDownloadFlying(true);
+    setTimeout(() => setDownloadFlying(false), 500);
+    try {
+      if (autoMta) await api.setMta(0, addr);
+      await api.download(bytes);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Download failed', 'error');
+    }
   }
 
   async function handleUpload() {
@@ -156,6 +188,14 @@ export function MtaBar() {
         />
       </div>
 
+      {/* Download data */}
+      <input
+        value={downloadData}
+        onChange={(e) => setDownloadData(e.target.value)}
+        placeholder="hex bytes to write…"
+        className="w-36 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-orange-500 placeholder:text-gray-700"
+      />
+
       {/* Upload / Download */}
       <div className="flex items-center gap-1.5">
         <button
@@ -165,9 +205,8 @@ export function MtaBar() {
           <span className={uploadFlying ? 'icon-upload-cycle' : ''}><ArrowLineUp size={14} /></span>Upload
         </button>
         <button
-          disabled
-          title="Download (write to slave) — not yet implemented"
-          className={`px-3 py-1 rounded text-xs font-medium bg-orange-600/15 text-orange-400 border border-orange-500/30 opacity-40 cursor-not-allowed flex items-center gap-1.5 ${downloadJiggling ? 'btn-jiggle' : ''}`}
+          onClick={handleDownload}
+          className={`px-3 py-1 rounded text-xs font-medium bg-orange-600/15 text-orange-400 border border-orange-500/30 hover:bg-orange-600/25 transition-colors active:scale-95 flex items-center gap-1.5 ${downloadJiggling ? 'btn-jiggle' : ''}`}
         >
           <span className={downloadFlying ? 'icon-download-cycle' : ''}><ArrowLineDown size={14} /></span>Download
         </button>
