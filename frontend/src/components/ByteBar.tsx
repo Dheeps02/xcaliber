@@ -55,13 +55,14 @@ export function ByteBar() {
   const setByteValue = useAppStore((s) => s.setByteValue);
   const setActiveCmd = useAppStore((s) => s.setActiveCmd);
   const customCmdDefs = useAppStore((s) => s.customCmdDefs);
+  const userCmdDefs = useAppStore((s) => s.userCmdDefs);
   const collapsed = useAppStore((s) => s.byteBarCollapsed);
   const setCollapsed = useAppStore((s) => s.setByteBarCollapsed);
   const showToast = useAppStore((s) => s.showToast);
   const { showTip, hideTip } = useTooltip();
   const [dropdown, setDropdown] = useState<Dropdown | null>(null);
 
-  const def = activeCmd ? (CMD_DEFS[activeCmd] ?? customCmdDefs[activeCmd]) : null;
+  const def = activeCmd ? (CMD_DEFS[activeCmd] ?? customCmdDefs[activeCmd] ?? userCmdDefs[activeCmd]) : null;
 
   // Flat array of ALL bytes across all sections; local state only
   const [allBytes, setAllBytes] = useState<string[]>(() => [...byteValues]);
@@ -247,7 +248,7 @@ export function ByteBar() {
         style={{
           display: 'grid',
           gridTemplateRows: collapsed ? '0fr' : '1fr',
-          transition: 'grid-template-rows 180ms ease',
+          transition: collapsed ? 'none' : 'grid-template-rows 180ms ease',
         }}
       >
         <div style={{ overflow: 'hidden' }}>

@@ -9,7 +9,8 @@ import {
 import { createPortal } from 'react-dom';
 import { useAppStore } from '../stores/app-store';
 import { formatLabel, toTitleCase, formatTime } from '../lib/utils';
-import type { PacketEntry } from '../lib/types';
+import type { PacketEntry, UserCmdDef } from '../lib/types';
+import { AnimatedCount } from './AnimatedCount';
 
 type DirFilter = 'all' | 'tx' | 'rx';
 
@@ -68,6 +69,49 @@ function formatValue(v: unknown): string {
   return JSON.stringify(v);
 }
 
+// ── USER_CMD response decoder ─────────────────────────────────────
+
+function hexToBytes(hex: string): number[] {
+  return hex.trim().split(/\s+/).map((b) => parseInt(b, 16)).filter((n) => !isNaN(n));
+}
+
+function decodeUserCmdRx(
+  tx: PacketEntry,
+  rx: PacketEntry,
+  userCmds: UserCmdDef[]
+): [string, unknown][] | null {
+  // TX decoded.command should match the UserCmdDef name
+  const cmdName = (tx.decoded as Record<string, unknown>)?.command;
+  const def = typeof cmdName === 'string'
+    ? userCmds.find((c) => c.name === cmdName)
+    : null;
+  if (!def) return null;
+
+  const txBytes = hexToBytes(tx.hex);  // [F1, ...requestBytes]
+  const rxBytes = hexToBytes(rx.hex);  // response bytes
+
+  // Evaluate variant conditions — txBytes[1+] are the user request bytes
+  const reqBytes = txBytes.slice(1);
+  const matchedVariant = def.responseVariants.find((v) => {
+    if (v.conditions.length === 0) return true;  // default/fallback — always last
+    return v.conditions.every((cond) => {
+      const actual = reqBytes[cond.reqByteOffset] ?? 0;
+      switch (cond.op) {
+        case '==': return actual === cond.value;
+        case '!=': return actual !== cond.value;
+        case '<':  return actual <  cond.value;
+        case '>':  return actual >  cond.value;
+        case '<=': return actual <= cond.value;
+        case '>=': return actual >= cond.value;
+      }
+    });
+  });
+  if (!matchedVariant) return null;
+
+  return matchedVariant.bytes
+    .map((b): [string, unknown] => [b.label || `byte[${b.offset}]`, rxBytes[b.offset] ?? null]);
+}
+
 function HexCell({ hex, dir }: { hex: string; dir: 'tx' | 'rx' }) {
   const cls = dir === 'tx' ? 'text-blue-400' : 'text-green-400';
   if (!hex) return <span className="text-gray-600 italic">—</span>;
@@ -117,7 +161,7 @@ function ExpandDetail({ p, colSpan, open }: { p: PacketEntry; colSpan: number; o
   );
 }
 
-function ExpandDetailFlat({ p, open }: { p: PacketEntry; open: boolean }) {
+function ExpandDetailFlat({ p, open, extraFields }: { p: PacketEntry; open: boolean; extraFields?: [string, unknown][] }) {
   const isErr = p.pid === 'FE';
   const valueCls = isErr
     ? 'text-red-400'
@@ -125,9 +169,10 @@ function ExpandDetailFlat({ p, open }: { p: PacketEntry; open: boolean }) {
     ? 'text-blue-400'
     : 'text-green-400';
   const allFields = flattenDecoded(p.decoded);
-  const rows = p.direction === 'tx'
+  const baseRows = p.direction === 'tx'
     ? allFields.filter(([k]) => k !== 'command')
     : allFields;
+  const rows = extraFields && extraFields.length > 0 ? extraFields : baseRows;
 
   return (
     <div className="bg-gray-900/60 overflow-hidden">
@@ -159,51 +204,6 @@ function dirBadgeCls(p: PacketEntry) {
     : isErr
     ? 'bg-red-900/30 text-red-400 border border-red-500/50'
     : 'bg-[#064e3b] text-[#6ee7b7] border border-[#10b981]';
-}
-
-// ── Animated counter ──────────────────────────────────────────────
-
-function AnimatedCount({ value, label, colorCls }: { value: number; label: string; colorCls: string }) {
-  const [displayed, setDisplayed] = useState(value);
-  const [animKey, setAnimKey] = useState(0);
-  const [animCls, setAnimCls] = useState('');
-  const displayedRef = useRef(displayed);
-  displayedRef.current = displayed;
-  const t1 = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const t2 = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (value === displayedRef.current) return;
-    if (t1.current) clearTimeout(t1.current);
-    if (t2.current) clearTimeout(t2.current);
-
-    if (value === 0) {
-      // Animate old value out downward, then swap to 0 and enter from top
-      setAnimCls('count-exit');
-      t1.current = setTimeout(() => {
-        setDisplayed(0);
-        setAnimCls('count-enter-from-top');
-        t2.current = setTimeout(() => setAnimCls(''), 250);
-      }, 160);
-    } else {
-      setDisplayed(value);
-      setAnimKey((k) => k + 1);
-      setAnimCls('count-tick');
-      t1.current = setTimeout(() => setAnimCls(''), 240);
-    }
-  }, [value]);
-
-  useEffect(() => () => {
-    if (t1.current) clearTimeout(t1.current);
-    if (t2.current) clearTimeout(t2.current);
-  }, []);
-
-  return (
-    <span className={`${colorCls} inline-flex items-center gap-0.5 font-mono text-[10px] overflow-hidden`}>
-      <span className="opacity-60">{label}:</span>
-      <span key={animKey} className={animCls} style={{ display: 'inline-block' }}>{displayed}</span>
-    </span>
-  );
 }
 
 // ── PID filter popover ────────────────────────────────────────────
@@ -297,6 +297,7 @@ export function PacketTrace() {
   const clearPackets = useAppStore((s) => s.clearPackets);
   const displayTimeoutMs = useAppStore((s) => s.displayTimeoutMs);
   const animationWatermark = useAppStore((s) => s.animationWatermark);
+  const userCmds = useAppStore((s) => s.userCmds);
 
   const [dirFilter, setDirFilter] = useState<DirFilter>('all');
   const [selectedPids, setSelectedPids] = useState<Set<string>>(new Set());
@@ -460,9 +461,8 @@ export function PacketTrace() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900 shrink-0">
+      <div className="flex items-center justify-between px-4 h-9 border-b border-gray-800 bg-gray-900 shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs font-medium text-gray-400 shrink-0">Packet Trace</span>
           <div className="flex items-center gap-1">
             {(['all', 'tx', 'rx'] as DirFilter[]).map((d) => (
               <button
@@ -564,7 +564,10 @@ export function PacketTrace() {
                   const { tx, rx } = g;
                   const hasPair = rx !== null;
                   const cmdLabel = getCommandLabel(tx);
-                  const isTimedOut = !hasPair && Date.now() - tx.timestamp_ms > displayTimeoutMs;
+                  const isBackendTimeout = hasPair && rx !== null && rx.pid === 'FE' &&
+                    (rx.decoded as Record<string, unknown>)?.error === 'timeout';
+                  const isTimedOut = isBackendTimeout ||
+                    (!hasPair && Date.now() - tx.timestamp_ms > displayTimeoutMs);
                   const newTx = animationWatermark !== null && tx.id > animationWatermark && !cleanedUpIds.current.has(tx.id);
                   const newRx = rx !== null && animationWatermark !== null && rx.id > animationWatermark && !cleanedUpIds.current.has(rx.id);
                   if (newTx && !groupStaggerDelays.current.has(g.key)) {
@@ -644,13 +647,13 @@ export function PacketTrace() {
                                     <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-500/50">TO</span>
                                   </div>
                                   <div className="px-3 py-1.5 text-gray-700 shrink-0" style={{ width: colWidths[2] }}>—</div>
-                                  <div className="px-3 py-1.5 text-amber-700 text-[10px] shrink-0" style={{ width: colWidths[3] }}>after {displayTimeoutMs}ms</div>
+                                  <div className="px-3 py-1.5 text-amber-700 text-[10px] shrink-0" style={{ width: colWidths[3] }}>after {isBackendTimeout && rx ? rx.timestamp_ms - tx.timestamp_ms : displayTimeoutMs}ms</div>
                                   <div className="px-3 py-1.5 flex-1 text-gray-700">—</div>
                                 </div>
                               )}
 
                               {/* Response row */}
-                              {hasPair && rx && (
+                              {hasPair && rx && !isBackendTimeout && (
                                 <>
                                   <div
                                     className={`flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors ${expandedIds.has(rx.id) ? 'bg-gray-800/30' : ''} ${newRx ? 'packet-new' : ''}`}
@@ -667,7 +670,11 @@ export function PacketTrace() {
                                     <div className="px-3 py-1.5 text-gray-500 shrink-0" style={{ width: colWidths[3] }}>{formatTime(rx.timestamp_ms)}</div>
                                     <div className="px-3 py-1.5 flex-1 min-w-0"><HexCell hex={rx.hex} dir="rx" /></div>
                                   </div>
-                                  <ExpandDetailFlat p={rx} open={expandedIds.has(rx.id)} />
+                                  <ExpandDetailFlat
+                                    p={rx}
+                                    open={expandedIds.has(rx.id)}
+                                    extraFields={tx.pid === 'F1' ? (decodeUserCmdRx(tx, rx, userCmds) ?? undefined) : undefined}
+                                  />
                                 </>
                               )}
                             </div>

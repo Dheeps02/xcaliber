@@ -148,16 +148,19 @@ export function Sidebar() {
   const activeCmd = useAppStore((s) => s.activeCmd);
   const setActiveCmd = useAppStore((s) => s.setActiveCmd);
   const customCmdDefs = useAppStore((s) => s.customCmdDefs);
+  const userCmdDefs = useAppStore((s) => s.userCmdDefs);
 
   const userGroups = useMemo(
-    () =>
-      Object.entries(customCmdDefs).reduce<Record<string, CmdButton[]>>((acc, [id, def]) => {
+    () => {
+      const allDefs = { ...customCmdDefs, ...userCmdDefs };
+      return Object.entries(allDefs).reduce<Record<string, CmdButton[]>>((acc, [id, def]) => {
         const grp = def.group ?? 'General';
         if (!acc[grp]) acc[grp] = [];
         acc[grp].push({ id, label: def.userCmdName ?? id, pid: '0xF1' });
         return acc;
-      }, {}),
-    [customCmdDefs]
+      }, {});
+    },
+    [customCmdDefs, userCmdDefs]
   );
 
   const allSysCatNames = useMemo(() => CMD_CATEGORIES.map((c) => c.name), []);

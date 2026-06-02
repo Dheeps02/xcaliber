@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef, DaqList, DaqStatus, DaqLiveValue, DaqEntryType, EventDef, A2lVariable } from '../lib/types';
+import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef, DaqList, DaqStatus, DaqLiveValue, DaqEntryType, EventDef, A2lVariable, UserCmdDef } from '../lib/types';
 import { CMD_DEFS } from '../lib/cmd-defs';
 
 const NUM_CELLS = 8;
@@ -36,6 +36,7 @@ interface AppStore {
   setConfig: (cfg: AppConfig) => void;
   setEvents: (events: EventDef[]) => void;
   addPacket: (p: PacketEntry) => void;
+  batchAddPackets: (packets: PacketEntry[]) => void;
   prependPackets: (packets: PacketEntry[]) => void;
   setAutoScroll: (v: boolean) => void;
   clearPackets: () => void;
@@ -66,9 +67,46 @@ interface AppStore {
   a2lVariables: A2lVariable[];
   setA2lVariables: (vars: A2lVariable[]) => void;
 
+  userCmds: UserCmdDef[];
+  userCmdDefs: Record<string, CmdDef>;
+  setUserCmds: (cmds: UserCmdDef[]) => void;
+
   alertMsg: string | null;
   showAlert: (msg: string) => void;
   clearAlert: () => void;
+
+  settingsOpen: boolean;
+  settingsInitialTab: string;
+  openSettings: (tab?: string) => void;
+  closeSettings: () => void;
+}
+
+function buildUserCmdDefs(userCmds: UserCmdDef[]): Record<string, CmdDef> {
+  const defs: Record<string, CmdDef> = {};
+  for (const uc of userCmds) {
+    const id = `ucmd_${uc.id}`;
+    const prefill: Record<number, string> = { 0: 'F1' };
+    uc.requestBytes.forEach((b, i) => {
+      if (b.default) prefill[i + 1] = b.default.toUpperCase().padStart(2, '0');
+    });
+    const fields: FieldDef[] = [
+      { label: 'pid', tip: 'USER_CMD (0xF1)' },
+      ...uc.requestBytes.map((b) => ({
+        label: b.label || 'byte',
+        tip: b.tip,
+        ...(b.options.length > 0 ? { options: b.options } : {}),
+      })),
+    ];
+    defs[id] = {
+      pid: 'F1',
+      isUserCmd: true,
+      userCmdName: uc.name,
+      group: uc.group,
+      prefill,
+      fields,
+    };
+  }
+  return defs;
 }
 
 function buildCustomCmdDefs(config: AppConfig): Record<string, CmdDef> {
@@ -118,6 +156,8 @@ export const useAppStore = create<AppStore>((set) => ({
   daqLiveValues: new Map(),
   daqDtoRate: 0,
   a2lVariables: [],
+  userCmds: [],
+  userCmdDefs: {},
 
   setConnected: (connected, slave) =>
     set((s) => ({
@@ -125,8 +165,10 @@ export const useAppStore = create<AppStore>((set) => ({
       slaveInfo: connected ? (slave ?? s.slaveInfo) : null,
     })),
 
-  setConfig: (config) =>
-    set({ config, customCmdDefs: buildCustomCmdDefs(config), events: config.events ?? [] }),
+  setConfig: (config) => {
+    const userCmds = config.user_cmds ?? [];
+    set({ config, customCmdDefs: buildCustomCmdDefs(config), events: config.events ?? [], userCmds, userCmdDefs: buildUserCmdDefs(userCmds) });
+  },
 
   setEvents: (events) => set({ events }),
 
@@ -141,6 +183,16 @@ export const useAppStore = create<AppStore>((set) => ({
         rxCount: p.direction === 'rx' ? s.rxCount + 1 : s.rxCount,
         lastPacketId: Math.max(s.lastPacketId, p.id),
       };
+    }),
+
+  batchAddPackets: (incoming) =>
+    set((s) => {
+      const all = [...s.packets, ...incoming];
+      const packets = all.length > 2000 ? all.slice(-2000) : all;
+      const txDelta = incoming.reduce((n, p) => n + (p.direction === 'tx' ? 1 : 0), 0);
+      const rxDelta = incoming.reduce((n, p) => n + (p.direction === 'rx' ? 1 : 0), 0);
+      const lastPacketId = incoming.reduce((m, p) => Math.max(m, p.id), s.lastPacketId);
+      return { packets, txCount: s.txCount + txDelta, rxCount: s.rxCount + rxDelta, lastPacketId };
     }),
 
   prependPackets: (incoming) =>
@@ -164,7 +216,7 @@ export const useAppStore = create<AppStore>((set) => ({
   setActiveCmd: (activeCmd) =>
     set((s) => {
       if (!activeCmd) return { activeCmd, byteValues: Array<string>(NUM_CELLS).fill('') };
-      const def = CMD_DEFS[activeCmd] ?? s.customCmdDefs[activeCmd];
+      const def = CMD_DEFS[activeCmd] ?? s.customCmdDefs[activeCmd] ?? s.userCmdDefs[activeCmd];
       const byteValues = Array.from(
         { length: NUM_CELLS },
         (_, i) => def?.prefill?.[i] ?? ''
@@ -195,9 +247,16 @@ export const useAppStore = create<AppStore>((set) => ({
   setDaqDtoRate: (daqDtoRate) => set({ daqDtoRate }),
   clearDaqLiveValues: () => set({ daqLiveValues: new Map() }),
   setA2lVariables: (a2lVariables) => set({ a2lVariables }),
+  setUserCmds: (userCmds) => set({ userCmds, userCmdDefs: buildUserCmdDefs(userCmds) }),
+
   alertMsg: null,
   showAlert: (msg) => set({ alertMsg: msg }),
   clearAlert: () => set({ alertMsg: null }),
+
+  settingsOpen: false,
+  settingsInitialTab: 'appearance',
+  openSettings: (tab = 'appearance') => set({ settingsOpen: true, settingsInitialTab: tab }),
+  closeSettings: () => set({ settingsOpen: false }),
   updateDaqLiveValue: (listId, odtId, name, addr, type, value) =>
     set((s) => {
       const key = `${listId}:${odtId}:${name}`;
