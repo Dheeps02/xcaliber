@@ -271,7 +271,7 @@ function ConnectionTab() {
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-gray-400 font-medium">Source</span>
             {(isDirty('bind_ip') || isDirty('listen_port')) && (
-              <button onClick={() => { resetField('bind_ip'); resetField('listen_port'); }} className="text-amber-500 hover:text-amber-300 transition-colors flex items-center" title="Reset row"><ArrowCounterClockwise size={11} /></button>
+              <button onClick={() => { resetField('bind_ip'); resetField('listen_port'); }} className="text-amber-500 hover:text-amber-300 transition-colors flex items-center" title="Reset row"><ArrowCounterClockwise size={20} /></button>
             )}
           </div>
           <input type="text" placeholder="0.0.0.0 (any)" value={draft.bind_ip} onChange={(e) => set('bind_ip', e.target.value)} className={inputCls('bind_ip')} />
@@ -282,7 +282,7 @@ function ConnectionTab() {
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-gray-400 font-medium">Destination</span>
             {(isDirty('server_ip') || isDirty('server_port')) && (
-              <button onClick={() => { resetField('server_ip'); resetField('server_port'); }} className="text-amber-500 hover:text-amber-300 transition-colors flex items-center" title="Reset row"><ArrowCounterClockwise size={11} /></button>
+              <button onClick={() => { resetField('server_ip'); resetField('server_port'); }} className="text-amber-500 hover:text-amber-300 transition-colors flex items-center" title="Reset row"><ArrowCounterClockwise size={20} /></button>
             )}
           </div>
           <input type="text" placeholder="127.0.0.1" value={draft.server_ip} onChange={(e) => set('server_ip', e.target.value)} className={inputCls('server_ip')} />
@@ -352,7 +352,7 @@ function ConnSection({ label, icon: Icon }: { label: string; icon?: React.Elemen
   return (
     <div className="flex items-center gap-2.5 pt-1">
       <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest whitespace-nowrap flex items-center gap-1.5">
-        {Icon && <Icon size={11} />}{label}
+        {Icon && <Icon size={20} />}{label}
       </span>
       <div className="flex-1 h-px bg-gray-800" />
     </div>
@@ -366,7 +366,7 @@ function Field({ label, dirty, onReset, children }: { label: string; dirty: bool
         <label className="text-[10px] text-gray-400 font-medium">{label}</label>
         {dirty && (
           <button onClick={onReset} title="Reset to default" className="text-[10px] text-amber-500 hover:text-amber-300 transition-colors flex items-center gap-0.5">
-            <ArrowCounterClockwise size={11} /> <span>reset</span>
+            <ArrowCounterClockwise size={20} /> <span>reset</span>
           </button>
         )}
       </div>
@@ -527,7 +527,7 @@ function EventsTab() {
                     onClick={() => removeEvent(i)}
                     className="text-gray-600 hover:text-red-400 transition-colors flex items-center justify-center"
                     title="Remove"
-                  ><X size={12} /></button>
+                  ><X size={20} /></button>
                 </td>
               </tr>
             ))}
@@ -538,7 +538,7 @@ function EventsTab() {
         onClick={addEvent}
         className="text-[11px] text-gray-500 hover:text-blue-400 transition-colors flex items-center gap-1"
       >
-        <Plus size={13} /> Add Event
+        <Plus size={20} /> Add Event
       </button>
       <div className="flex items-center gap-2 pt-1">
         <button
@@ -605,7 +605,7 @@ function AboutTab() {
             onClick={() => window.open(GITHUB_URL, '_blank')}
             className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors font-mono flex items-center gap-1"
           >
-            github.com/Dheeps02/xcaliber <ArrowSquareOut size={11} />
+            github.com/Dheeps02/xcaliber <ArrowSquareOut size={20} />
           </button>
         </Row>
       </div>
@@ -618,7 +618,7 @@ function AboutTab() {
             disabled={status === 'checking'}
             className="px-3 py-1.5 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-50 border border-gray-700 text-gray-300 transition-colors active:scale-95 flex items-center gap-1.5"
           >
-            <ArrowsClockwise size={13} className={status === 'checking' ? 'animate-spin' : ''} />
+            <ArrowsClockwise size={20} className={status === 'checking' ? 'animate-spin' : ''} />
             {status === 'checking' ? 'Checking…' : 'Check for Updates'}
           </button>
           {status === 'up-to-date' && (
@@ -718,7 +718,18 @@ export function Settings({ onClose, initialTab }: Props) {
                     : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
                 }`}
               >
-                <t.icon key={tab === t.id ? animKey : undefined} size={14} className={tab === t.id && animKey > 0 ? 'icon-pop' : ''} />
+                <span className="relative inline-flex shrink-0" style={{ width: 20, height: 20 }}>
+                  <t.icon size={20} weight="regular" className={tab === t.id ? 'text-black' : ''} />
+                  <span
+                    className="absolute inset-0"
+                    style={{
+                      clipPath: tab === t.id ? 'inset(0% 0 0 0)' : 'inset(100% 0 0 0)',
+                      transition: 'clip-path 320ms ease',
+                    }}
+                  >
+                    <t.icon size={20} weight="fill" />
+                  </span>
+                </span>
                 {t.label}
               </button>
             ))}
@@ -728,7 +739,7 @@ export function Settings({ onClose, initialTab }: Props) {
               onClick={handleClose}
               className="w-full px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors text-left active:scale-95 flex items-center gap-1.5"
             >
-              <X size={12} /> Close
+              <X size={20} /> Close
             </button>
           </div>
         </div>
