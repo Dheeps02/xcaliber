@@ -374,6 +374,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   const [dropOver, setDropOver] = useState<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const dropOverRef = useRef<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const [recentlyMoved, setRecentlyMoved] = useState<string | null>(null);
+  const listsRef = useRef(lists);
 
   useEffect(() => {
     if (renamingKey && renameInputRef.current) {
@@ -390,6 +391,61 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [colorPicker]);
+
+  // Keep listsRef in sync so the pointer-up handler can read entry names
+  useEffect(() => { listsRef.current = lists; }, [lists]);
+
+  // Pointer-event based drag (replaces HTML5 drag-and-drop which is unreliable in webkit2gtk)
+  useEffect(() => {
+    function onPointerMove(e: PointerEvent) {
+      if (!dragEntryRef.current) return;
+      const ds = dragEntryRef.current;
+      const els = document.elementsFromPoint(e.clientX, e.clientY);
+      const entryEl = els.find(
+        (el) => (el as HTMLElement).dataset?.entryIdx !== undefined
+      ) as HTMLElement | undefined;
+      if (!entryEl) return;
+      const lId  = parseInt(entryEl.dataset.entryList ?? '');
+      const oId  = parseInt(entryEl.dataset.entryOdt  ?? '');
+      const eIdx = parseInt(entryEl.dataset.entryIdx  ?? '');
+      if (isNaN(lId) || isNaN(oId) || isNaN(eIdx) || lId !== ds.listId || oId !== ds.odtId) return;
+      const rect  = entryEl.getBoundingClientRect();
+      const above = e.clientY < rect.top + rect.height / 2;
+      const val   = { listId: lId, odtId: oId, toIdx: eIdx, above };
+      dropOverRef.current = val;
+      setDropOver(val);
+    }
+
+    function onPointerUp() {
+      if (!dragEntryRef.current) return;
+      const de  = dragEntryRef.current;
+      const dov = dropOverRef.current;
+      dragEntryRef.current = null;
+      dropOverRef.current  = null;
+      document.body.style.cursor    = '';
+      document.body.style.userSelect = '';
+      setDragEntry(null);
+      setDropOver(null);
+      if (!dov || dov.listId !== de.listId || dov.odtId !== de.odtId) return;
+      const { fromIdx } = de;
+      const raw   = dov.above ? dov.toIdx : dov.toIdx + 1;
+      const toIdx = raw > fromIdx ? raw - 1 : raw;
+      if (toIdx === fromIdx) return;
+      const lst  = listsRef.current.find(l => l.id === de.listId);
+      const odt  = lst?.odts.find(o => o.id === de.odtId);
+      const name = odt?.entries[fromIdx]?.name ?? '';
+      setRecentlyMoved(`${de.listId}:${de.odtId}:${name}`);
+      setTimeout(() => setRecentlyMoved(null), 450);
+      onMoveEntry(de.listId, de.odtId, fromIdx, toIdx);
+    }
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup',   onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup',   onPointerUp);
+    };
+  }, [onMoveEntry]);
 
   function toggleCollapse(key: string) {
     setCollapsed(prev => {
@@ -597,54 +653,28 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                                   return (
                                   <div
                                     key={ei}
-                                    draggable
-                                    onDragStart={(e) => {
-                                      e.dataTransfer.effectAllowed = 'move';
-                                      const val = { listId: list.id, odtId: odt.id, fromIdx: ei };
-                                      dragEntryRef.current = val;
-                                      setDragEntry(val);
-                                    }}
-                                    onDragEnd={() => {
-                                      dragEntryRef.current = null;
-                                      dropOverRef.current = null;
-                                      setDragEntry(null);
-                                      setDropOver(null);
-                                    }}
-                                    onDragOver={(e) => {
-                                      const de = dragEntryRef.current;
-                                      if (!de || de.listId !== list.id || de.odtId !== odt.id) return;
-                                      e.preventDefault();
-                                      const above = e.nativeEvent.offsetY < (e.currentTarget as HTMLElement).offsetHeight / 2;
-                                      const val = { listId: list.id, odtId: odt.id, toIdx: ei, above };
-                                      dropOverRef.current = val;
-                                      setDropOver(val);
-                                    }}
-                                    onDrop={(e) => {
-                                      e.preventDefault();
-                                      const de = dragEntryRef.current;
-                                      const dov = dropOverRef.current;
-                                      if (!de || de.listId !== list.id || de.odtId !== odt.id) return;
-                                      const { fromIdx } = de;
-                                      const raw = dov?.above ? ei : ei + 1;
-                                      const toIdx = raw > fromIdx ? raw - 1 : raw;
-                                      const name = odt.entries[fromIdx]?.name ?? '';
-                                      dragEntryRef.current = null;
-                                      dropOverRef.current = null;
-                                      setDragEntry(null);
-                                      setDropOver(null);
-                                      if (toIdx !== fromIdx) {
-                                        setRecentlyMoved(`${list.id}:${odt.id}:${name}`);
-                                        setTimeout(() => setRecentlyMoved(null), 450);
-                                        onMoveEntry(list.id, odt.id, fromIdx, toIdx);
-                                      }
-                                    }}
+                                    data-entry-list={list.id}
+                                    data-entry-odt={odt.id}
+                                    data-entry-idx={ei}
                                     className={`daq-entry-row group${exitingEntries.has(`${list.id}:${odt.id}:${ei}`) ? ' daq-exiting' : ''}${isDragging ? ' opacity-40' : ''}${isDropAbove ? ' daq-drag-over-above' : ''}${isDropBelow ? ' daq-drag-over-below' : ''}${recentlyMoved === movedKey ? ' daq-moved' : ''}`}
                                     onClick={(e) => {
-                                      if (dragEntry) return;
+                                      if (dragEntryRef.current) return;
                                       setPopover({ listId: list.id, odtId: odt.id, entryIdx: ei, initial: entry, anchor: { x: e.clientX, y: e.clientY } });
                                     }}
                                   >
-                                    <span className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 shrink-0 cursor-grab active:cursor-grabbing select-none leading-none"><DotsSixVertical size={13} /></span>
+                                    <span
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 shrink-0 cursor-grab active:cursor-grabbing select-none leading-none"
+                                      onPointerDown={(e) => {
+                                        if (e.button !== 0) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const val = { listId: list.id, odtId: odt.id, fromIdx: ei };
+                                        dragEntryRef.current = val;
+                                        setDragEntry(val);
+                                        document.body.style.cursor    = 'grabbing';
+                                        document.body.style.userSelect = 'none';
+                                      }}
+                                    ><DotsSixVertical size={13} /></span>
                                     <span className="shrink-0 leading-none" style={{ color: odtColors[`${list.id}:${odt.id}`] ?? ODT_COLORS[0] }}><Waveform size={12} /></span>
                                     <span className="text-gray-300 text-[11px] flex-1 truncate">{entry.name}</span>
                                     <span className="font-mono text-gray-500 text-[10px] shrink-0">{entry.type_name}</span>
