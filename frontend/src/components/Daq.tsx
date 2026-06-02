@@ -369,9 +369,9 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   const [dropOver, setDropOver] = useState<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const dropOverRef = useRef<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const [recentlyMoved, setRecentlyMoved] = useState<string | null>(null);
-  const listsRef      = useRef(lists);
-  const entryElsRef   = useRef<Map<string, HTMLElement>>(new Map());
-  const prevEntryYRef = useRef<Map<string, number>>(new Map());
+  const listsRef    = useRef(lists);
+  const entryElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const snapshotRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (renamingKey && renameInputRef.current) {
@@ -433,6 +433,17 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
       const name = odt?.entries[fromIdx]?.name ?? '';
       setRecentlyMoved(`${de.listId}:${de.odtId}:${name}`);
       setTimeout(() => setRecentlyMoved(null), 450);
+      // Snapshot current Y positions right now — after any container animations have settled
+      const snap = new Map<string, number>();
+      const snapOdt = listsRef.current.find(l => l.id === de.listId)?.odts.find(o => o.id === de.odtId);
+      if (snapOdt) {
+        for (const e of snapOdt.entries) {
+          const k = `${de.listId}:${de.odtId}:${e.name}`;
+          const el = entryElsRef.current.get(k);
+          if (el) snap.set(k, el.getBoundingClientRect().top);
+        }
+      }
+      snapshotRef.current = snap;
       onMoveEntry(de.listId, de.odtId, fromIdx, toIdx);
     }
 
@@ -444,22 +455,18 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
     };
   }, [onMoveEntry]);
 
-  // FLIP for entry reorder: snapshot-before is stored in prevEntryYRef from the previous render.
-  // After React commits the new list order, useLayoutEffect reads old vs new Y and plays the
-  // inverse-translate trick. transitionend cleans up inline styles so they don't ghost later.
+  // FLIP: snapshot taken in onPointerUp right before onMoveEntry (positions are always current,
+  // never stale from an initial render mid-transition). transitionend cleans up inline styles.
   useLayoutEffect(() => {
-    const prev = prevEntryYRef.current;
-    const next = new Map<string, number>();
-    for (const [key, el] of entryElsRef.current) {
-      const currentY = el.getBoundingClientRect().top;
-      next.set(key, currentY);
-      const oldY = prev.get(key);
-      if (oldY === undefined) continue;           // newly added entry — no animation
-      const dy = oldY - currentY;
+    if (snapshotRef.current.size === 0) return;
+    for (const [key, prevY] of snapshotRef.current) {
+      const el = entryElsRef.current.get(key);
+      if (!el) continue;
+      const dy = prevY - el.getBoundingClientRect().top;
       if (Math.abs(dy) < 1) continue;
       el.style.transition = 'none';
       el.style.transform  = `translateY(${dy}px)`;
-      void el.offsetHeight;                       // synchronous reflow: lock in "from" state
+      void el.offsetHeight;
       el.style.transition = 'transform 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
       el.style.transform  = '';
       el.addEventListener('transitionend', function onEnd(ev: Event) {
@@ -468,7 +475,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
         el.removeEventListener('transitionend', onEnd);
       });
     }
-    prevEntryYRef.current = next;
+    snapshotRef.current = new Map();
   }, [lists]);
 
   function toggleCollapse(key: string) {
