@@ -24,6 +24,7 @@ import { useAppStore } from '../stores/app-store';
 import { formatLabel, toTitleCase, formatTime } from '../lib/utils';
 import type { PacketEntry, UserCmdDef } from '../lib/types';
 import { AnimatedCount } from './AnimatedCount';
+import { Toggle } from './Toggle';
 
 type DirFilter = 'all' | 'tx' | 'rx';
 
@@ -534,10 +535,7 @@ export function PacketTrace() {
             <span className="text-gray-700 text-[10px]">|</span>
             <AnimatedCount value={rxCount} label="RX" colorCls="text-green-400" />
           </div>
-          <label className="flex items-center gap-1.5 text-[10px] text-gray-500 cursor-pointer select-none">
-            <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} className="accent-blue-500" />
-            Auto-scroll
-          </label>
+          <Toggle active={autoScroll} onClick={() => setAutoScroll(!autoScroll)} label="Auto-scroll" />
           <button
             onClick={() => {
               setEraserWiggling(true);
