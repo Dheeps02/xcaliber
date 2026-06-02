@@ -12,8 +12,8 @@ import {
 import { createPortal } from 'react-dom';
 import {
   Trash, Wrench, Play, Stop, Pulse, ArrowSquareOut, FolderOpen,
-  Database, Plus, PencilSimple, X, DotsSixVertical, ChartLine,
-  Rows, FloppyDisk,
+  FileText, Database, Plus, PencilSimple, X, DotsSixVertical, ChartLine,
+  Rows, FloppyDisk, MagnifyingGlass, Waveform,
 } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
@@ -249,7 +249,7 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
 
   return createPortal(
     <div ref={popRef} style={style} className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2 flex items-center gap-1.5"><Rows size={11} />ODT Entry</p>
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2 flex items-center gap-1.5"><Rows size={13} />ODT Entry</p>
       <div className="space-y-2">
         <div className="relative">
           <label className="text-[10px] text-gray-500 block mb-0.5">Label</label>
@@ -325,7 +325,7 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
       <div className="flex gap-1.5 mt-3">
         <button onClick={handleSave}
           className="flex-1 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center justify-center gap-1.5">
-          <FloppyDisk size={12} />Save
+          <FloppyDisk size={14} />Save
         </button>
         <button onClick={onClose}
           className="px-3 py-1 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700 transition-colors">
@@ -370,7 +370,9 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [colorPicker, setColorPicker] = useState<{ listId: number; odtId: number; x: number; y: number } | null>(null);
   const [dragEntry, setDragEntry] = useState<{ listId: number; odtId: number; fromIdx: number } | null>(null);
+  const dragEntryRef = useRef<{ listId: number; odtId: number; fromIdx: number } | null>(null);
   const [dropOver, setDropOver] = useState<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
+  const dropOverRef = useRef<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const [recentlyMoved, setRecentlyMoved] = useState<string | null>(null);
 
   useEffect(() => {
@@ -455,9 +457,9 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5"><Database size={12} />DAQ Lists</span>
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5"><FileText size={18} />DAQ Lists</span>
         <button onClick={onAddList} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors">
-          <Plus size={11} /> Add List
+          <Plus size={12} /> Add List
         </button>
       </div>
 
@@ -496,7 +498,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                       onClick={e => { e.stopPropagation(); startRename(lKey, list.name ?? `List ${list.id}`); }}
                       className="text-gray-700 hover:text-blue-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
                       title="Rename list"
-                    ><PencilSimple size={10} /></button>
+                    ><PencilSimple size={12} /></button>
                   </div>
                 )}
                 <select
@@ -513,7 +515,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                 <button
                   onClick={e => { e.stopPropagation(); handleDeleteList(list.id); }}
                   className="ml-1 text-gray-600 hover:text-red-400 transition-colors shrink-0"
-                ><X size={10} /></button>
+                ><X size={12} /></button>
               </div>
 
               {/* Animated list body */}
@@ -565,7 +567,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                                   onClick={e => { e.stopPropagation(); startRename(oRenameKey, odt.name ?? `ODT ${odt.id}`); }}
                                   className="text-gray-700 hover:text-blue-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
                                   title="Rename ODT"
-                                ><PencilSimple size={10} /></button>
+                                ><PencilSimple size={12} /></button>
                               </div>
                             )}
                             <span className="text-gray-600 shrink-0">{odt.entries.length} entries</span>
@@ -573,7 +575,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                               onClick={e => { e.stopPropagation(); handleDeleteOdt(list.id, odt.id); }}
                               className="ml-1 text-gray-600 hover:text-red-400 transition-colors shrink-0"
                               title="Delete ODT"
-                            ><X size={10} /></button>
+                            ><X size={12} /></button>
                           </div>
 
                           {/* Animated ODT body */}
@@ -598,22 +600,36 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                                     draggable
                                     onDragStart={(e) => {
                                       e.dataTransfer.effectAllowed = 'move';
-                                      setDragEntry({ listId: list.id, odtId: odt.id, fromIdx: ei });
+                                      const val = { listId: list.id, odtId: odt.id, fromIdx: ei };
+                                      dragEntryRef.current = val;
+                                      setDragEntry(val);
                                     }}
-                                    onDragEnd={() => { setDragEntry(null); setDropOver(null); }}
+                                    onDragEnd={() => {
+                                      dragEntryRef.current = null;
+                                      dropOverRef.current = null;
+                                      setDragEntry(null);
+                                      setDropOver(null);
+                                    }}
                                     onDragOver={(e) => {
-                                      if (dragEntry?.listId !== list.id || dragEntry?.odtId !== odt.id) return;
+                                      const de = dragEntryRef.current;
+                                      if (!de || de.listId !== list.id || de.odtId !== odt.id) return;
                                       e.preventDefault();
                                       const above = e.nativeEvent.offsetY < (e.currentTarget as HTMLElement).offsetHeight / 2;
-                                      setDropOver({ listId: list.id, odtId: odt.id, toIdx: ei, above });
+                                      const val = { listId: list.id, odtId: odt.id, toIdx: ei, above };
+                                      dropOverRef.current = val;
+                                      setDropOver(val);
                                     }}
                                     onDrop={(e) => {
                                       e.preventDefault();
-                                      if (!dragEntry || dragEntry.listId !== list.id || dragEntry.odtId !== odt.id) return;
-                                      const { fromIdx } = dragEntry;
-                                      const raw = dropOver?.above ? ei : ei + 1;
+                                      const de = dragEntryRef.current;
+                                      const dov = dropOverRef.current;
+                                      if (!de || de.listId !== list.id || de.odtId !== odt.id) return;
+                                      const { fromIdx } = de;
+                                      const raw = dov?.above ? ei : ei + 1;
                                       const toIdx = raw > fromIdx ? raw - 1 : raw;
                                       const name = odt.entries[fromIdx]?.name ?? '';
+                                      dragEntryRef.current = null;
+                                      dropOverRef.current = null;
                                       setDragEntry(null);
                                       setDropOver(null);
                                       if (toIdx !== fromIdx) {
@@ -628,13 +644,14 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                                       setPopover({ listId: list.id, odtId: odt.id, entryIdx: ei, initial: entry, anchor: { x: e.clientX, y: e.clientY } });
                                     }}
                                   >
-                                    <span className="text-gray-700 shrink-0 cursor-grab active:cursor-grabbing select-none leading-none"><DotsSixVertical size={12} /></span>
+                                    <span className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 shrink-0 cursor-grab active:cursor-grabbing select-none leading-none"><DotsSixVertical size={13} /></span>
+                                    <span className="shrink-0 leading-none" style={{ color: odtColors[`${list.id}:${odt.id}`] ?? ODT_COLORS[0] }}><Waveform size={12} /></span>
                                     <span className="text-gray-300 text-[11px] flex-1 truncate">{entry.name}</span>
                                     <span className="font-mono text-gray-500 text-[10px] shrink-0">{entry.type_name}</span>
                                     <button
                                       className="ml-0.5 text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
                                       onClick={e => { e.stopPropagation(); handleDeleteEntry(list.id, odt.id, ei); }}
-                                    ><X size={10} /></button>
+                                    ><X size={12} /></button>
                                   </div>
                                   );
                                 })}
@@ -643,7 +660,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                                     onClick={e => setPopover({ listId: list.id, odtId: odt.id, entryIdx: null, anchor: { x: e.clientX, y: e.clientY } })}
                                     className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-blue-400 transition-colors"
                                   >
-                                    <Plus size={10} /> Add Entry
+                                    <Plus size={12} /> Add Entry
                                   </button>
                                 </div>
                               </div>
@@ -654,7 +671,7 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                     })}
                     <button onClick={() => onAddOdt(list.id)}
                       className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-blue-400 transition-colors px-1 py-0.5 mt-0.5">
-                      <Plus size={10} /> Add ODT
+                      <Plus size={12} /> Add ODT
                     </button>
                   </div>
                 </div>
@@ -816,8 +833,8 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5"><ChartLine size={12} />Live Values</span>
-        <span className="text-[10px] text-gray-600 font-mono">zoom: {zoom}pts · scroll on plot to adjust</span>
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5"><ChartLine size={18} />Live Values</span>
+        <span className="text-[10px] text-gray-600 font-mono flex items-center gap-1"><MagnifyingGlass size={12} />{zoom} pts</span>
       </div>
       <div className="flex-1 overflow-auto">
         {rows.length === 0 ? (
@@ -989,7 +1006,7 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
             : 'text-gray-600 border-gray-800 bg-gray-900 cursor-not-allowed opacity-40'
         }`}
       >
-        <Trash size={12} />Free All
+        <Trash size={18} />Free All
       </button>
       <div className="w-px h-4 bg-gray-800" />
 
@@ -1009,7 +1026,7 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
             </svg>
             Configuring DAQ
           </>
-        ) : <><Wrench size={12} />Configure</>}
+        ) : <><Wrench size={18} />Configure</>}
       </button>
 
       {/* Play */}
@@ -1020,7 +1037,7 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
         className={`w-6 h-6 rounded flex items-center justify-center border transition-colors text-green-400 border-green-500/30 bg-green-500/10 ${
           canStart ? 'hover:bg-green-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
         }`}
-      ><Play size={13} /></button>
+      ><Play size={14} /></button>
 
       {/* Stop */}
       <button
@@ -1030,13 +1047,13 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
         className={`w-6 h-6 rounded flex items-center justify-center border transition-colors text-red-400 border-red-500/30 bg-red-500/10 ${
           canStop ? 'hover:bg-red-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
         }`}
-      ><Stop size={13} /></button>
+      ><Stop size={14} /></button>
 
       <div className="flex-1" />
 
       {/* DTO rate */}
       <span className="text-[10px] text-gray-600 font-mono flex items-center gap-1">
-        <Pulse size={11} />{daqDtoRate} DTOs / s
+        <Pulse size={13} />{daqDtoRate} DTOs / s
       </span>
 
       <div className="w-px h-4 bg-gray-800" />
@@ -1047,14 +1064,14 @@ function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, 
         title="Export DAQ lists to .daq file"
         className="h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer"
       >
-        <ArrowSquareOut size={12} />Export
+        <ArrowSquareOut size={14} />Export
       </button>
       <button
         onClick={() => fileInputRef.current?.click()}
         title="Import DAQ lists from .daq file"
         className="h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer"
       >
-        <FolderOpen size={12} />Import
+        <FolderOpen size={14} />Import
       </button>
     </div>
   );
