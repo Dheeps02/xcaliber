@@ -2,6 +2,7 @@ import {
   useRef,
   useState,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useMemo,
   memo,
@@ -151,7 +152,7 @@ function resolveEntryAddr(input: string, a2lVars: A2lVariable[]): number | null 
 
 function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClose }: EntryPopoverProps) {
   const a2lVars  = useAppStore((s) => s.a2lVariables);
-  const showAlert = useAppStore((s) => s.showAlert);
+  const showToast = useAppStore((s) => s.showToast);
   const [name, setName] = useState(initial?.name ?? '');
   const [addr, setAddr] = useState(initial ? `0x${initial.addr.toString(16).padStart(8, '0').toUpperCase()}` : '');
   const [ext, setExt] = useState(String(initial?.addr_ext ?? 0));
@@ -209,14 +210,20 @@ function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClos
   function handleSave() {
     const addrTrim = addr.trim();
     const isHex = /^(?:0x)?[0-9a-fA-F]+$/i.test(addrTrim);
-    if (!isHex && a2lVars.length === 0) {
-      showAlert('No A2L file loaded.\n\nLoad an A2L JSON file first to resolve variable names.');
-      return;
-    }
     const resolvedAddr = resolveEntryAddr(addr, a2lVars);
     const errs: { name?: boolean; addr?: boolean } = {};
     if (!name.trim()) errs.name = true;
-    if (resolvedAddr === null) errs.addr = true;
+    if (resolvedAddr === null) {
+      errs.addr = true;
+      if (!isHex) {
+        showToast(
+          a2lVars.length === 0
+            ? 'No A2L file loaded — load one to resolve variable names'
+            : 'Unknown variable name',
+          'error'
+        );
+      }
+    }
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     onSave(
       { name: name.trim(), addr: resolvedAddr!, addr_ext: Number(ext) || 0, size: TYPE_SIZES[typeName], type_name: typeName },
@@ -374,7 +381,9 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   const [dropOver, setDropOver] = useState<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const dropOverRef = useRef<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const [recentlyMoved, setRecentlyMoved] = useState<string | null>(null);
-  const listsRef = useRef(lists);
+  const listsRef    = useRef(lists);
+  const entryElsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const snapshotRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (renamingKey && renameInputRef.current) {
@@ -394,6 +403,27 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
 
   // Keep listsRef in sync so the pointer-up handler can read entry names
   useEffect(() => { listsRef.current = lists; }, [lists]);
+
+  // FLIP animation: runs synchronously after DOM commits the new order
+  useLayoutEffect(() => {
+    if (snapshotRef.current.size === 0) return;
+    for (const [key, prevY] of snapshotRef.current) {
+      const el = entryElsRef.current.get(key);
+      if (!el) continue;
+      const dy = prevY - el.getBoundingClientRect().top;
+      if (Math.abs(dy) < 1) continue;
+      // Place element visually at its old position (no transition)
+      el.style.transition = 'none';
+      el.style.transform  = `translateY(${dy}px)`;
+      // Two rAFs: first commits the style, second starts the transition
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        el.style.transition = 'transform 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        el.style.transform  = '';
+        setTimeout(() => { el.style.transition = ''; }, 240);
+      }));
+    }
+    snapshotRef.current.clear();
+  }, [lists]);
 
   // Pointer-event based drag (replaces HTML5 drag-and-drop which is unreliable in webkit2gtk)
   useEffect(() => {
@@ -434,6 +464,10 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
       const lst  = listsRef.current.find(l => l.id === de.listId);
       const odt  = lst?.odts.find(o => o.id === de.odtId);
       const name = odt?.entries[fromIdx]?.name ?? '';
+      // Snapshot Y positions NOW (before React re-renders) for FLIP animation
+      for (const [key, el] of entryElsRef.current) {
+        snapshotRef.current.set(key, el.getBoundingClientRect().top);
+      }
       setRecentlyMoved(`${de.listId}:${de.odtId}:${name}`);
       setTimeout(() => setRecentlyMoved(null), 450);
       onMoveEntry(de.listId, de.odtId, fromIdx, toIdx);
@@ -652,7 +686,12 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
                                   const movedKey = `${list.id}:${odt.id}:${entry.name}`;
                                   return (
                                   <div
-                                    key={ei}
+                                    key={entry.name}
+                                    ref={(el) => {
+                                      const k = `${list.id}:${odt.id}:${entry.name}`;
+                                      if (el) entryElsRef.current.set(k, el);
+                                      else    entryElsRef.current.delete(k);
+                                    }}
                                     data-entry-list={list.id}
                                     data-entry-odt={odt.id}
                                     data-entry-idx={ei}
