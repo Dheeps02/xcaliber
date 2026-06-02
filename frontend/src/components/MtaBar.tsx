@@ -29,8 +29,8 @@ export function MtaBar() {
   const [mtaJiggling, setMtaJiggling]           = useState(false);
   const [uploadFlying, setUploadFlying]         = useState(false);
   const [uploadJiggling, setUploadJiggling]     = useState(false);
-  const [downloadFlying, setDownloadFlying]     = useState(false);
-  const [downloadJiggling, setDownloadJiggling] = useState(false);
+  const [downloadFlying]     = useState(false);
+  const [downloadJiggling] = useState(false);
 
   useEffect(() => {
     const t = mta.trim();

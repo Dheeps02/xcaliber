@@ -76,6 +76,8 @@ interface ConnDraft {
 function AppearanceTab() {
   const theme = useAppStore((s) => s.theme);
   const setTheme = useAppStore((s) => s.setTheme);
+  const uiZoom = useAppStore((s) => s.uiZoom);
+  const setUiZoom = useAppStore((s) => s.setUiZoom);
 
   function handleSelect(id: string) {
     setTheme(id);
@@ -83,9 +85,10 @@ function AppearanceTab() {
   }
 
   return (
-    <div>
-      <p className="text-[11px] text-gray-500 mb-4">Choose a colour theme. Changes apply instantly.</p>
-      <div className="grid grid-cols-3 gap-3">
+    <div className="space-y-6">
+      <div>
+        <p className="text-[11px] text-gray-500 mb-4">Choose a colour theme. Changes apply instantly.</p>
+        <div className="grid grid-cols-3 gap-3">
         {THEMES.map((t) => {
           const active = theme === t.id;
           const { bg, sidebar, accent, text } = t.preview;
@@ -134,6 +137,29 @@ function AppearanceTab() {
             </button>
           );
         })}
+        </div>
+      </div>
+
+      {/* Zoom */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[11px] text-gray-500 font-medium">UI Zoom</p>
+          <span className="text-[11px] font-mono text-gray-400">{Math.round(uiZoom * 100)}%</span>
+        </div>
+        <input
+          type="range"
+          min={0.7}
+          max={1.5}
+          step={0.05}
+          value={uiZoom}
+          onChange={(e) => setUiZoom(Number(e.target.value))}
+          className="w-full accent-blue-500"
+        />
+        <div className="flex justify-between text-[10px] text-gray-700 mt-1">
+          <span>70%</span>
+          <span>100%</span>
+          <span>150%</span>
+        </div>
       </div>
     </div>
   );
