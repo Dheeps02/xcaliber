@@ -21,8 +21,7 @@
         "width": 1440,
         "height": 860,
         "resizable": true,
-        "decorations": false,
-        "zoom": 1.2
+        "decorations": false
       }
     ],
     "security": {
