@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { FileCode, Link, LinkBreak, Broadcast, ArrowsClockwise, GearSix } from '@phosphor-icons/react';
+import { useRef, useState } from 'react';
+import { FileCode, Link, LinkBreak, Broadcast, ArrowsClockwise, GearSix, X } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import { Settings } from './Settings';
@@ -17,6 +17,7 @@ export function Header() {
   const openSettings       = useAppStore((s) => s.openSettings);
   const closeSettings      = useAppStore((s) => s.closeSettings);
   const a2lInputRef = useRef<HTMLInputElement>(null);
+  const [a2lFileName, setA2lFileName] = useState<string | null>(null);
 
   async function handleToggle() {
     if (connected) {
@@ -41,10 +42,16 @@ export function Header() {
         : (data as Record<string, unknown>).variables ?? [];
       if (!Array.isArray(arr)) throw new Error();
       setA2lVariables(arr as { name: string; addr: number; type?: DaqEntryType }[]);
+      setA2lFileName(file.name);
       showToast(`Loaded ${(arr as unknown[]).length} A2L variable(s)`, 'success');
     } catch {
       showToast('Invalid A2L JSON. Expected [{name, addr, type?}]', 'error');
     }
+  }
+
+  function handleUnloadA2l() {
+    setA2lVariables([]);
+    setA2lFileName(null);
   }
 
   return (
@@ -60,21 +67,39 @@ export function Header() {
         }}
       />
       <header className="flex items-center justify-between px-4 h-11 border-b border-gray-800 bg-gray-900 shrink-0">
-        {/* A2L loader — window far left */}
-        <button
-          onClick={() => a2lInputRef.current?.click()}
-          title={a2lVariables.length > 0
-            ? `A2L loaded: ${a2lVariables.length} variables`
-            : 'Load A2L JSON for variable autocomplete'}
-          className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors active:scale-95 ${
-            a2lVariables.length > 0
-              ? 'text-green-400 border-green-500/30 bg-green-500/10 hover:bg-green-500/20'
-              : 'text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700'
-          }`}
-        >
-          <FileCode size={14} />
-          A2L{a2lVariables.length > 0 ? ` (${a2lVariables.length})` : ''}
-        </button>
+        {/* A2L loader — far left */}
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            onClick={() => a2lInputRef.current?.click()}
+            title={a2lFileName ? `${a2lFileName} · ${a2lVariables.length} variables` : 'Load A2L JSON for variable autocomplete'}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors active:scale-95 shrink-0 ${
+              a2lFileName
+                ? 'text-green-400 border-green-500/30 bg-green-500/10 hover:bg-green-500/20'
+                : 'text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700'
+            }`}
+          >
+            <FileCode size={14} />
+            {a2lFileName ? 'A2L Loaded' : 'Load A2L'}
+          </button>
+          {a2lFileName && (
+            <div className="flex items-center gap-1 min-w-0">
+              <button
+                onClick={() => a2lInputRef.current?.click()}
+                title="Click to replace A2L file"
+                className="text-[10px] text-gray-500 hover:text-gray-300 truncate max-w-[160px] transition-colors"
+              >
+                {a2lFileName}
+              </button>
+              <button
+                onClick={handleUnloadA2l}
+                title="Unload A2L"
+                className="text-gray-600 hover:text-red-400 transition-colors shrink-0"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center gap-2">
 

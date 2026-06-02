@@ -512,17 +512,19 @@ export function PacketTrace() {
           >
             <Funnel size={14} weight={selectedPids.size > 0 ? 'fill' : 'regular'} />
             {selectedPids.size > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full text-[7px] text-white flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-blue-500 rounded-full text-[8px] font-bold text-white leading-none flex items-center justify-center">
                 {selectedPids.size}
               </span>
             )}
           </button>
           <button
             onClick={allCollapsed ? expandAll : collapseAll}
-            className="h-6 px-2 rounded text-[10px] flex items-center gap-1.5 text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors shrink-0"
+            title={allCollapsed ? 'Expand All' : 'Collapse All'}
+            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors shrink-0"
           >
-            {allCollapsed ? <CornersOut size={13} /> : <CornersIn size={13} />}
-            {allCollapsed ? 'Expand All' : 'Collapse All'}
+            <span key={allCollapsed ? 'out' : 'in'} className="icon-pop">
+              {allCollapsed ? <CornersOut size={13} /> : <CornersIn size={13} />}
+            </span>
           </button>
         </div>
 
@@ -544,12 +546,12 @@ export function PacketTrace() {
             }}
             onMouseEnter={() => setEraserHovered(true)}
             onMouseLeave={() => setEraserHovered(false)}
-            className="h-6 px-2 rounded text-[10px] flex items-center gap-1.5 text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors"
+            title="Clear"
+            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors"
           >
             <span className={eraserWiggling ? 'icon-wiggle' : ''}>
               <Eraser size={13} weight={eraserHovered || eraserWiggling ? 'fill' : 'regular'} />
             </span>
-            Clear
           </button>
           <button
             onClick={() => setTraceVisible(!traceVisible)}
