@@ -1225,12 +1225,13 @@ export function Daq() {
       });
     });
     const data = JSON.stringify({ version: 1, lists: daqLists, colors }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(data);
+    a.href = url;
     a.download = 'daq_config.daq';
-    document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   async function handleLoadDaq(file: File) {
