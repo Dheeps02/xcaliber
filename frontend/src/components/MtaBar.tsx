@@ -3,6 +3,39 @@ import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import type { A2lVariable } from '../lib/types';
 
+function AutoMtaToggle({ active, onClick }: { active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="flex items-center gap-2 select-none">
+      <svg
+        viewBox="0 0 256 256"
+        width={22}
+        height={22}
+        fill="currentColor"
+        className={`transition-colors ${active ? 'text-blue-400' : 'text-gray-600'}`}
+      >
+        <g fillRule="evenodd">
+          <path d="M176,56H80a72,72,0,0,0,0,144h96a72,72,0,0,0,0-144Z" />
+          <path d="M176,72H80a56,56,0,0,0,0,112h96a56,56,0,0,0,0-112Z" />
+        </g>
+        <g
+          fillRule="evenodd"
+          style={{
+            transform: active ? 'translateX(37.5%)' : 'translateX(0%)',
+            transition: 'transform 220ms cubic-bezier(0.4, 0, 0.2, 1)',
+            transformBox: 'view-box',
+          }}
+        >
+          <circle cx="80" cy="128" r="40" />
+          <circle cx="80" cy="128" r="24" />
+        </g>
+      </svg>
+      <span className={`text-[10px] transition-colors ${active ? 'text-gray-400' : 'text-gray-600'}`}>
+        Auto SET_MTA
+      </span>
+    </button>
+  );
+}
+
 function resolveAddr(input: string, a2lVars: A2lVariable[]): number | null {
   const t = input.trim();
   if (/^(?:0x)?[0-9a-fA-F]+$/i.test(t)) {
@@ -138,18 +171,7 @@ export function MtaBar() {
         </button>
       </div>
 
-      {/* Auto SET_MTA toggle */}
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <div
-          className={`w-7 h-3.5 rounded-full relative transition-colors ${autoMta ? 'bg-blue-600' : 'bg-gray-700'}`}
-          onClick={() => setAutoMta(!autoMta)}
-        >
-          <div className={`w-2.5 h-2.5 bg-white rounded-full absolute top-0.5 transition-transform ${autoMta ? 'translate-x-4' : 'translate-x-0.5'}`} />
-        </div>
-        <span className={`text-[10px] ${autoMta ? 'text-gray-400' : 'text-gray-600'}`}>
-          Auto SET_MTA
-        </span>
-      </label>
+      <AutoMtaToggle active={autoMta} onClick={() => setAutoMta(!autoMta)} />
     </div>
   );
 }
