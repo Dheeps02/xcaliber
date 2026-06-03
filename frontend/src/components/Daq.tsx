@@ -19,6 +19,7 @@ import {
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import type { DaqList, DaqOdt, DaqEntry, DaqEntryType, A2lVariable } from '../lib/types';
+import { ExportDialog } from './ExportDialog';
 
 // ── constants ────────────────────────────────────────────────────
 const TYPE_SIZES: Record<DaqEntryType, number> = {
@@ -1386,6 +1387,7 @@ export function Daq() {
 
   const [treePaneWidth, setTreePaneWidth] = useState(300);
   const [configuring, setConfiguring] = useState(false);
+  const [exportContent, setExportContent] = useState<string | null>(null);
   const [odtColors, setOdtColors] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     let idx = 0;
@@ -1526,14 +1528,7 @@ export function Daq() {
         if (c) colors[`${li}:${oi}`] = c;
       });
     });
-    const data = JSON.stringify({ version: 1, lists: daqLists, colors }, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'daq_config.daq';
-    a.click();
-    URL.revokeObjectURL(url);
+    setExportContent(JSON.stringify({ version: 1, lists: daqLists, colors }, null, 2));
   }
 
   async function handleLoadDaq(file: File) {
@@ -1630,6 +1625,14 @@ export function Daq() {
           <DaqLiveTable lists={daqLists} odtColors={odtColors} />
         </div>
       </div>
+      {exportContent !== null && (
+        <ExportDialog
+          defaultFilename="daq_config.daq"
+          content={exportContent}
+          onClose={() => setExportContent(null)}
+          onSuccess={() => showToast('DAQ config exported', 'success')}
+        />
+      )}
     </div>
   );
 }

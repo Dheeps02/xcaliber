@@ -10,6 +10,7 @@ import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import { CMD_DEFS } from '../lib/cmd-defs';
 import type { Sequence as SeqType, SeqFile, SeqStepOutcome, SeqStepResp } from '../lib/types';
+import { ExportDialog } from './ExportDialog';
 
 // ── helpers ───────────────────────────────────────────────────────
 
@@ -89,6 +90,8 @@ export function Sequence() {
   const runStatus = seqRunResult?.status ?? 'idle';
   const isRunning = runStatus === 'running';
   const canRun    = !!activeSeq && connected && !isRunning && (activeSeq.steps.length > 0);
+
+  const [exportContent, setExportContent] = useState<string | null>(null);
 
   // Expand/collapse state — mirrors trace view
   const [expandedSteps, setExpandedSteps]     = useState<Set<string>>(new Set());
@@ -243,11 +246,7 @@ export function Sequence() {
   function handleExport() {
     if (!sequences.length) return;
     const file: SeqFile = { version: 1, sequences };
-    const blob = new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'sequences.seq'; a.click();
-    URL.revokeObjectURL(url);
+    setExportContent(JSON.stringify(file, null, 2));
   }
 
   async function handleImport(file: File) {
@@ -570,6 +569,14 @@ export function Sequence() {
           })}
         </>)}
       </div>
+      {exportContent !== null && (
+        <ExportDialog
+          defaultFilename="sequences.seq"
+          content={exportContent}
+          onClose={() => setExportContent(null)}
+          onSuccess={() => showToast('Sequences exported', 'success')}
+        />
+      )}
     </div>
   );
 }
