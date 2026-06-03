@@ -55,6 +55,12 @@ impl DispatchedTransport {
         self.counter.load(Ordering::Relaxed)
     }
 
+    /// Roll back the counter after a silent keepalive so user-visible ctrs stay contiguous.
+    /// Safe to call only while the session mutex is held (no other execute can interleave).
+    pub fn undo_ctr_increment(&self) {
+        self.counter.fetch_sub(1, Ordering::Relaxed);
+    }
+
     /// Subscribe to all incoming packets (both response PIDs ≥ 0xFC and DTO PIDs < 0xFC).
     pub fn subscribe(&self) -> broadcast::Receiver<Arc<XcpPacket>> {
         self.broadcast_tx.subscribe()

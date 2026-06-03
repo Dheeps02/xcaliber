@@ -261,7 +261,11 @@ pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
                         let mut guard = state2.session.lock().await;
                         match guard.as_mut() {
                             None => break, // manually disconnected
-                            Some(session) => session.execute(&XcpCommand::GetStatus).await,
+                            Some(session) => {
+                                let r = session.execute(&XcpCommand::GetStatus).await;
+                                session.undo_ctr_increment();
+                                r
+                            }
                         }
                     };
                     if result.is_err() {
