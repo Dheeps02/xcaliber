@@ -34,6 +34,10 @@ impl XcpSession {
         self.transport.peek_ctr()
     }
 
+    pub fn undo_ctr_increment(&self) {
+        self.transport.undo_ctr_increment();
+    }
+
     /// Send a command and wait for a response PID (≥ 0xFC), skipping DAQ DTOs.
     pub async fn execute(&self, cmd: &XcpCommand) -> Result<XcpResponse, XcpError> {
         self.transport.execute(cmd).await

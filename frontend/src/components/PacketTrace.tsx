@@ -17,12 +17,12 @@ import {
   Eraser,
   CaretDown,
   CaretUp,
-  CaretRight,
   Timer,
 } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { formatLabel, toTitleCase, formatTime } from '../lib/utils';
 import type { PacketEntry, UserCmdDef } from '../lib/types';
+import { flattenDecoded, formatValue, ExpandDetailFlat, HexCell, dirBadgeCls } from './PacketDetail';
 import { AnimatedCount } from './AnimatedCount';
 import { Toggle } from './Toggle';
 
@@ -58,29 +58,6 @@ function getCommandLabel(p: PacketEntry): string {
   const d = p.decoded as Record<string, unknown>;
   if (typeof d.command === 'string') return formatLabel(d.command);
   return `0x${p.pid}`;
-}
-
-function flattenDecoded(decoded: Record<string, unknown>): [string, unknown][] {
-  if (!decoded || typeof decoded !== 'object') return [];
-  const type = decoded.type as string | undefined;
-  const data = decoded.data;
-  if (type && data && typeof data === 'object') {
-    return [['type', type], ...Object.entries(data as Record<string, unknown>)];
-  }
-  return Object.entries(decoded);
-}
-
-function formatValue(v: unknown): string {
-  if (v === null || v === undefined) return '—';
-  if (typeof v === 'boolean') return String(v);
-  if (typeof v === 'number')
-    return Number.isInteger(v)
-      ? `0x${v.toString(16).toUpperCase().padStart(2, '0')} (${v})`
-      : String(v);
-  if (typeof v === 'string') return v;
-  if (Array.isArray(v))
-    return v.map((b) => (typeof b === 'number' ? b.toString(16).toUpperCase().padStart(2, '0') : String(b))).join(' ');
-  return JSON.stringify(v);
 }
 
 // ── USER_CMD response decoder ─────────────────────────────────────
@@ -126,18 +103,6 @@ function decodeUserCmdRx(
     .map((b): [string, unknown] => [b.label || `byte[${b.offset}]`, rxBytes[b.offset] ?? null]);
 }
 
-function HexCell({ hex, dir }: { hex: string; dir: 'tx' | 'rx' }) {
-  const cls = dir === 'tx' ? 'text-blue-400' : 'text-green-400';
-  if (!hex) return <span className="text-gray-600 italic">—</span>;
-  return (
-    <>
-      {hex.split(' ').map((b, i) => (
-        <span key={i} className={cls}>{b} </span>
-      ))}
-    </>
-  );
-}
-
 function ExpandDetail({ p, colSpan, open }: { p: PacketEntry; colSpan: number; open: boolean }) {
   const isErr = p.pid === 'FE';
   const valueCls = isErr
@@ -178,56 +143,6 @@ function ExpandDetail({ p, colSpan, open }: { p: PacketEntry; colSpan: number; o
       </td>
     </tr>
   );
-}
-
-function ExpandDetailFlat({ p, open, extraFields }: { p: PacketEntry; open: boolean; extraFields?: [string, unknown][] }) {
-  const isErr = p.pid === 'FE';
-  const valueCls = isErr
-    ? 'text-red-400'
-    : p.direction === 'tx'
-    ? 'text-blue-400'
-    : 'text-green-400';
-  const allFields = flattenDecoded(p.decoded);
-  const baseRows = p.direction === 'tx'
-    ? allFields.filter(([k]) => k !== 'command')
-    : allFields;
-  const rows = extraFields && extraFields.length > 0 ? extraFields : baseRows;
-
-  return (
-    <div className="bg-gray-900/60 overflow-hidden">
-      <div className={`expand-content ${open ? 'px-6 pb-3 pt-1' : 'closed'}`} style={{ maxHeight: open ? '300px' : undefined }}>
-        <div className={`text-[10px] mb-1.5 uppercase tracking-wider ${isErr ? 'text-red-500' : 'text-gray-500'}`}>
-          {p.direction === 'tx'
-            ? <><PaperPlaneTilt size={11} className="inline mr-1" />TX · PID 0x{p.pid}</>
-            : isErr
-            ? <><WarningCircle size={11} className="inline mr-1" />ERR · PID 0x{p.pid}</>
-            : <><DownloadSimple size={11} className="inline mr-1" />RX · PID 0x{p.pid}</>
-          }
-        </div>
-        <div className="space-y-0.5 text-xs">
-          {rows.length > 0 ? (
-            rows.map(([k, v]) => (
-              <div key={k}>
-                <span className="w-36 inline-block text-gray-500">{toTitleCase(k)}</span>
-                <span className={valueCls}>{formatValue(v)}</span>
-              </div>
-            ))
-          ) : (
-            <span className="text-gray-700 italic">no field data</span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function dirBadgeCls(p: PacketEntry) {
-  const isErr = p.pid === 'FE';
-  return p.direction === 'tx'
-    ? 'bg-[#1e3a8a] text-[#93c5fd] border border-[#3b82f6]'
-    : isErr
-    ? 'bg-red-900/30 text-red-400 border border-red-500/50'
-    : 'bg-[#064e3b] text-[#6ee7b7] border border-[#10b981]';
 }
 
 // ── PID filter popover ────────────────────────────────────────────
@@ -568,7 +483,7 @@ export function PacketTrace() {
 
       {/* Table */}
       {traceVisible && (
-        <div className="flex-1 overflow-y-auto trace-mono text-xs" style={{ transform: 'translateZ(0)' }}>
+        <div className="flex-1 overflow-y-auto font-mono text-xs" style={{ transform: 'translateZ(0)' }}>
           <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: colWidths[0] }} />
@@ -578,20 +493,20 @@ export function PacketTrace() {
               <col />
             </colgroup>
             <thead className="sticky top-0 bg-gray-900 z-10">
-              <tr className="text-left text-[10px] text-gray-500 uppercase tracking-wider select-none">
-                <th className="px-3 py-2 relative overflow-hidden">Command
+              <tr className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-widest select-none border-b border-gray-800">
+                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">Command
                   <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(0, e)} />
                 </th>
-                <th className="px-3 py-2 relative overflow-hidden">DIR
+                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">DIR
                   <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(1, e)} />
                 </th>
-                <th className="px-3 py-2 relative overflow-hidden">CTR
+                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">CTR
                   <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(2, e)} />
                 </th>
-                <th className="px-3 py-2 relative overflow-hidden">Time
+                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">Time
                   <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(3, e)} />
                 </th>
-                <th className="px-3 py-2">Hex</th>
+                <th className="px-3 py-1.5 font-semibold">Hex</th>
               </tr>
             </thead>
             <tbody>
@@ -624,19 +539,14 @@ export function PacketTrace() {
                         onClick={(e) => toggleGroup(g.key, e)}
                       >
                         <td
-                          className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 border-y border-gray-800/60 bg-gray-900/70 group-hover:bg-gray-800/50 transition-colors"
+                          className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-800 bg-gray-900/70 group-hover:bg-gray-800/40 transition-colors"
                           style={{ width: colWidths[0] }}
                         >
-                          <div className="flex items-center gap-2">
-                            <CaretRight
-                              size={10}
-                              className={`transition-transform duration-150 shrink-0 ${isGroupCollapsed ? '' : 'rotate-90'}`}
-                            />
-                            <span>{cmdLabel}</span>
-                          </div>
+                          <span className="mr-1.5 inline-block">{isGroupCollapsed ? '▸' : '▾'}</span>
+                          {cmdLabel}
                         </td>
                         <td
-                          className="px-3 py-1.5 border-y border-gray-800/60 bg-gray-900/70 group-hover:bg-gray-800/50 transition-colors"
+                          className="px-3 py-1 border-b border-gray-800 bg-gray-900/70 group-hover:bg-gray-800/40 transition-colors"
                           style={{ width: colWidths[1] }}
                         >
                           {isGroupCollapsed && (
@@ -647,7 +557,7 @@ export function PacketTrace() {
                             </div>
                           )}
                         </td>
-                        <td colSpan={3} className="border-y border-gray-800/60 bg-gray-900/70 group-hover:bg-gray-800/50 transition-colors" />
+                        <td colSpan={3} className="border-b border-gray-800 bg-gray-900/70 group-hover:bg-gray-800/40 transition-colors" />
                       </tr>
 
                       {/* ── Sub-rows — single TR/TD with grid wrapper for smooth height animation ── */}

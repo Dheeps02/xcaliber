@@ -10,6 +10,7 @@ import { MtaBar } from './components/MtaBar';
 import { ByteBar } from './components/ByteBar';
 import { PacketTrace } from './components/PacketTrace';
 import { Daq } from './components/Daq';
+import { Sequence } from './components/Sequence';
 import { AlertModal } from './components/AlertModal';
 import { useAppStore } from './stores/app-store';
 
@@ -72,6 +73,16 @@ function AppInner() {
             >
               DAQ
             </button>
+            <button
+              onClick={() => setActiveMainTab('sequence')}
+              className={`px-3 pb-1 text-xs font-medium transition-colors ${
+                activeMainTab === 'sequence'
+                  ? 'border-b-2 border-blue-500 text-blue-400'
+                  : 'border-b-2 border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Sequence
+            </button>
           </div>
 
           {/* Tab content — both always mounted; CSS controls active/inactive */}
@@ -81,6 +92,9 @@ function AppInner() {
             </div>
             <div className={`tab-panel ${activeMainTab === 'daq' ? 'tab-panel-active' : 'tab-panel-inactive'}`}>
               <Daq />
+            </div>
+            <div className={`tab-panel ${activeMainTab === 'sequence' ? 'tab-panel-active' : 'tab-panel-inactive'}`}>
+              <Sequence />
             </div>
           </div>
         </main>

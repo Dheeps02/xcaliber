@@ -432,6 +432,77 @@ select {
   background: #4b5563;
   box-shadow: 0 0 4px 1px rgba(75,85,99,.4);
 }
+.blinker-green {
+  background: #22c55e;
+  box-shadow: 0 0 6px 2px rgba(34,197,94,.5);
+}
+.blinker-red {
+  background: #ef4444;
+  box-shadow: 0 0 6px 2px rgba(239,68,68,.5);
+}
+
+/* ── Sequence tab ───────────────────────────────────────────────── */
+.seq-step-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 16px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid rgba(31,41,55,0.9);
+  transition: background 100ms;
+}
+.seq-step-hdr:hover { background: rgba(55,65,81,0.18); }
+.seq-step-hdr.active {
+  background: rgba(59,130,246,0.07);
+  border-left: 2px solid #3b82f6;
+  padding-left: 14px;
+}
+.seq-step-status {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #4b5563;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 200ms;
+}
+.seq-step-status.pass    { border-color: #22c55e; background: #22c55e; }
+.seq-step-status.fail    { border-color: #ef4444; background: #ef4444; }
+.seq-step-status.skipped { border-color: #374151; background: #374151; }
+.seq-step-status.running {
+  border-color: #fbbf24;
+  animation: result-pulse 0.9s ease-in-out infinite;
+}
+@keyframes result-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.seq-step-detail {
+  background: rgba(3,7,18,0.5);
+  border-bottom: 1px solid rgba(31,41,55,0.9);
+}
+.resp-toggle {
+  display: inline-flex;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.resp-btn {
+  padding: 2px 6px;
+  font-size: 9px;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 100ms;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+.resp-btn:hover { color: #d1d5db; background: rgba(55,65,81,0.5); }
+.resp-btn.active { background: #374151; color: #d1d5db; }
+.resp-btn.active[data-val="neg"] { background: rgba(239,68,68,0.15); color: #f87171; }
+.resp-btn.active[data-val="pos"] { background: rgba(34,197,94,0.15); color: #4ade80; }
 
 /* ── DAQ tree components ────────────────────────────────────────── */
 .daq-list-card {

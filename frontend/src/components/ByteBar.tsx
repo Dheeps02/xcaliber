@@ -11,7 +11,7 @@ import { useAppStore } from '../stores/app-store';
 import { useTooltip } from '../context/TooltipContext';
 import { CMD_DEFS } from '../lib/cmd-defs';
 import { api } from '../lib/api';
-import type { FieldOption } from '../lib/types';
+import type { FieldOption, SeqStep } from '../lib/types';
 import { toTitleCase } from '../lib/utils';
 
 const BASE_CELLS = 8;
@@ -60,6 +60,12 @@ export function ByteBar() {
   const collapsed = useAppStore((s) => s.byteBarCollapsed);
   const setCollapsed = useAppStore((s) => s.setByteBarCollapsed);
   const showToast = useAppStore((s) => s.showToast);
+  const activeMainTab = useAppStore((s) => s.activeMainTab);
+  const activeSequenceId = useAppStore((s) => s.activeSequenceId);
+  const seqSelectedStepId = useAppStore((s) => s.seqSelectedStepId);
+  const sequences = useAppStore((s) => s.sequences);
+  const updateSequence = useAppStore((s) => s.updateSequence);
+  const setSeqSelectedStepId = useAppStore((s) => s.setSeqSelectedStepId);
   const { showTip, hideTip } = useTooltip();
   const [dropdown, setDropdown] = useState<Dropdown | null>(null);
 
@@ -221,6 +227,27 @@ export function ByteBar() {
       await api.raw(bytes)
         .catch((e: Error) => showToast(e.message, 'error'));
     }
+  }
+
+  function handleAddToSequence() {
+    const seq = sequences.find((s) => s.id === activeSequenceId);
+    if (!seq) return;
+    const stepBytes = Array.from({ length: BASE_CELLS }, (_, i) => allBytes[i]?.trim() ?? '');
+    const cmdKey = activeCmd ?? (CMD_DEFS[stepBytes[0]?.toLowerCase()] ? stepBytes[0].toLowerCase() : 'raw');
+    const newStep: SeqStep = {
+      id: crypto.randomUUID(),
+      cmdKey,
+      bytes: stepBytes,
+      resp: 'either',
+    };
+    updateSequence({ ...seq, steps: [...seq.steps, newStep] });
+  }
+
+  function handleRemoveFromSequence() {
+    const seq = sequences.find((s) => s.id === activeSequenceId);
+    if (!seq || !seqSelectedStepId) return;
+    updateSequence({ ...seq, steps: seq.steps.filter((s) => s.id !== seqSelectedStepId) });
+    setSeqSelectedStepId(null);
   }
 
   const startByte = section * BASE_CELLS;
@@ -443,12 +470,31 @@ export function ByteBar() {
         <NavBtn onClick={goForward}>›</NavBtn>
       </div>
 
-      <button
-        onClick={() => { setSendFlying(true); setTimeout(() => setSendFlying(false), 550); handleSend(); }}
-        className="w-full mt-2 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center justify-center gap-1.5"
-      >
-        <span className={sendFlying ? 'icon-send-cycle' : ''}><PaperPlaneTilt size={15} /></span>Send
-      </button>
+      {activeMainTab === 'sequence' ? (
+        <div className="mt-2 flex gap-2">
+          <button
+            onClick={handleAddToSequence}
+            disabled={!activeSequenceId}
+            className="flex-1 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+          >
+            + Add to Sequence
+          </button>
+          <button
+            onClick={handleRemoveFromSequence}
+            disabled={!seqSelectedStepId}
+            className="px-3 py-1.5 rounded-md text-xs font-medium border border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Remove
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => { setSendFlying(true); setTimeout(() => setSendFlying(false), 550); handleSend(); }}
+          className="w-full mt-2 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center justify-center gap-1.5"
+        >
+          <span className={sendFlying ? 'icon-send-cycle' : ''}><PaperPlaneTilt size={15} /></span>Send
+        </button>
+      )}
 
           </div>{/* /px-4 pb-2 */}
         </div>{/* /overflow-hidden */}

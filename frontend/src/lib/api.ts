@@ -1,4 +1,4 @@
-import type { ConnectResponse, PacketEntry, AppConfig, NetworkInterface, DaqList, DaqEntry, DaqStatus, EventDef } from './types';
+import type { ConnectResponse, PacketEntry, AppConfig, NetworkInterface, DaqList, DaqEntry, DaqStatus, EventDef, Sequence } from './types';
 
 const BASE = import.meta.env.DEV ? '' : 'http://localhost:8080';
 
@@ -103,4 +103,7 @@ export const api = {
     post<{ ok: boolean }>('/api/daq/free'),
   daqStatus: () =>
     get<{ state: DaqStatus; lists: DaqList[] }>('/api/daq/status'),
+
+  // ── Sequence ──────────────────────────────────────────────────────
+  seqRun: (seq: Sequence) => post<{ ok: boolean }>('/api/sequence/run', seq),
 };

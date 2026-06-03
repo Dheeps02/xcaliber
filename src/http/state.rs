@@ -58,6 +58,8 @@ pub struct AppState {
     pub daq_dto_map: Mutex<HashMap<u8, (u32, u32, Vec<DaqEntryDef>)>>,
     /// Handle to the running DTO receive task (Some while DAQ is running).
     pub daq_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    /// Handle to the slave drop monitor task — aborted on manual disconnect.
+    pub monitor_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 /// A packet log entry (mirrors the DB row).
@@ -98,6 +100,7 @@ impl AppState {
             daq_lists: Mutex::new(Vec::new()),
             daq_dto_map: Mutex::new(HashMap::new()),
             daq_task: Mutex::new(None),
+            monitor_task: Mutex::new(None),
         }
     }
 

@@ -19,6 +19,7 @@ import {
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import type { DaqList, DaqOdt, DaqEntry, DaqEntryType, A2lVariable } from '../lib/types';
+import { ExportDialog } from './ExportDialog';
 
 // ── constants ────────────────────────────────────────────────────
 const TYPE_SIZES: Record<DaqEntryType, number> = {
@@ -28,11 +29,12 @@ const DEFAULT_COL_WIDTHS = { signal: 160, value: 96, type: 52, address: 100, lis
 const ODT_COLORS = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#ec4899','#84cc16'];
 
 // ── Sparkline ────────────────────────────────────────────────────
-const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 40, onZoomChange }: {
+const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 40, onZoomChange, lineStyle }: {
   history: number[];
   color?: string;
   zoom?: number;
   onZoomChange?: (dir: number) => void;
+  lineStyle?: React.CSSProperties;
 }) {
   const W = 200, H = 22;
   const svgRef = useRef<SVGSVGElement>(null);
@@ -84,15 +86,14 @@ const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 4
         </linearGradient>
       </defs>
 
-      {/* Background */}
+      {/* Background — fades with row, not clipped */}
       <rect width={W} height={H} fill={color} fillOpacity={0.06} />
 
-
-      {/* Gradient fill */}
-      <path d={fillPath} fill={`url(#${gradId})`} />
-
-      {/* Line */}
-      <polyline points={pts} fill="none" style={{ stroke: color, transition: 'stroke 300ms ease' }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      {/* Line + fill — clipped by reveal animation */}
+      <g style={lineStyle}>
+        <path d={fillPath} fill={`url(#${gradId})`} />
+        <polyline points={pts} fill="none" style={{ stroke: color, transition: 'stroke 300ms ease' }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      </g>
     </svg>
   );
 });
@@ -1103,8 +1104,8 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
                                   <div className="px-3 py-1.5 text-gray-500" style={{ width: colWidths.type, flexShrink: 0 }}>{row.entry.type_name}</div>
                                   <div className="px-3 py-1.5 text-gray-500" style={{ width: colWidths.address, flexShrink: 0 }}>0x{row.entry.addr.toString(16).padStart(8, '0').toUpperCase()}</div>
                                   <div className="px-3 py-1.5 text-gray-600" style={{ width: colWidths.listOdt, flexShrink: 0 }}>{row.listId}/{row.odtId}</div>
-                                  <div className="px-2 py-1 flex-1 min-w-0" style={plotStyle}>
-                                    <Sparkline history={row.history} color={rowColor} zoom={zoom} onZoomChange={handleZoom} />
+                                  <div className="px-2 py-1 flex-1 min-w-0">
+                                    <Sparkline history={row.history} color={rowColor} zoom={zoom} onZoomChange={handleZoom} lineStyle={plotStyle} />
                                   </div>
                                 </div>
                               );
@@ -1377,14 +1378,16 @@ function PaneSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
 
 // ── Root DAQ component ───────────────────────────────────────────
 export function Daq() {
-  const daqLists           = useAppStore(s => s.daqLists);
-  const setDaqLists        = useAppStore(s => s.setDaqLists);
-  const setDaqStatus       = useAppStore(s => s.setDaqStatus);
-  const clearDaqLiveValues = useAppStore(s => s.clearDaqLiveValues);
-  const showToast          = useAppStore(s => s.showToast);
+  const daqLists              = useAppStore(s => s.daqLists);
+  const setDaqLists           = useAppStore(s => s.setDaqLists);
+  const setDaqStatus          = useAppStore(s => s.setDaqStatus);
+  const clearDaqLiveValues    = useAppStore(s => s.clearDaqLiveValues);
+  const showToast             = useAppStore(s => s.showToast);
+  const setDaqListsFromFile   = useAppStore(s => s.setDaqListsFromFile);
 
   const [treePaneWidth, setTreePaneWidth] = useState(300);
   const [configuring, setConfiguring] = useState(false);
+  const [exportContent, setExportContent] = useState<string | null>(null);
   const [odtColors, setOdtColors] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     let idx = 0;
@@ -1525,14 +1528,7 @@ export function Daq() {
         if (c) colors[`${li}:${oi}`] = c;
       });
     });
-    const data = JSON.stringify({ version: 1, lists: daqLists, colors }, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'daq_config.daq';
-    a.click();
-    URL.revokeObjectURL(url);
+    setExportContent(JSON.stringify({ version: 1, lists: daqLists, colors }, null, 2));
   }
 
   async function handleLoadDaq(file: File) {
@@ -1549,6 +1545,7 @@ export function Daq() {
         odts: (l.odts ?? []).map((o: DaqOdt, oi: number) => ({ ...o, id: oi })),
       }));
       setDaqLists(reIndexed);
+      setDaqListsFromFile(true);
       if (data.colors) {
         setOdtColors(data.colors);
       }
@@ -1628,6 +1625,14 @@ export function Daq() {
           <DaqLiveTable lists={daqLists} odtColors={odtColors} />
         </div>
       </div>
+      {exportContent !== null && (
+        <ExportDialog
+          defaultFilename="daq_config.daq"
+          content={exportContent}
+          onClose={() => setExportContent(null)}
+          onSuccess={() => showToast('DAQ config exported', 'success')}
+        />
+      )}
     </div>
   );
 }

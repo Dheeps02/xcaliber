@@ -34,6 +34,7 @@ function BroadcastCustom({ size, pulsing, pulseKey }: { size: number; pulsing: b
 export function Header() {
   const connected          = useAppStore((s) => s.connected);
   const setConnected       = useAppStore((s) => s.setConnected);
+  const setSlaveDropped    = useAppStore((s) => s.setSlaveDropped);
   const showToast          = useAppStore((s) => s.showToast);
   const a2lVariables       = useAppStore((s) => s.a2lVariables);
   const setA2lVariables    = useAppStore((s) => s.setA2lVariables);
@@ -52,6 +53,7 @@ export function Header() {
 
   async function handleToggle() {
     if (connected) {
+      setSlaveDropped(false);
       setConnected(false);
       await api.disconnect().catch(() => {});
     } else {

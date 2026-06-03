@@ -252,6 +252,34 @@ pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
                 "event": "state_changed",
                 "data": { "state": "connected", "slave": info },
             })).unwrap_or_default());
+
+            let state2 = Arc::clone(&state);
+            let monitor = tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                    let result = {
+                        let mut guard = state2.session.lock().await;
+                        match guard.as_mut() {
+                            None => break, // manually disconnected
+                            Some(session) => {
+                                let r = session.execute(&XcpCommand::GetStatus).await;
+                                session.undo_ctr_increment();
+                                r
+                            }
+                        }
+                    };
+                    if result.is_err() {
+                        *state2.session.lock().await = None;
+                        let _ = state2.tx.send(serde_json::to_string(&json!({
+                            "event": "state_changed",
+                            "data": { "state": "disconnected" },
+                        })).unwrap_or_default());
+                        break;
+                    }
+                }
+            });
+            *state.monitor_task.lock().unwrap() = Some(monitor);
+
             Json(json!({ "ok": true, "slave": info })).into_response()
         }
         Err(e) => {
@@ -262,6 +290,10 @@ pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 }
 
 pub async fn disconnect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    if let Some(task) = state.monitor_task.lock().unwrap().take() {
+        task.abort();
+    }
+
     let ctr = {
         let guard = state.session.lock().await;
         guard.as_ref().map(|s| s.peek_next_ctr()).unwrap_or(0)
@@ -869,4 +901,110 @@ pub async fn daq_free(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         }
         Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
+}
+
+// ── Sequence ─────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct SeqStepBody {
+    pub id: String,
+    pub bytes: Vec<u8>,
+    pub resp: String,
+    pub disabled: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeqRunBody {
+    pub abort_on_error: bool,
+    pub step_delay_ms: Option<u64>,
+    pub steps: Vec<SeqStepBody>,
+}
+
+fn check_resp(resp: &[u8], mode: &str) -> bool {
+    match mode {
+        "pos" => resp.first() == Some(&0xFF),
+        "neg" => resp.first() == Some(&0xFE),
+        _     => true,
+    }
+}
+
+pub async fn seq_run(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<SeqRunBody>,
+) -> impl IntoResponse {
+    let delay_ms = body.step_delay_ms.unwrap_or(0);
+    let total = body.steps.iter().filter(|s| s.disabled != Some(true)).count();
+    let mut done = 0usize;
+    let mut final_status = "done";
+
+    for step in &body.steps {
+        if step.disabled == Some(true) {
+            let _ = state.tx.send(serde_json::to_string(&json!({
+                "event": "seq_step_done",
+                "data": { "stepId": step.id, "outcome": "skipped" }
+            })).unwrap_or_default());
+            continue;
+        }
+
+        let bytes = step.bytes.clone();
+        if bytes.is_empty() {
+            let _ = state.tx.send(serde_json::to_string(&json!({
+                "event": "seq_step_done",
+                "data": { "stepId": step.id, "outcome": "error", "errorMsg": "Step has no bytes" }
+            })).unwrap_or_default());
+            if body.abort_on_error { final_status = "aborted"; break; }
+            continue;
+        }
+
+        let tx_hex = bytes_to_hex(&bytes);
+        match run_cmd(&state, XcpCommand::Raw { bytes }).await {
+            Err(e) => {
+                let _ = state.tx.send(serde_json::to_string(&json!({
+                    "event": "seq_step_done",
+                    "data": {
+                        "stepId": step.id,
+                        "outcome": "error",
+                        "txHex": tx_hex,
+                        "errorMsg": user_error(&e),
+                    }
+                })).unwrap_or_default());
+                if body.abort_on_error {
+                    final_status = "aborted";
+                    break;
+                }
+            }
+            Ok(resp) => {
+                done += 1;
+                let rx_bytes = resp.encode();
+                let rx_hex = bytes_to_hex(&rx_bytes);
+                let passed = check_resp(&rx_bytes, &step.resp);
+                let outcome = if passed { "pass" } else { "fail" };
+                let _ = state.tx.send(serde_json::to_string(&json!({
+                    "event": "seq_step_done",
+                    "data": {
+                        "stepId": step.id,
+                        "outcome": outcome,
+                        "txHex": tx_hex,
+                        "rxHex": rx_hex,
+                    }
+                })).unwrap_or_default());
+                if !passed && body.abort_on_error {
+                    final_status = "aborted";
+                    break;
+                }
+            }
+        }
+
+        if delay_ms > 0 {
+            tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+        }
+    }
+
+    let _ = state.tx.send(serde_json::to_string(&json!({
+        "event": "seq_run_finished",
+        "data": { "status": final_status, "stepsTotal": total, "stepsDone": done }
+    })).unwrap_or_default());
+
+    Json(json!({ "ok": true }))
 }
