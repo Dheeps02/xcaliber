@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FolderOpen } from '@phosphor-icons/react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { documentDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 
-const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+const inTauri = isTauri();
 
 const EXIT_MS = 130;
 
@@ -24,7 +24,7 @@ export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: P
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
-    if (!isTauri) return;
+    if (!inTauri) return;
     documentDir().then(setFolder).catch(() => setFolder(''));
   }, []);
 
@@ -46,7 +46,7 @@ export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: P
     setError('');
 
     try {
-      if (isTauri) {
+      if (inTauri) {
         const sep = folder.endsWith('/') || folder.endsWith('\\') ? '' : '/';
         const path = folder ? `${folder}${sep}${name}` : name;
         await invoke('save_file', { path, content });
@@ -87,7 +87,7 @@ export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: P
         </div>
 
         {/* Folder — Tauri only */}
-        {isTauri && (
+        {inTauri && (
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Folder</label>
             <div className="flex gap-2">
