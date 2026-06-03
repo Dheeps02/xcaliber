@@ -285,6 +285,18 @@ export function Sequence() {
         </button>
       </div>
 
+      {/* Steps list header */}
+      <div className="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5">
+          <ListBullets size={14} />Steps
+        </span>
+        {activeSeq && (
+          <span className="text-[10px] text-gray-700 tabular-nums">
+            {activeSeq.steps.length} step{activeSeq.steps.length !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
       {/* Steps list */}
       <div className="flex-1 overflow-y-auto">
         {!activeSeq ? (

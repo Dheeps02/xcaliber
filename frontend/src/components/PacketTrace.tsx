@@ -17,7 +17,6 @@ import {
   Eraser,
   CaretDown,
   CaretUp,
-  CaretRight,
   Timer,
 } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
@@ -568,7 +567,7 @@ export function PacketTrace() {
 
       {/* Table */}
       {traceVisible && (
-        <div className="flex-1 overflow-y-auto trace-mono text-xs" style={{ transform: 'translateZ(0)' }}>
+        <div className="flex-1 overflow-y-auto font-mono text-xs" style={{ transform: 'translateZ(0)' }}>
           <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: colWidths[0] }} />
@@ -578,20 +577,20 @@ export function PacketTrace() {
               <col />
             </colgroup>
             <thead className="sticky top-0 bg-gray-900 z-10">
-              <tr className="text-left text-[10px] text-gray-500 uppercase tracking-wider select-none">
-                <th className="px-3 py-2 relative overflow-hidden">Command
+              <tr className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-widest select-none border-b border-gray-800">
+                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">Command
                   <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(0, e)} />
                 </th>
-                <th className="px-3 py-2 relative overflow-hidden">DIR
+                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">DIR
                   <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(1, e)} />
                 </th>
-                <th className="px-3 py-2 relative overflow-hidden">CTR
+                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">CTR
                   <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(2, e)} />
                 </th>
-                <th className="px-3 py-2 relative overflow-hidden">Time
+                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">Time
                   <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(3, e)} />
                 </th>
-                <th className="px-3 py-2">Hex</th>
+                <th className="px-3 py-1.5 font-semibold">Hex</th>
               </tr>
             </thead>
             <tbody>
@@ -624,19 +623,14 @@ export function PacketTrace() {
                         onClick={(e) => toggleGroup(g.key, e)}
                       >
                         <td
-                          className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 border-y border-gray-800/60 bg-gray-900/70 group-hover:bg-gray-800/50 transition-colors"
+                          className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-800 bg-gray-900/70 group-hover:bg-gray-800/40 transition-colors"
                           style={{ width: colWidths[0] }}
                         >
-                          <div className="flex items-center gap-2">
-                            <CaretRight
-                              size={10}
-                              className={`transition-transform duration-150 shrink-0 ${isGroupCollapsed ? '' : 'rotate-90'}`}
-                            />
-                            <span>{cmdLabel}</span>
-                          </div>
+                          <span className="mr-1.5 inline-block">{isGroupCollapsed ? '▸' : '▾'}</span>
+                          {cmdLabel}
                         </td>
                         <td
-                          className="px-3 py-1.5 border-y border-gray-800/60 bg-gray-900/70 group-hover:bg-gray-800/50 transition-colors"
+                          className="px-3 py-1 border-b border-gray-800 bg-gray-900/70 group-hover:bg-gray-800/40 transition-colors"
                           style={{ width: colWidths[1] }}
                         >
                           {isGroupCollapsed && (
@@ -647,7 +641,7 @@ export function PacketTrace() {
                             </div>
                           )}
                         </td>
-                        <td colSpan={3} className="border-y border-gray-800/60 bg-gray-900/70 group-hover:bg-gray-800/50 transition-colors" />
+                        <td colSpan={3} className="border-b border-gray-800 bg-gray-900/70 group-hover:bg-gray-800/40 transition-colors" />
                       </tr>
 
                       {/* ── Sub-rows — single TR/TD with grid wrapper for smooth height animation ── */}
