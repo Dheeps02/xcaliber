@@ -158,10 +158,18 @@ export function Sequence() {
     setSeqRunResult({ status: 'running', stepResults: [] });
     const payload = {
       ...activeSeq,
-      steps: activeSeq!.steps.map((step) => ({
-        ...step,
-        bytes: step.bytes.map((b) => (b.trim() ? parseInt(b, 16) & 0xff : 0)),
-      })),
+      steps: activeSeq!.steps.map((step) => {
+        // Mirror ByteBar's send logic: find the last explicitly-filled cell,
+        // then convert only up to that point (so '00' is preserved but trailing '' are dropped).
+        let lastFilled = -1;
+        for (let i = step.bytes.length - 1; i >= 0; i--) {
+          if (step.bytes[i]?.trim()) { lastFilled = i; break; }
+        }
+        const bytes = step.bytes
+          .slice(0, lastFilled + 1)
+          .map((b) => (b.trim() ? parseInt(b, 16) & 0xff : 0));
+        return { ...step, bytes };
+      }),
     };
     try {
       await api.seqRun(payload as unknown as SeqType);

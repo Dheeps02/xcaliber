@@ -943,11 +943,15 @@ pub async fn seq_run(
             continue;
         }
 
-        let bytes: Vec<u8> = {
-            let mut b = step.bytes.clone();
-            while b.last() == Some(&0) { b.pop(); }
-            b
-        };
+        let bytes = step.bytes.clone();
+        if bytes.is_empty() {
+            let _ = state.tx.send(serde_json::to_string(&json!({
+                "event": "seq_step_done",
+                "data": { "stepId": step.id, "outcome": "error", "errorMsg": "Step has no bytes" }
+            })).unwrap_or_default());
+            if body.abort_on_error { final_status = "aborted"; break; }
+            continue;
+        }
 
         let tx_hex = bytes_to_hex(&bytes);
         match run_cmd(&state, XcpCommand::Raw { bytes }).await {
