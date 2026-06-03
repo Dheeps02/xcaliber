@@ -1,151 +1,99 @@
 import {
-  useState,
-  useRef,
-  useEffect,
-  useMemo,
-  Fragment,
+  useState, useRef, useEffect, useMemo,
   type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  PaperPlaneTilt,
-  DownloadSimple,
-  WarningCircle,
-  Funnel,
-  ExcludeSquare,
-  IntersectSquare,
-  Eraser,
-  CaretDown,
-  CaretUp,
-  Timer,
-} from '@phosphor-icons/react';
+import { Funnel, Eraser } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
-import { formatLabel, toTitleCase, formatTime } from '../lib/utils';
-import type { PacketEntry, UserCmdDef } from '../lib/types';
-import { flattenDecoded, formatValue, ExpandDetailFlat, HexCell, dirBadgeCls } from './PacketDetail';
-import { AnimatedCount } from './AnimatedCount';
-import { Toggle } from './Toggle';
+import { formatLabel, formatTime } from '../lib/utils';
+import type { PacketEntry } from '../lib/types';
+import { flattenDecoded, formatValue } from './PacketDetail';
+import { Button } from './ui/Button';
+import { SegmentControl } from './ui/SegmentControl';
+
+// ── types ─────────────────────────────────────────────────────────────────
 
 type DirFilter = 'all' | 'tx' | 'rx';
 
-type PairGroup = { kind: 'pair'; tx: PacketEntry; rx: PacketEntry | null; key: number };
-type SoloGroup = { kind: 'solo'; packet: PacketEntry; key: number };
-type Group = PairGroup | SoloGroup;
+// ── helpers ──────────────────────────────────────────────────────────────
 
-function buildGroups(packets: PacketEntry[]): Group[] {
-  const groups: Group[] = [];
-  let i = 0;
-  while (i < packets.length) {
-    const p = packets[i];
-    if (p.direction === 'tx') {
-      const next = packets[i + 1];
-      if (next && next.direction === 'rx') {
-        groups.push({ kind: 'pair', tx: p, rx: next, key: p.id });
-        i += 2;
-      } else {
-        groups.push({ kind: 'pair', tx: p, rx: null, key: p.id });
-        i += 1;
-      }
-    } else {
-      groups.push({ kind: 'solo', packet: p, key: p.id });
-      i += 1;
-    }
-  }
-  return groups;
-}
-
-function getCommandLabel(p: PacketEntry): string {
+function getCommandName(p: PacketEntry): string {
   const d = p.decoded as Record<string, unknown>;
   if (typeof d.command === 'string') return formatLabel(d.command);
   return `0x${p.pid}`;
 }
 
-// ── USER_CMD response decoder ─────────────────────────────────────
-
-function hexToBytes(hex: string): number[] {
-  return hex.trim().split(/\s+/).map((b) => parseInt(b, 16)).filter((n) => !isNaN(n));
+function dirColor(dir: string): string {
+  if (dir === 'tx') return 'var(--tx)';
+  if (dir === 'rx') return 'var(--rx)';
+  return 'var(--status-err)';
 }
 
-function decodeUserCmdRx(
-  tx: PacketEntry,
-  rx: PacketEntry,
-  userCmds: UserCmdDef[]
-): [string, unknown][] | null {
-  // TX decoded.command should match the UserCmdDef name
-  const cmdName = (tx.decoded as Record<string, unknown>)?.command;
-  const def = typeof cmdName === 'string'
-    ? userCmds.find((c) => c.name === cmdName)
-    : null;
-  if (!def) return null;
-
-  const txBytes = hexToBytes(tx.hex);  // [F1, ...requestBytes]
-  const rxBytes = hexToBytes(rx.hex);  // response bytes
-
-  // Evaluate variant conditions — txBytes[1+] are the user request bytes
-  const reqBytes = txBytes.slice(1);
-  const matchedVariant = def.responseVariants.find((v) => {
-    if (v.conditions.length === 0) return true;  // default/fallback — always last
-    return v.conditions.every((cond) => {
-      const actual = reqBytes[cond.reqByteOffset] ?? 0;
-      switch (cond.op) {
-        case '==': return actual === cond.value;
-        case '!=': return actual !== cond.value;
-        case '<':  return actual <  cond.value;
-        case '>':  return actual >  cond.value;
-        case '<=': return actual <= cond.value;
-        case '>=': return actual >= cond.value;
-      }
-    });
-  });
-  if (!matchedVariant) return null;
-
-  return matchedVariant.bytes
-    .map((b): [string, unknown] => [b.label || `byte[${b.offset}]`, rxBytes[b.offset] ?? null]);
+function dirBgColor(dir: string): string {
+  if (dir === 'tx') return 'rgba(96,165,250,0.022)';
+  if (dir === 'rx') return 'rgba(74,222,128,0.016)';
+  return 'rgba(248,113,113,0.028)';
 }
 
-function ExpandDetail({ p, colSpan, open }: { p: PacketEntry; colSpan: number; open: boolean }) {
-  const isErr = p.pid === 'FE';
-  const valueCls = isErr
-    ? 'text-red-400'
-    : p.direction === 'tx'
-    ? 'text-blue-400'
-    : 'text-green-400';
+function dirBgHover(dir: string): string {
+  if (dir === 'tx') return 'rgba(96,165,250,0.055)';
+  if (dir === 'rx') return 'rgba(74,222,128,0.044)';
+  return 'rgba(248,113,113,0.065)';
+}
+
+// ── ExpandPanel ──────────────────────────────────────────────────────────
+
+function ExpandPanel({ p, open }: { p: PacketEntry; open: boolean }) {
+  const isErr  = p.pid === 'FE';
+  const effectiveDir = isErr ? 'err' : p.direction;
+  const color  = dirColor(effectiveDir);
+  const label  = p.direction === 'tx' ? 'TX' : isErr ? 'ERR' : 'RX';
   const allFields = flattenDecoded(p.decoded);
-  const rows = p.direction === 'tx'
+  const rows   = p.direction === 'tx'
     ? allFields.filter(([k]) => k !== 'command')
     : allFields;
 
   return (
-    <tr className="bg-gray-900/60">
-      <td colSpan={colSpan} className="overflow-hidden p-0">
-        <div className={`expand-content ${open ? 'px-6 pb-3 pt-1' : 'closed'}`} style={{ maxHeight: open ? '300px' : undefined }}>
-          <div className={`text-[10px] mb-1.5 uppercase tracking-wider ${isErr ? 'text-red-500' : 'text-gray-500'}`}>
-            {p.direction === 'tx'
-            ? <><PaperPlaneTilt size={11} className="inline mr-1" />TX · PID 0x{p.pid}</>
-            : isErr
-            ? <><WarningCircle size={11} className="inline mr-1" />ERR · PID 0x{p.pid}</>
-            : <><DownloadSimple size={11} className="inline mr-1" />RX · PID 0x{p.pid}</>
-          }
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateRows: open ? '1fr' : '0fr',
+        transition: 'grid-template-rows 160ms ease',
+        borderLeft: `3px solid ${color}`,
+        background: 'var(--surface-overlay)',
+        borderBottom: open ? '1px solid var(--border)' : 'none',
+      }}
+    >
+      <div style={{ minHeight: 0, overflow: 'hidden' }}>
+        <div className="px-4 py-2.5">
+          <div
+            className="text-[10px] font-semibold uppercase tracking-[0.08em] mb-2"
+            style={{ color }}
+          >
+            {label} · PID 0x{p.pid}
           </div>
-          <div className="space-y-0.5 text-xs">
-            {rows.length > 0 ? (
-              rows.map(([k, v]) => (
-                <div key={k}>
-                  <span className="w-36 inline-block text-gray-500">{toTitleCase(k)}</span>
-                  <span className={valueCls}>{formatValue(v)}</span>
-                </div>
-              ))
-            ) : (
-              <span className="text-gray-700 italic">no field data</span>
+          <div
+            className="grid gap-y-1 text-[11px] font-mono"
+            style={{ gridTemplateColumns: '150px 1fr' }}
+          >
+            {rows.length > 0 ? rows.map(([k, v]) => (
+              <>
+                <span key={`k-${k}`} style={{ color: 'var(--text-muted)' }}>{k}</span>
+                <span key={`v-${k}`} style={{ color }}>{formatValue(v)}</span>
+              </>
+            )) : (
+              <span className="col-span-2 italic" style={{ color: 'var(--text-muted)' }}>
+                no field data
+              </span>
             )}
           </div>
         </div>
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
 
-// ── PID filter popover ────────────────────────────────────────────
+// ── PID filter popover ────────────────────────────────────────────────────
 
 interface PidPopoverProps {
   anchor: HTMLElement;
@@ -164,10 +112,10 @@ function PidPopover({ anchor, pids, selected, onToggle, onAll, onClose }: PidPop
   if (x + 192 > window.innerWidth - 8) x = Math.max(8, window.innerWidth - 192 - 8);
 
   useEffect(() => {
-    function onDown(e: globalThis.MouseEvent) {
+    const onDown = (e: globalThis.MouseEvent) => {
       const t = e.target as Node;
       if (popRef.current && !popRef.current.contains(t) && !anchor.contains(t)) onClose();
-    }
+    };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [anchor, onClose]);
@@ -177,17 +125,26 @@ function PidPopover({ anchor, pids, selected, onToggle, onAll, onClose }: PidPop
   return createPortal(
     <div
       ref={popRef}
-      className="fixed bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-[9998]"
-      style={{ top: rect.bottom + 4, left: x, width: 192 }}
+      className="fixed rounded-lg shadow-2xl z-[9998]"
+      style={{
+        top: rect.bottom + 4, left: x, width: 192,
+        background: 'var(--surface-overlay)',
+        border: '1px solid var(--border-strong)',
+      }}
     >
-      <div className="p-2 border-b border-gray-800">
+      <div className="p-2" style={{ borderBottom: '1px solid var(--border)' }}>
         <input
           autoFocus
           placeholder="Search PID…"
           maxLength={2}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500"
+          className="w-full px-2 py-1 rounded text-xs font-mono focus:outline-none"
+          style={{
+            background: 'var(--surface-base)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-primary)',
+          }}
         />
       </div>
       <div className="p-1 max-h-44 overflow-y-auto">
@@ -196,81 +153,78 @@ function PidPopover({ anchor, pids, selected, onToggle, onAll, onClose }: PidPop
           return (
             <div
               key={pid}
-              className="flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-gray-800 transition-colors"
+              className="flex items-center gap-2 px-2 py-1 rounded cursor-pointer transition-colors"
+              style={{ color: active ? 'var(--accent)' : 'var(--text-secondary)' }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-hover)')}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = 'transparent')}
               onClick={() => onToggle(pid)}
             >
-              <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 text-[8px] ${active ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-600 text-transparent'}`}>
-                ✓
-              </span>
-              <span className={`font-mono text-xs ${active ? 'text-blue-300' : 'text-gray-400'}`}>
-                0x{pid}
-              </span>
+              <span
+                className="w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 text-[8px]"
+                style={{
+                  background: active ? 'var(--accent)' : 'transparent',
+                  borderColor: active ? 'var(--accent)' : 'var(--border-strong)',
+                  color: active ? '#03101a' : 'transparent',
+                }}
+              >✓</span>
+              <span className="font-mono text-xs">0x{pid}</span>
             </div>
           );
         })}
       </div>
-      <div className="p-1.5 border-t border-gray-800 flex gap-1">
-        <button onClick={onAll} className="flex-1 py-0.5 rounded text-[10px] text-gray-400 hover:text-gray-200 hover:bg-gray-700 border border-gray-700 transition-colors">
+      <div className="p-1.5 flex gap-1" style={{ borderTop: '1px solid var(--border)' }}>
+        <Button variant="ghost" className="flex-1 !justify-center !text-[10px] !py-0.5" onClick={onAll}>
           All
-        </button>
-        <button onClick={onAll} className="flex-1 py-0.5 rounded text-[10px] text-gray-400 hover:text-gray-200 hover:bg-gray-700 border border-gray-700 transition-colors">
+        </Button>
+        <Button variant="ghost" className="flex-1 !justify-center !text-[10px] !py-0.5" onClick={onAll}>
           Clear
-        </button>
+        </Button>
       </div>
     </div>,
     document.body
   );
 }
 
-// ── Main component ────────────────────────────────────────────────
+// ── PacketTrace ───────────────────────────────────────────────────────────
 
-const COL_SPAN = 5;
-const ALT_BG = ['', 'bg-gray-800/15'] as const;
+const DIR_ITEMS: { value: DirFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'tx',  label: 'TX' },
+  { value: 'rx',  label: 'RX' },
+];
 
 export function PacketTrace() {
-  const packets = useAppStore((s) => s.packets);
-  const txCount = useAppStore((s) => s.txCount);
-  const rxCount = useAppStore((s) => s.rxCount);
-  const autoScroll = useAppStore((s) => s.autoScroll);
-  const setAutoScroll = useAppStore((s) => s.setAutoScroll);
-  const clearPackets = useAppStore((s) => s.clearPackets);
-  const displayTimeoutMs = useAppStore((s) => s.displayTimeoutMs);
+  const packets          = useAppStore((s) => s.packets);
+  const autoScroll       = useAppStore((s) => s.autoScroll);
+  const setAutoScroll    = useAppStore((s) => s.setAutoScroll);
+  const clearPackets     = useAppStore((s) => s.clearPackets);
   const animationWatermark = useAppStore((s) => s.animationWatermark);
-  const userCmds = useAppStore((s) => s.userCmds);
 
-  const [dirFilter, setDirFilter] = useState<DirFilter>('all');
+  const [dirFilter, setDirFilter]     = useState<DirFilter>('all');
   const [selectedPids, setSelectedPids] = useState<Set<string>>(new Set());
-  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set());
-  const [isClearing, setIsClearing] = useState(false);
-  const [, setVersion] = useState(0);
-  const [colWidths, setColWidths] = useState([160, 60, 52, 120]);
-  const [traceVisible, setTraceVisible] = useState(true);
-  const [pidAnchor, setPidAnchor] = useState<HTMLElement | null>(null);
+  const [expandedIds, setExpandedIds]   = useState<Set<number>>(new Set());
+  const [isClearing, setIsClearing]     = useState(false);
+  const [pidAnchor, setPidAnchor]       = useState<HTMLElement | null>(null);
   const [eraserHovered, setEraserHovered] = useState(false);
   const [eraserWiggling, setEraserWiggling] = useState(false);
-  const [collapseAllAnimKey, setCollapseAllAnimKey] = useState(0);
-  const [collapseAllAnimCls, setCollapseAllAnimCls] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [, setVersion] = useState(0);
 
-  // IDs whose entry animation has already completed — used to suppress re-animation on re-render
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const scrollRef  = useRef<HTMLDivElement>(null);
   const cleanedUpIds = useRef<Set<number>>(new Set());
-  // Stagger delay (ms) per group key, assigned once synchronously during render
-  const groupStaggerDelays = useRef<Map<number, number>>(new Map());
-  // Monotonic counter for sequential stagger; reset after a quiet period
-  const groupStaggerCounter = useRef(0);
+  const staggerDelays = useRef<Map<number, number>>(new Map());
+  const staggerCounter = useRef(0);
   const staggerResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Auto-scroll
   useEffect(() => {
     if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [packets, autoScroll]);
 
-  // Reset stagger counter on each new command so responses start fresh at 0ms delay
-  useEffect(() => {
-    groupStaggerCounter.current = 0;
-  }, [animationWatermark]);
+  // Reset stagger on new command
+  useEffect(() => { staggerCounter.current = 0; }, [animationWatermark]);
 
-  // Cleanup-only effect: removes packet-new class after animation finishes
+  // Remove animation class after it completes
   useEffect(() => {
     if (animationWatermark === null) return;
     const liveIds = packets
@@ -278,18 +232,14 @@ export function PacketTrace() {
       .map((p) => p.id);
     if (liveIds.length === 0) return;
 
-    // Compute max stagger delay so cleanup fires after the last group finishes
     let maxDelay = 0;
-    for (const g of groups) {
-      const gId = g.kind === 'pair' ? g.tx.id : g.packet.id;
-      if (gId > animationWatermark && !cleanedUpIds.current.has(gId)) {
-        maxDelay = Math.max(maxDelay, groupStaggerDelays.current.get(g.key) ?? 0);
+    for (const p of filtered) {
+      if (p.id > animationWatermark && !cleanedUpIds.current.has(p.id)) {
+        maxDelay = Math.max(maxDelay, staggerDelays.current.get(p.id) ?? 0);
       }
     }
-
-    // Reset stagger counter after a quiet period so unrelated commands start fresh
     if (staggerResetRef.current) clearTimeout(staggerResetRef.current);
-    staggerResetRef.current = setTimeout(() => { groupStaggerCounter.current = 0; }, 1500);
+    staggerResetRef.current = setTimeout(() => { staggerCounter.current = 0; }, 1500);
 
     const t = setTimeout(() => {
       liveIds.forEach((id) => cleanedUpIds.current.add(id));
@@ -301,64 +251,28 @@ export function PacketTrace() {
   const allPids = useMemo(() => [...new Set(packets.map((p) => p.pid))].sort(), [packets]);
 
   const filtered = useMemo(
-    () =>
-      packets.filter((p) => {
-        const dirOk = dirFilter === 'all' || p.direction === dirFilter;
-        const pidOk = selectedPids.size === 0 || selectedPids.has(p.pid);
-        return dirOk && pidOk;
-      }),
+    () => packets.filter((p) => {
+      const dirOk = dirFilter === 'all' || p.direction === dirFilter;
+      const pidOk = selectedPids.size === 0 || selectedPids.has(p.pid);
+      return dirOk && pidOk;
+    }),
     [packets, dirFilter, selectedPids]
   );
-
-  const groups = useMemo(() => buildGroups(filtered), [filtered]);
-
-  // Collapse/Expand All toggle state
-  const allPairKeys = useMemo(
-    () => groups.filter((g): g is PairGroup => g.kind === 'pair').map((g) => g.key),
-    [groups]
-  );
-  const allCollapsed = allPairKeys.length > 0 && allPairKeys.every((k) => collapsedGroups.has(k));
-
-  useEffect(() => {
-    const now = Date.now();
-    const pendingTimes = groups
-      .filter((g): g is PairGroup => g.kind === 'pair' && g.rx === null)
-      .map((g) => g.tx.timestamp_ms)
-      .filter((t) => now - t < displayTimeoutMs);
-    if (pendingTimes.length === 0) return;
-    const delay = displayTimeoutMs - (now - Math.min(...pendingTimes)) + 50;
-    const id = setTimeout(() => setVersion((v) => v + 1), delay);
-    return () => clearTimeout(id);
-  }, [groups, displayTimeoutMs]);
 
   function toggleRow(p: PacketEntry) {
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(p.id)) next.delete(p.id);
-      else next.add(p.id);
+      if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
       return next;
     });
   }
 
-  function toggleGroup(key: number, e: React.MouseEvent) {
-    e.stopPropagation();
-    setCollapsedGroups((prev) => {
-      const s = new Set(prev);
-      if (s.has(key)) s.delete(key); else s.add(key);
-      return s;
+  function togglePid(pid: string) {
+    setSelectedPids((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid); else next.add(pid);
+      return next;
     });
-  }
-
-  function collapseAll() {
-    setCollapsedGroups(new Set(allPairKeys));
-    setCollapseAllAnimKey(k => k + 1);
-    setCollapseAllAnimCls('icon-flip-collapse');
-  }
-
-  function expandAll() {
-    setCollapsedGroups(new Set());
-    setCollapseAllAnimKey(k => k + 1);
-    setCollapseAllAnimCls('icon-flip-expand');
   }
 
   function handleClear() {
@@ -367,97 +281,57 @@ export function PacketTrace() {
     setTimeout(() => {
       clearPackets();
       setIsClearing(false);
-      setCollapsedGroups(new Set());
       setExpandedIds(new Set());
       cleanedUpIds.current.clear();
-      groupStaggerDelays.current.clear();
-      groupStaggerCounter.current = 0;
+      staggerDelays.current.clear();
+      staggerCounter.current = 0;
       if (staggerResetRef.current) { clearTimeout(staggerResetRef.current); staggerResetRef.current = null; }
     }, 220);
   }
 
-  function togglePid(pid: string) {
-    setSelectedPids((prev) => {
-      const next = new Set(prev);
-      if (next.has(pid)) next.delete(pid);
-      else next.add(pid);
-      return next;
-    });
-  }
-
-  function startResize(colIdx: number, e: React.MouseEvent) {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = colWidths[colIdx];
-    function onMove(ev: globalThis.MouseEvent) {
-      const delta = ev.clientX - startX;
-      setColWidths(prev => {
-        const next = [...prev];
-        next[colIdx] = Math.max(40, startWidth + delta);
-        return next;
-      });
-    }
-    function onUp() {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }
-
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 h-9 border-b border-gray-800 bg-gray-900 shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <button
-            onClick={allCollapsed ? expandAll : collapseAll}
-            title={allCollapsed ? 'Expand All' : 'Collapse All'}
-            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors shrink-0"
-          >
-            <span key={collapseAllAnimKey} className={collapseAllAnimCls}>
-              {allCollapsed ? <ExcludeSquare size={18} weight="fill" /> : <IntersectSquare size={18} weight="fill" />}
-            </span>
-          </button>
-          <div className="flex items-center gap-1">
-            {(['all', 'tx', 'rx'] as DirFilter[]).map((d) => (
-              <button
-                key={d}
-                onClick={() => setDirFilter(d)}
-                className={`h-6 px-2 rounded text-[10px] flex items-center transition-colors ${
-                  dirFilter === d ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
-                }`}
-              >
-                {d === 'all' ? 'All' : d.toUpperCase()}
-              </button>
-            ))}
-          </div>
-          <button
+
+      {/* ── Toolbar ───────────────────────────────────────────────── */}
+      <div
+        className="flex items-center justify-between px-3.5 shrink-0"
+        style={{
+          height: 36,
+          borderBottom: '1px solid var(--border)',
+          background: 'var(--surface-raised)',
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <SegmentControl items={DIR_ITEMS} value={dirFilter} onChange={setDirFilter} size="sm" />
+
+          {/* PID filter */}
+          <Button
+            variant="ghost"
+            className={`!px-2 !py-1 !text-[11px] !gap-1.5 ${selectedPids.size > 0 ? '!text-[color:var(--accent)]' : ''}`}
+            title="Filter by PID"
             onClick={(e: MouseEvent<HTMLButtonElement>) =>
               setPidAnchor((prev) => (prev ? null : e.currentTarget))
             }
-            className={`relative w-6 h-6 rounded flex items-center justify-center transition-colors hover:bg-gray-800 ${
-              selectedPids.size > 0 ? 'text-blue-400' : 'text-gray-500 hover:text-gray-300'
-            }`}
-            title="Filter by PID"
           >
-            <Funnel size={18} weight={selectedPids.size > 0 ? 'fill' : 'regular'} />
-            {selectedPids.size > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-blue-500 rounded-full text-[8px] font-bold text-white leading-none flex items-center justify-center">
-                {selectedPids.size}
-              </span>
-            )}
-          </button>
+            <Funnel size={12} weight={selectedPids.size > 0 ? 'fill' : 'regular'} />
+            PID{selectedPids.size > 0 ? ` (${selectedPids.size})` : ''}
+          </Button>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-2">
-            <AnimatedCount value={txCount} label="TX" colorCls="text-blue-400" />
-            <span className="text-gray-700 text-[10px]">|</span>
-            <AnimatedCount value={rxCount} label="RX" colorCls="text-green-400" />
-          </div>
-          <Toggle active={autoScroll} onClick={() => setAutoScroll(!autoScroll)} label="Auto-scroll" />
-          <button
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            on={autoScroll}
+            className="!px-2 !py-1 !text-[11px]"
+            onClick={() => setAutoScroll(!autoScroll)}
+          >
+            Auto-scroll
+          </Button>
+
+          <Button
+            variant="ghost"
+            className="!px-2 !py-1 !w-7 !h-7 !p-0"
+            title="Clear"
             onClick={() => {
               setEraserWiggling(true);
               setTimeout(() => setEraserWiggling(false), 400);
@@ -465,218 +339,68 @@ export function PacketTrace() {
             }}
             onMouseEnter={() => setEraserHovered(true)}
             onMouseLeave={() => setEraserHovered(false)}
-            title="Clear"
-            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors"
           >
             <span className={eraserWiggling ? 'icon-wiggle' : ''}>
-              <Eraser size={18} weight={eraserHovered || eraserWiggling ? 'fill' : 'regular'} />
+              <Eraser size={14} weight={eraserHovered || eraserWiggling ? 'fill' : 'regular'} />
             </span>
-          </button>
-          <button
-            onClick={() => setTraceVisible(!traceVisible)}
-            className="w-6 h-6 rounded flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
-          >
-            {traceVisible ? <CaretDown size={18} /> : <CaretUp size={18} />}
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Table */}
-      {traceVisible && (
-        <div className="flex-1 overflow-y-auto font-mono text-xs" style={{ transform: 'translateZ(0)' }}>
-          <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-            <colgroup>
-              <col style={{ width: colWidths[0] }} />
-              <col style={{ width: colWidths[1] }} />
-              <col style={{ width: colWidths[2] }} />
-              <col style={{ width: colWidths[3] }} />
-              <col />
-            </colgroup>
-            <thead className="sticky top-0 bg-gray-900 z-10">
-              <tr className="text-left text-[10px] font-semibold text-gray-600 uppercase tracking-widest select-none border-b border-gray-800">
-                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">Command
-                  <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(0, e)} />
-                </th>
-                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">DIR
-                  <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(1, e)} />
-                </th>
-                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">CTR
-                  <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(2, e)} />
-                </th>
-                <th className="px-3 py-1.5 relative overflow-hidden font-semibold">Time
-                  <div className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60" onMouseDown={(e) => startResize(3, e)} />
-                </th>
-                <th className="px-3 py-1.5 font-semibold">Hex</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((g, gi) => {
-                const altBg = ALT_BG[gi % 2];
+      {/* ── Table ─────────────────────────────────────────────────── */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
 
-                if (g.kind === 'pair') {
-                  const isGroupCollapsed = collapsedGroups.has(g.key);
-                  const { tx, rx } = g;
-                  const hasPair = rx !== null;
-                  const cmdLabel = getCommandLabel(tx);
-                  const isBackendTimeout = hasPair && rx !== null && rx.pid === 'FE' &&
-                    (rx.decoded as Record<string, unknown>)?.error === 'timeout';
-                  const isTimedOut = isBackendTimeout ||
-                    (!hasPair && Date.now() - tx.timestamp_ms > displayTimeoutMs);
-                  const newTx = animationWatermark !== null && tx.id > animationWatermark && !cleanedUpIds.current.has(tx.id);
-                  const newRx = rx !== null && animationWatermark !== null && rx.id > animationWatermark && !cleanedUpIds.current.has(rx.id);
-                  if (newTx && !groupStaggerDelays.current.has(g.key)) {
-                    groupStaggerDelays.current.set(g.key, Math.min(groupStaggerCounter.current, 3) * 120);
-                    groupStaggerCounter.current++;
-                  }
-                  const groupDelay = groupStaggerDelays.current.get(g.key) ?? 0;
-
-                  return (
-                    <Fragment key={g.key}>
-                      {/* ── Group header row ──────────────────────── */}
-                      <tr
-                        className={`cursor-pointer select-none group ${newTx ? 'packet-new' : ''} ${isClearing ? 'row-out' : ''}`}
-                        style={newTx ? { animationDelay: `${groupDelay}ms` } : undefined}
-                        onClick={(e) => toggleGroup(g.key, e)}
-                      >
-                        <td
-                          className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-800 bg-gray-900/70 group-hover:bg-gray-800/40 transition-colors"
-                          style={{ width: colWidths[0] }}
-                        >
-                          <span className="mr-1.5 inline-block">{isGroupCollapsed ? '▸' : '▾'}</span>
-                          {cmdLabel}
-                        </td>
-                        <td
-                          className="px-3 py-1 border-b border-gray-800 bg-gray-900/70 group-hover:bg-gray-800/40 transition-colors"
-                          style={{ width: colWidths[1] }}
-                        >
-                          {isGroupCollapsed && (
-                            <div className="flex items-center gap-1.5">
-                              <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${dirBadgeCls(tx)}`}>TX</span>
-                              {rx && <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${dirBadgeCls(rx)}`}>RX</span>}
-                              {isTimedOut && <span className="px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-500/50">TO</span>}
-                            </div>
-                          )}
-                        </td>
-                        <td colSpan={3} className="border-b border-gray-800 bg-gray-900/70 group-hover:bg-gray-800/40 transition-colors" />
-                      </tr>
-
-                      {/* ── Sub-rows — single TR/TD with grid wrapper for smooth height animation ── */}
-                      <tr className={`${altBg} ${newTx ? 'packet-new' : ''}`} style={newTx ? { animationDelay: `${groupDelay}ms` } : undefined}>
-                        <td colSpan={COL_SPAN} className="p-0 border-0">
-                          <div style={{
-                            display: 'grid',
-                            gridTemplateRows: isGroupCollapsed ? '0fr' : '1fr',
-                            opacity: (isGroupCollapsed || isClearing) ? 0 : 1,
-                            transition: 'grid-template-rows 180ms ease, opacity 120ms ease',
-                          }}>
-                            <div style={{ minHeight: 0, overflow: 'hidden' }}>
-                              {/* Request row */}
-                              <div
-                                className={`flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors ${expandedIds.has(tx.id) ? 'bg-gray-800/30' : ''} ${newTx ? 'packet-new' : ''}`}
-                                style={newTx ? { animationDelay: `${groupDelay}ms` } : undefined}
-                                onClick={() => toggleRow(tx)}
-                              >
-                                <div className="px-2 py-1.5 pl-7 shrink-0 overflow-hidden" style={{ width: colWidths[0] }}>
-                                  <span className="text-blue-400 text-[10px] flex items-center gap-1"><PaperPlaneTilt size={11} />Request</span>
-                                </div>
-                                <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(tx)}`}>TX</span>
-                                </div>
-                                <div className="px-3 py-1.5 text-gray-500 shrink-0" style={{ width: colWidths[2] }}>{tx.counter}</div>
-                                <div className="px-3 py-1.5 text-gray-500 shrink-0" style={{ width: colWidths[3] }}>{formatTime(tx.timestamp_ms)}</div>
-                                <div className="px-3 py-1.5 flex-1 min-w-0"><HexCell hex={tx.hex} dir="tx" /></div>
-                              </div>
-                              <ExpandDetailFlat p={tx} open={expandedIds.has(tx.id)} />
-
-                              {/* Timeout indicator */}
-                              {isTimedOut && (
-                                <div className="flex items-center border-b border-amber-900/30 bg-amber-950/20">
-                                  <div className="px-2 py-1.5 pl-7 shrink-0" style={{ width: colWidths[0] }}>
-                                    <span className="text-amber-500 text-[10px] flex items-center gap-1"><Timer size={11} />Timeout</span>
-                                  </div>
-                                  <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-500/50">TO</span>
-                                  </div>
-                                  <div className="px-3 py-1.5 text-gray-700 shrink-0" style={{ width: colWidths[2] }}>—</div>
-                                  <div className="px-3 py-1.5 text-amber-700 text-[10px] shrink-0" style={{ width: colWidths[3] }}>after {isBackendTimeout && rx ? rx.timestamp_ms - tx.timestamp_ms : displayTimeoutMs}ms</div>
-                                  <div className="px-3 py-1.5 flex-1 text-gray-700">—</div>
-                                </div>
-                              )}
-
-                              {/* Response row */}
-                              {hasPair && rx && !isBackendTimeout && (
-                                <>
-                                  <div
-                                    className={`flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors ${expandedIds.has(rx.id) ? 'bg-gray-800/30' : ''} ${newRx ? 'packet-new' : ''}`}
-                                    style={newRx ? { animationDelay: `${groupDelay + 100}ms` } : undefined}
-                                    onClick={() => toggleRow(rx)}
-                                  >
-                                    <div className="px-2 py-1.5 pl-7 shrink-0 overflow-hidden" style={{ width: colWidths[0] }}>
-                                      <span className={`text-[10px] flex items-center gap-1 ${rx.pid === 'FE' ? 'text-red-400' : 'text-green-400'}`}>
-                                        <DownloadSimple size={11} />Response
-                                      </span>
-                                    </div>
-                                    <div className="px-3 py-1.5 shrink-0" style={{ width: colWidths[1] }}>
-                                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(rx)}`}>RX</span>
-                                    </div>
-                                    <div className="px-3 py-1.5 text-gray-500 shrink-0" style={{ width: colWidths[2] }}>{rx.counter}</div>
-                                    <div className="px-3 py-1.5 text-gray-500 shrink-0" style={{ width: colWidths[3] }}>{formatTime(rx.timestamp_ms)}</div>
-                                    <div className="px-3 py-1.5 flex-1 min-w-0"><HexCell hex={rx.hex} dir="rx" /></div>
-                                  </div>
-                                  <ExpandDetailFlat
-                                    p={rx}
-                                    open={expandedIds.has(rx.id)}
-                                    extraFields={tx.pid === 'F1' ? (decodeUserCmdRx(tx, rx, userCmds) ?? undefined) : undefined}
-                                  />
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    </Fragment>
-                  );
-                }
-
-                // ── Solo packet ──────────────────────────────────
-                const p = g.packet;
-                const isNewSolo = animationWatermark !== null && p.id > animationWatermark && !cleanedUpIds.current.has(p.id);
-                if (isNewSolo && !groupStaggerDelays.current.has(g.key)) {
-                  groupStaggerDelays.current.set(g.key, Math.min(groupStaggerCounter.current, 3) * 120);
-                  groupStaggerCounter.current++;
-                }
-                const soloDelay = groupStaggerDelays.current.get(g.key) ?? 0;
-                return (
-                  <Fragment key={g.key}>
-                    <tr
-                      className={`border-b border-gray-800/40 hover:bg-gray-700/20 cursor-pointer transition-colors ${altBg} ${expandedIds.has(p.id) ? 'bg-gray-800/30' : ''} ${isNewSolo ? 'packet-new' : ''} ${isClearing ? 'row-out' : ''}`}
-                      style={isNewSolo ? { animationDelay: `${soloDelay}ms` } : undefined}
-                      onClick={() => toggleRow(p)}
-                    >
-                      <td className="px-2 py-1.5">
-                        <div className="flex items-center gap-1 min-w-0">
-                          <span className="w-3 shrink-0" />
-                          <span className="text-gray-500 truncate">{getCommandLabel(p)}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(p)}`}>
-                          {p.direction.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="px-3 py-1.5 text-gray-500">{p.counter}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{formatTime(p.timestamp_ms)}</td>
-                      <td className="px-3 py-1.5"><HexCell hex={p.hex} dir={p.direction} /></td>
-                    </tr>
-                    <ExpandDetail p={p} colSpan={COL_SPAN} open={expandedIds.has(p.id)} />
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-          <div ref={bottomRef} />
+        {/* Sticky column headers */}
+        <div
+          className="sticky top-0 z-10 grid text-[10px] font-semibold uppercase tracking-[0.09em] px-4"
+          style={{
+            gridTemplateColumns: 'minmax(160px,1.2fr) 110px 1fr',
+            paddingLeft: 20,
+            paddingTop: 5,
+            paddingBottom: 5,
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--surface-raised)',
+            color: 'var(--text-muted)',
+          }}
+        >
+          <span>Command</span>
+          <span>Time</span>
+          <span>Hex</span>
         </div>
-      )}
+
+        {/* Rows */}
+        {filtered.map((p) => {
+          const isNew = animationWatermark !== null && p.id > animationWatermark && !cleanedUpIds.current.has(p.id);
+          if (isNew && !staggerDelays.current.has(p.id)) {
+            staggerDelays.current.set(p.id, Math.min(staggerCounter.current, 3) * 60);
+            staggerCounter.current++;
+          }
+          const delay = staggerDelays.current.get(p.id) ?? 0;
+          const isExpanded = expandedIds.has(p.id);
+          const isErr = p.pid === 'FE';
+          const effectiveDir = isErr ? 'err' : p.direction;
+          const cmdName = getCommandName(p);
+
+          return (
+            <div key={p.id} className={isClearing ? 'row-out' : ''}>
+              {/* Row */}
+              <TraceRow
+                p={p}
+                isNew={isNew}
+                delay={delay}
+                isExpanded={isExpanded}
+                effectiveDir={effectiveDir}
+                cmdName={cmdName}
+                onClick={() => toggleRow(p)}
+              />
+              {/* Inline expand */}
+              <ExpandPanel p={p} open={isExpanded} />
+            </div>
+          );
+        })}
+
+        <div ref={bottomRef} />
+      </div>
 
       {pidAnchor && (
         <PidPopover
@@ -689,5 +413,93 @@ export function PacketTrace() {
         />
       )}
     </div>
+  );
+}
+
+// ── TraceRow ──────────────────────────────────────────────────────────────
+
+interface TraceRowProps {
+  p: PacketEntry;
+  isNew: boolean;
+  delay: number;
+  isExpanded: boolean;
+  effectiveDir: string;
+  cmdName: string;
+  onClick: () => void;
+}
+
+function TraceRow({ p, isNew, delay, isExpanded, effectiveDir, cmdName, onClick }: TraceRowProps) {
+  const [hovered, setHovered] = useState(false);
+  const bg = isExpanded
+    ? 'var(--surface-overlay)'
+    : hovered
+    ? dirBgHover(effectiveDir)
+    : dirBgColor(effectiveDir);
+
+  return (
+    <div
+      className={`relative grid cursor-pointer ${isNew ? 'packet-new' : ''}`}
+      style={{
+        gridTemplateColumns: 'minmax(160px,1.2fr) 110px 1fr',
+        paddingRight: 16,
+        paddingLeft: 0,
+        borderBottom: '1px solid var(--border)',
+        background: bg,
+        transition: 'background 70ms',
+        ...(isNew ? { animationDelay: `${delay}ms` } : {}),
+      }}
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Direction stripe */}
+      <div
+        className="absolute left-0 top-0 bottom-0"
+        style={{
+          width: 3,
+          borderRadius: '0 2px 2px 0',
+          background: dirColor(effectiveDir),
+        }}
+      />
+
+      {/* Command */}
+      <div
+        className="flex items-center gap-2 py-2 min-w-0 overflow-hidden"
+        style={{ paddingLeft: 20 }}
+      >
+        <span className="font-medium text-[12px] truncate" style={{ color: 'var(--text-primary)' }}>
+          {cmdName}
+        </span>
+        <span className="text-[10px] font-mono shrink-0" style={{ color: 'var(--text-muted)' }}>
+          #{p.counter}
+        </span>
+      </div>
+
+      {/* Time */}
+      <div
+        className="flex items-center py-2 font-mono text-[11px]"
+        style={{ color: 'var(--text-muted)' }}
+      >
+        {formatTime(p.timestamp_ms)}
+      </div>
+
+      {/* Hex */}
+      <div className="flex items-center gap-1 py-2 font-mono text-[11px] flex-wrap min-w-0">
+        <HexCells hex={p.hex} dir={effectiveDir} />
+      </div>
+    </div>
+  );
+}
+
+// ── HexCells ──────────────────────────────────────────────────────────────
+
+function HexCells({ hex, dir }: { hex: string; dir: string }) {
+  const color = dirColor(dir);
+  return (
+    <>
+      {hex.trim().split(/\s+/).map((b, i) => (
+        <span key={i} style={{ color }}>{b}</span>
+      ))}
+    </>
   );
 }

@@ -1,18 +1,28 @@
 import { useRef, useState } from 'react';
-import { FileCode, Link, LinkBreak, ArrowsClockwise, GearSix, X, FolderOpen } from '@phosphor-icons/react';
+import {
+  FileCode, ArrowsClockwise, GearSix, X, FolderOpen, Link, LinkBreak,
+} from '@phosphor-icons/react';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import { Settings } from './Settings';
 import { ToastContainer } from './Toast';
+import { SegmentControl } from './ui/SegmentControl';
+import { Button } from './ui/Button';
 import type { DaqEntryType } from '../lib/types';
 
+type MainTab = 'trace' | 'daq' | 'sequence';
+
+const TAB_ITEMS: { value: MainTab; label: string }[] = [
+  { value: 'trace',    label: 'Trace' },
+  { value: 'daq',      label: 'DAQ' },
+  { value: 'sequence', label: 'Sequence' },
+];
+
 function BroadcastCustom({ size, pulsing, pulseKey }: { size: number; pulsing: boolean; pulseKey: number }) {
-  // Exact Phosphor bold-weight broadcast paths, split into three groups for animation.
   return (
     <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" aria-hidden="true">
       <g key={`dot-${pulseKey}`}>
-        {/* Bold ring center: outer r=44, inner r=20, fillRule punches the hole */}
         <path
           fillRule="evenodd"
           className={pulsing ? 'broadcast-dot-pulse' : ''}
@@ -36,22 +46,29 @@ export function Header() {
   const setConnected       = useAppStore((s) => s.setConnected);
   const setSlaveDropped    = useAppStore((s) => s.setSlaveDropped);
   const showToast          = useAppStore((s) => s.showToast);
+  const txCount            = useAppStore((s) => s.txCount);
+  const rxCount            = useAppStore((s) => s.rxCount);
   const a2lVariables       = useAppStore((s) => s.a2lVariables);
   const setA2lVariables    = useAppStore((s) => s.setA2lVariables);
   const settingsOpen       = useAppStore((s) => s.settingsOpen);
   const settingsInitialTab = useAppStore((s) => s.settingsInitialTab);
   const openSettings       = useAppStore((s) => s.openSettings);
   const closeSettings      = useAppStore((s) => s.closeSettings);
+  const activeMainTab      = useAppStore((s) => s.activeMainTab);
+  const setActiveMainTab   = useAppStore((s) => s.setActiveMainTab);
+
   const a2lInputRef = useRef<HTMLInputElement>(null);
   const [a2lFileName, setA2lFileName] = useState<string | null>(null);
   const [a2lFilePath, setA2lFilePath] = useState<string | null>(null);
   const [broadcastPulsing, setBroadcastPulsing] = useState(false);
   const [broadcastPulseKey, setBroadcastPulseKey] = useState(0);
   const [syncSpinning, setSyncSpinning] = useState(false);
+  const [connectAnimKey, setConnectAnimKey] = useState(0);
   const [gearKey, setGearKey] = useState(0);
   const [gearReverse, setGearReverse] = useState(false);
 
   async function handleToggle() {
+    setConnectAnimKey((k) => k + 1);
     if (connected) {
       setSlaveDropped(false);
       setConnected(false);
@@ -61,8 +78,7 @@ export function Header() {
         const r = await api.connect();
         setConnected(true, r.slave);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Connection failed';
-        showToast(msg, 'error');
+        showToast(e instanceof Error ? e.message : 'Connection failed', 'error');
       }
     }
   }
@@ -84,7 +100,7 @@ export function Header() {
   }
 
   function handleGetStatus() {
-    setBroadcastPulseKey(k => k + 1);
+    setBroadcastPulseKey((k) => k + 1);
     setBroadcastPulsing(true);
     setTimeout(() => setBroadcastPulsing(false), 750);
     api.getStatus().catch(() => {});
@@ -114,107 +130,159 @@ export function Header() {
           if (file) { handleLoadA2l(file); e.target.value = ''; }
         }}
       />
-      <header className="flex items-center justify-between px-4 h-11 border-b border-gray-800 bg-gray-900 shrink-0" data-tauri-drag-region>
-        {/* A2L loader — far left */}
-        <div className="flex items-center gap-2 min-w-0">
-          <button
-            onClick={() => a2lInputRef.current?.click()}
-            title={a2lFileName ? `${a2lFileName} · ${a2lVariables.length} variables` : 'Load A2L JSON for variable autocomplete'}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors active:scale-95 shrink-0 ${
-              a2lFileName
-                ? 'text-green-400 border-green-500/30 bg-green-500/10 hover:bg-green-500/20'
-                : 'text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700'
-            }`}
+
+      <header
+        data-tauri-drag-region
+        className="flex items-center h-11 px-3.5 gap-3 shrink-0"
+        style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border)' }}
+      >
+        {/* ── Left: branding + connection ──────────────────────────── */}
+        <div className="flex items-center gap-2.5 min-w-0" style={{ minWidth: 200 }}>
+          <span
+            className="text-xs font-semibold tracking-widest uppercase"
+            style={{ color: 'var(--text-primary)', letterSpacing: '0.1em' }}
           >
-            <FileCode size={14} />
-            {a2lFileName ? 'A2L Loaded' : 'Load A2L'}
-          </button>
-          {a2lFileName && (
-            <div className="flex items-center gap-1 min-w-0">
-              {a2lFilePath ? (
-                <button
-                  onClick={() => revealItemInDir(a2lFilePath).catch(() => {})}
-                  title="Reveal in file explorer"
-                  className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300 truncate max-w-[160px] transition-colors"
-                >
-                  <FolderOpen size={11} />
-                  {a2lFileName}
-                </button>
-              ) : (
-                <span className="text-[10px] text-gray-500 truncate max-w-[160px]">{a2lFileName}</span>
-              )}
-              <button
-                onClick={handleUnloadA2l}
-                title="Unload A2L"
-                className="text-gray-600 hover:text-red-400 transition-colors shrink-0"
-              >
-                <X size={11} />
-              </button>
-            </div>
-          )}
-        </div>
+            xcaliber
+          </span>
 
-        <div className="flex items-center gap-2">
-
-          {/* Connect / Disconnect */}
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full shrink-0 ${connected ? 'blinker-on' : 'blinker-off'}`} />
-            <button
+          <div className="flex items-center gap-1.5">
+            <span className={`xcb-led ${connected ? 'on' : 'off'}`} />
+            <Button
+              variant="ghost"
+              className="!px-1.5 !py-0.5 !text-[11px] !gap-1"
               onClick={handleToggle}
-              className={`w-[112px] py-1 px-2 rounded-md text-xs font-medium border transition-colors active:scale-95 flex items-center gap-1.5 ${
-                connected
-                  ? 'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20'
-                  : 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20'
-              }`}
+              title={connected ? 'Disconnect' : 'Connect'}
             >
-              <span key={connected ? 'break' : 'link'} className="icon-rotate-in shrink-0 flex items-center">
-                {connected ? <LinkBreak size={14} /> : <Link size={14} />}
+              <span key={connectAnimKey} className="icon-rotate-in flex items-center">
+                {connected ? <LinkBreak size={11} /> : <Link size={11} />}
               </span>
-              <span key={connected ? 'disc' : 'conn'} className="text-blur-in flex-1 text-center">
-                {connected ? 'Disconnect' : 'Connect'}
+              <span key={`lbl-${connectAnimKey}`} className="text-blur-in">
+                {connected ? 'Connected' : 'Connect'}
               </span>
-            </button>
+            </Button>
           </div>
 
+          <div className="xcb-vdiv" />
+
+          {/* A2L loader */}
+          <div className="flex items-center gap-1 min-w-0">
+            <Button
+              variant="ghost"
+              className={`!px-1.5 !py-0.5 !text-[11px] !gap-1 ${a2lFileName ? '!text-[color:var(--status-ok)]' : ''}`}
+              onClick={() => a2lInputRef.current?.click()}
+              title={a2lFileName ? `${a2lFileName} · ${a2lVariables.length} variables` : 'Load A2L JSON'}
+            >
+              <FileCode size={12} />
+              {a2lFileName ? 'A2L' : 'A2L'}
+            </Button>
+            {a2lFileName && (
+              <>
+                {a2lFilePath ? (
+                  <button
+                    className="flex items-center gap-1 text-[10px] truncate max-w-[120px] transition-colors"
+                    style={{ color: 'var(--text-muted)' }}
+                    title="Reveal in file explorer"
+                    onClick={() => revealItemInDir(a2lFilePath).catch(() => {})}
+                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)')}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
+                  >
+                    <FolderOpen size={10} />
+                    {a2lFileName}
+                  </button>
+                ) : (
+                  <span className="text-[10px] truncate max-w-[120px]" style={{ color: 'var(--text-muted)' }}>
+                    {a2lFileName}
+                  </span>
+                )}
+                <button
+                  className="transition-colors shrink-0"
+                  style={{ color: 'var(--text-muted)' }}
+                  title="Unload A2L"
+                  onClick={handleUnloadA2l}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
+                >
+                  <X size={11} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ── Center: main tab selector ─────────────────────────────── */}
+        <div className="flex-1 flex justify-center">
+          <SegmentControl
+            items={TAB_ITEMS}
+            value={activeMainTab}
+            onChange={setActiveMainTab}
+          />
+        </div>
+
+        {/* ── Right: counters + actions ─────────────────────────────── */}
+        <div className="flex items-center gap-2" style={{ minWidth: 200, justifyContent: 'flex-end' }}>
+          {/* TX / RX counters */}
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>TX</span>
+              <span className="font-mono text-[11px]" style={{ color: 'var(--tx)' }}>{txCount}</span>
+            </div>
+            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>·</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>RX</span>
+              <span className="font-mono text-[11px]" style={{ color: 'var(--rx)' }}>{rxCount}</span>
+            </div>
+          </div>
+
+          <div className="xcb-vdiv" />
+
           {/* Get Status */}
-          <button
+          <Button
+            variant="ghost"
+            disabled={!connected}
+            className="!px-2 !py-1 !w-7 !h-7 !p-0"
+            title="Get Status"
             onClick={handleGetStatus}
-            disabled={!connected}
-            className="px-2 py-1 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-gray-800 text-gray-400 border border-gray-700 transition-colors active:scale-95 disabled:active:scale-100 flex items-center gap-1.5"
           >
-            <BroadcastCustom size={16} pulsing={broadcastPulsing} pulseKey={broadcastPulseKey} />
-            Get Status
-          </button>
+            <BroadcastCustom size={14} pulsing={broadcastPulsing} pulseKey={broadcastPulseKey} />
+          </Button>
 
-          <div className="w-px h-4 bg-gray-800" />
-
-          {/* Sync — far right before settings */}
-          <button
-            onClick={handleSync}
+          {/* Sync */}
+          <Button
+            variant="ghost"
             disabled={!connected}
-            className="px-2 py-1 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-gray-800 text-gray-400 border border-gray-700 transition-colors active:scale-95 disabled:active:scale-100 flex items-center gap-1.5"
+            className="!px-2 !py-1 !w-7 !h-7 !p-0"
+            title="Sync"
+            onClick={handleSync}
           >
             <span className={syncSpinning ? 'icon-spin-once' : ''}>
               <ArrowsClockwise size={14} />
             </span>
-            Sync
-          </button>
+          </Button>
 
-          {/* Settings — always last */}
-          <button
-            onClick={() => { setGearKey(k => k + 1); setGearReverse(false); openSettings(); }}
+          <div className="xcb-vdiv" />
+
+          {/* Settings */}
+          <Button
+            variant="ghost"
+            className="!px-0 !w-7 !h-7 !p-0"
             title="Settings"
-            className="w-7 h-7 rounded flex items-center justify-center text-gray-500 hover:text-gray-200 hover:bg-gray-800 transition-colors active:scale-95"
+            onClick={() => { setGearKey((k) => k + 1); setGearReverse(false); openSettings(); }}
           >
             <GearSix
               key={gearKey}
-              size={16}
+              size={15}
               className={gearKey > 0 ? (gearReverse ? 'icon-spin-90-reverse' : 'icon-spin-90') : ''}
             />
-          </button>
+          </Button>
         </div>
       </header>
-      {settingsOpen && <Settings onClose={() => { setGearKey(k => k + 1); setGearReverse(true); closeSettings(); }} initialTab={settingsInitialTab} />}
+
+      {settingsOpen && (
+        <Settings
+          onClose={() => { setGearKey((k) => k + 1); setGearReverse(true); closeSettings(); }}
+          initialTab={settingsInitialTab}
+        />
+      )}
       <ToastContainer />
     </>
   );
