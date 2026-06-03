@@ -137,7 +137,7 @@ export function Sidebar() {
   const [filteredSysCats, setFilteredSysCats] = useState<Set<string>>(new Set());
   const [filteredUserGroups, setFilteredUserGroups] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'system' | 'user'>('system');
-  const [tabAnimKey, setTabAnimKey] = useState(0);
+  const [_tabAnimKey, setTabAnimKey] = useState(0);
   const [expandKeys, setExpandKeys] = useState<Record<string, number>>({});
   const [enteringCats, setEnteringCats] = useState<Set<string>>(new Set());
   const [exitingData, setExitingData] = useState<Map<string, ExitData>>(new Map());

@@ -275,7 +275,7 @@ export function MtaBar() {
         <Info
           size={12}
           className="text-gray-600 hover:text-gray-400 transition-colors cursor-default shrink-0"
-          onMouseEnter={(e) => showTip(e.currentTarget, 'When enabled, a SET_MTA is sent automatically using the address above before every Upload or Download — no need to click Set MTA manually each time.')}
+          onMouseEnter={(e) => showTip(e.currentTarget as unknown as HTMLElement, 'When enabled, a SET_MTA is sent automatically using the address above before every Upload or Download — no need to click Set MTA manually each time.')}
           onMouseLeave={hideTip}
         />
       </div>
