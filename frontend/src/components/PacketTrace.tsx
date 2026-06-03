@@ -22,7 +22,7 @@ import {
 import { useAppStore } from '../stores/app-store';
 import { formatLabel, toTitleCase, formatTime } from '../lib/utils';
 import type { PacketEntry, UserCmdDef } from '../lib/types';
-import { flattenDecoded, formatValue, ExpandDetailFlat } from './PacketDetail';
+import { flattenDecoded, formatValue, ExpandDetailFlat, HexCell, dirBadgeCls } from './PacketDetail';
 import { AnimatedCount } from './AnimatedCount';
 import { Toggle } from './Toggle';
 
@@ -103,18 +103,6 @@ function decodeUserCmdRx(
     .map((b): [string, unknown] => [b.label || `byte[${b.offset}]`, rxBytes[b.offset] ?? null]);
 }
 
-function HexCell({ hex, dir }: { hex: string; dir: 'tx' | 'rx' }) {
-  const cls = dir === 'tx' ? 'text-blue-400' : 'text-green-400';
-  if (!hex) return <span className="text-gray-600 italic">—</span>;
-  return (
-    <>
-      {hex.split(' ').map((b, i) => (
-        <span key={i} className={cls}>{b} </span>
-      ))}
-    </>
-  );
-}
-
 function ExpandDetail({ p, colSpan, open }: { p: PacketEntry; colSpan: number; open: boolean }) {
   const isErr = p.pid === 'FE';
   const valueCls = isErr
@@ -155,15 +143,6 @@ function ExpandDetail({ p, colSpan, open }: { p: PacketEntry; colSpan: number; o
       </td>
     </tr>
   );
-}
-
-function dirBadgeCls(p: PacketEntry) {
-  const isErr = p.pid === 'FE';
-  return p.direction === 'tx'
-    ? 'bg-[#1e3a8a] text-[#93c5fd] border border-[#3b82f6]'
-    : isErr
-    ? 'bg-red-900/30 text-red-400 border border-red-500/50'
-    : 'bg-[#064e3b] text-[#6ee7b7] border border-[#10b981]';
 }
 
 // ── PID filter popover ────────────────────────────────────────────

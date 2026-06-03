@@ -1,10 +1,11 @@
 import { useRef, useState, useEffect } from 'react';
 import {
   Play, Plus, X, ArrowSquareOut, FolderOpen, ListBullets, Timer,
+  PaperPlaneTilt, DownloadSimple,
 } from '@phosphor-icons/react';
 import { Toggle } from './Toggle';
 import { SpinInput } from './SpinInput';
-import { ExpandDetailFlat } from './PacketDetail';
+import { ExpandDetailFlat, HexCell, dirBadgeCls } from './PacketDetail';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import { CMD_DEFS } from '../lib/cmd-defs';
@@ -89,6 +90,10 @@ export function Sequence() {
   const isRunning = runStatus === 'running';
   const canRun    = !!activeSeq && connected && !isRunning && (activeSeq.steps.length > 0);
 
+  // Expand/collapse state — mirrors trace view
+  const [collapsedSteps, setCollapsedSteps]   = useState<Set<string>>(new Set());
+  const [expandedSubRows, setExpandedSubRows] = useState<Set<string>>(new Set());
+
   // Animation state
   const [newStepIds, setNewStepIds]     = useState<Set<string>>(new Set());
   const [exitingIds, setExitingIds]     = useState<Set<string>>(new Set());
@@ -133,9 +138,24 @@ export function Sequence() {
     if (!activeSeq) return;
     const step = activeSeq.steps.find((s) => s.id === stepId);
     if (!step) return;
+    // Load into ByteBar
     setSeqSelectedStepId(stepId);
     setActiveCmd(step.cmdKey);
     step.bytes.forEach((b, i) => setByteValue(i, b));
+    // Toggle sub-row collapse — same as trace group header click
+    setCollapsedSteps((prev) => {
+      const next = new Set(prev);
+      if (next.has(stepId)) next.delete(stepId); else next.add(stepId);
+      return next;
+    });
+  }
+
+  function toggleSubRow(key: string) {
+    setExpandedSubRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
   }
 
   function setStepResp(stepId: string, resp: SeqStepResp) {
@@ -346,22 +366,38 @@ export function Sequence() {
           </div>
         ) : (
           activeSeq.steps.map((step, idx) => {
-            const result = seqRunResult?.stepResults.find((r) => r.stepId === step.id);
-            const isSelected = seqSelectedStepId === step.id;
+            const result    = seqRunResult?.stepResults.find((r) => r.stepId === step.id);
+            const isSelected    = seqSelectedStepId === step.id;
             const isStepRunning = isRunning && !result;
-            const isExiting = exitingIds.has(step.id);
-            const isNew = newStepIds.has(step.id);
-            // Find matching packets for ExpandDetailFlat
-            const txPacket = result?.txHex ? [...packets].reverse().find((p) => p.hex === result.txHex && p.direction === 'tx') : undefined;
-            const rxPacket = result?.rxHex ? [...packets].reverse().find((p) => p.hex === result.rxHex && p.direction === 'rx') : undefined;
+            const isExiting     = exitingIds.has(step.id);
+            const isNew         = newStepIds.has(step.id);
+            const isCollapsed   = collapsedSteps.has(step.id);
+            const txKey = `${step.id}:tx`;
+            const rxKey = `${step.id}:rx`;
+
+            // TX hex: use run result if available, else show step's configured bytes
+            const txHex = result?.txHex ?? bytePreview(step.bytes);
+            const rxHex = result?.rxHex;
+            const hasRx = !!(rxHex || result?.errorMsg);
+            const isErrOutcome = result?.outcome === 'error' || result?.outcome === 'fail';
+
+            // Look up actual PacketEntry objects for decoded ExpandDetailFlat
+            const txPacket = result?.txHex
+              ? [...packets].reverse().find((p) => p.hex === result.txHex && p.direction === 'tx')
+              : undefined;
+            const rxPacket = result?.rxHex
+              ? [...packets].reverse().find((p) => p.hex === result.rxHex && p.direction === 'rx')
+              : undefined;
 
             return (
-              <div key={step.id} className={isExiting ? 'row-out' : isNew ? 'daq-row-enter' : ''}>
+              <div key={step.id} className={isExiting ? 'row-out' : isNew ? 'packet-new' : ''}>
+
+                {/* ── Group header — identical structure to trace group header ── */}
                 <div
-                  className={`seq-step-hdr group${isSelected ? ' active' : ''}`}
+                  className={`seq-step-hdr group cursor-pointer select-none${isSelected ? ' active' : ''}`}
                   onClick={() => onStepClick(step.id)}
                 >
-                  {/* Status circle */}
+                  {/* Outcome circle */}
                   <div className={outcomeClass(result?.outcome, isStepRunning)}>
                     {result?.outcome === 'pass' && (
                       <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
@@ -375,18 +411,21 @@ export function Sequence() {
                     )}
                   </div>
 
-                  {/* Index */}
+                  {/* ▸/▾ collapser */}
+                  <span className="text-gray-600 text-[10px] w-3 shrink-0">{isCollapsed ? '▸' : '▾'}</span>
+
+                  {/* Step number */}
                   <span className="text-[10px] text-gray-600 shrink-0 w-4 text-right tabular-nums">{idx + 1}</span>
 
                   {/* Command name */}
-                  <span className="text-xs text-gray-300 font-medium flex-1 truncate min-w-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 flex-1 truncate min-w-0">
                     {cmdLabel(step.cmdKey)}
                   </span>
 
-                  {/* Byte preview */}
-                  <span className="font-mono text-[10px] text-gray-600 shrink-0 hidden group-hover:inline">
-                    {bytePreview(step.bytes)}
-                  </span>
+                  {/* Collapsed byte preview — mirrors trace collapsed badge area */}
+                  {isCollapsed && (
+                    <span className="font-mono text-[10px] text-gray-600 shrink-0">{txHex}</span>
+                  )}
 
                   {/* Response assertion toggle */}
                   <RespToggle value={step.resp} onChange={(v) => setStepResp(step.id, v)} />
@@ -401,16 +440,66 @@ export function Sequence() {
                   </button>
                 </div>
 
-                {/* Inline packet detail — same as trace view */}
-                {isSelected && txPacket && (
-                  <ExpandDetailFlat p={txPacket} open />
-                )}
-                {isSelected && rxPacket && (
-                  <ExpandDetailFlat p={rxPacket} open />
-                )}
-                {isSelected && result?.errorMsg && (
-                  <div className="seq-step-detail px-5 py-2 text-[10px] text-red-400">{result.errorMsg}</div>
-                )}
+                {/* ── Sub-rows — grid animate, identical to trace ── */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateRows: isCollapsed ? '0fr' : '1fr',
+                  opacity: isCollapsed ? 0 : 1,
+                  transition: 'grid-template-rows 180ms ease, opacity 120ms ease',
+                }}>
+                  <div style={{ minHeight: 0, overflow: 'hidden' }}>
+
+                    {/* TX / Request row */}
+                    <div
+                      className={`flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors font-mono text-xs ${expandedSubRows.has(txKey) ? 'bg-gray-800/30' : ''}`}
+                      onClick={() => toggleSubRow(txKey)}
+                    >
+                      <div className="px-2 py-1.5 pl-7 shrink-0 w-28">
+                        <span className="text-blue-400 text-[10px] flex items-center gap-1">
+                          <PaperPlaneTilt size={11} />Request
+                        </span>
+                      </div>
+                      <div className="px-2 py-1.5 shrink-0">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1e3a8a] text-[#93c5fd] border border-[#3b82f6]">TX</span>
+                      </div>
+                      <div className="px-3 py-1.5 flex-1 min-w-0">
+                        <HexCell hex={txHex} dir="tx" />
+                      </div>
+                    </div>
+                    {txPacket && <ExpandDetailFlat p={txPacket} open={expandedSubRows.has(txKey)} />}
+
+                    {/* RX / Response row — only when result has rx data */}
+                    {hasRx && (
+                      <>
+                        <div
+                          className={`flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors font-mono text-xs ${expandedSubRows.has(rxKey) ? 'bg-gray-800/30' : ''}`}
+                          onClick={() => toggleSubRow(rxKey)}
+                        >
+                          <div className="px-2 py-1.5 pl-7 shrink-0 w-28">
+                            <span className={`text-[10px] flex items-center gap-1 ${isErrOutcome ? 'text-red-400' : 'text-green-400'}`}>
+                              <DownloadSimple size={11} />Response
+                            </span>
+                          </div>
+                          <div className="px-2 py-1.5 shrink-0">
+                            {rxPacket
+                              ? <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(rxPacket)}`}>RX</span>
+                              : <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-900/30 text-red-400 border border-red-500/50">ERR</span>
+                            }
+                          </div>
+                          <div className="px-3 py-1.5 flex-1 min-w-0">
+                            {rxHex
+                              ? <HexCell hex={rxHex} dir={isErrOutcome ? 'tx' : 'rx'} />
+                              : <span className="text-red-400 text-[10px] not-font-mono">{result?.errorMsg}</span>
+                            }
+                          </div>
+                        </div>
+                        {rxPacket && <ExpandDetailFlat p={rxPacket} open={expandedSubRows.has(rxKey)} />}
+                      </>
+                    )}
+
+                  </div>
+                </div>
+
               </div>
             );
           })

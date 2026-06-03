@@ -2,6 +2,27 @@ import { PaperPlaneTilt, DownloadSimple, WarningCircle } from '@phosphor-icons/r
 import { toTitleCase } from '../lib/utils';
 import type { PacketEntry } from '../lib/types';
 
+export function HexCell({ hex, dir }: { hex: string; dir: 'tx' | 'rx' }) {
+  const cls = dir === 'tx' ? 'text-blue-400' : 'text-green-400';
+  if (!hex) return <span className="text-gray-600 italic">—</span>;
+  return (
+    <>
+      {hex.split(' ').map((b, i) => (
+        <span key={i} className={cls}>{b} </span>
+      ))}
+    </>
+  );
+}
+
+export function dirBadgeCls(p: PacketEntry) {
+  const isErr = p.pid === 'FE';
+  return p.direction === 'tx'
+    ? 'bg-[#1e3a8a] text-[#93c5fd] border border-[#3b82f6]'
+    : isErr
+    ? 'bg-red-900/30 text-red-400 border border-red-500/50'
+    : 'bg-[#064e3b] text-[#6ee7b7] border border-[#10b981]';
+}
+
 export function flattenDecoded(decoded: Record<string, unknown>): [string, unknown][] {
   if (!decoded || typeof decoded !== 'object') return [];
   const type = decoded.type as string | undefined;
