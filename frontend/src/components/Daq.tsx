@@ -29,11 +29,12 @@ const DEFAULT_COL_WIDTHS = { signal: 160, value: 96, type: 52, address: 100, lis
 const ODT_COLORS = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#ec4899','#84cc16'];
 
 // ── Sparkline ────────────────────────────────────────────────────
-const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 40, onZoomChange }: {
+const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 40, onZoomChange, lineStyle }: {
   history: number[];
   color?: string;
   zoom?: number;
   onZoomChange?: (dir: number) => void;
+  lineStyle?: React.CSSProperties;
 }) {
   const W = 200, H = 22;
   const svgRef = useRef<SVGSVGElement>(null);
@@ -85,15 +86,14 @@ const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 4
         </linearGradient>
       </defs>
 
-      {/* Background */}
+      {/* Background — fades with row, not clipped */}
       <rect width={W} height={H} fill={color} fillOpacity={0.06} />
 
-
-      {/* Gradient fill */}
-      <path d={fillPath} fill={`url(#${gradId})`} />
-
-      {/* Line */}
-      <polyline points={pts} fill="none" style={{ stroke: color, transition: 'stroke 300ms ease' }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      {/* Line + fill — clipped by reveal animation */}
+      <g style={lineStyle}>
+        <path d={fillPath} fill={`url(#${gradId})`} />
+        <polyline points={pts} fill="none" style={{ stroke: color, transition: 'stroke 300ms ease' }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      </g>
     </svg>
   );
 });
@@ -1104,8 +1104,8 @@ function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
                                   <div className="px-3 py-1.5 text-gray-500" style={{ width: colWidths.type, flexShrink: 0 }}>{row.entry.type_name}</div>
                                   <div className="px-3 py-1.5 text-gray-500" style={{ width: colWidths.address, flexShrink: 0 }}>0x{row.entry.addr.toString(16).padStart(8, '0').toUpperCase()}</div>
                                   <div className="px-3 py-1.5 text-gray-600" style={{ width: colWidths.listOdt, flexShrink: 0 }}>{row.listId}/{row.odtId}</div>
-                                  <div className="px-2 py-1 flex-1 min-w-0" style={plotStyle}>
-                                    <Sparkline history={row.history} color={rowColor} zoom={zoom} onZoomChange={handleZoom} />
+                                  <div className="px-2 py-1 flex-1 min-w-0">
+                                    <Sparkline history={row.history} color={rowColor} zoom={zoom} onZoomChange={handleZoom} lineStyle={plotStyle} />
                                   </div>
                                 </div>
                               );
