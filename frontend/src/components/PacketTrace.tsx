@@ -1,5 +1,5 @@
 import {
-  useState, useRef, useEffect, useMemo,
+  useState, useRef, useEffect, useMemo, Fragment,
   type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -77,10 +77,10 @@ function ExpandPanel({ p, open }: { p: PacketEntry; open: boolean }) {
             style={{ gridTemplateColumns: '150px 1fr' }}
           >
             {rows.length > 0 ? rows.map(([k, v]) => (
-              <>
-                <span key={`k-${k}`} style={{ color: 'var(--text-muted)' }}>{k}</span>
-                <span key={`v-${k}`} style={{ color }}>{formatValue(v)}</span>
-              </>
+              <Fragment key={k}>
+                <span style={{ color: 'var(--text-muted)' }}>{k}</span>
+                <span style={{ color }}>{formatValue(v)}</span>
+              </Fragment>
             )) : (
               <span className="col-span-2 italic" style={{ color: 'var(--text-muted)' }}>
                 no field data
