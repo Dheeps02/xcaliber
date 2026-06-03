@@ -17,7 +17,11 @@ interface Props {
 }
 
 export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: Props) {
-  const [filename, setFilename] = useState(defaultFilename);
+  const dotIdx = defaultFilename.lastIndexOf('.');
+  const defaultStem = dotIdx > 0 ? defaultFilename.slice(0, dotIdx) : defaultFilename;
+  const ext = dotIdx > 0 ? defaultFilename.slice(dotIdx) : '';
+
+  const [stem, setStem] = useState(defaultStem);
   const [folder, setFolder] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -39,8 +43,8 @@ export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: P
   }
 
   async function handleSave() {
-    const name = filename.trim();
-    if (!name) { setError('Filename is required.'); return; }
+    const name = stem.trim() + ext;
+    if (!stem.trim()) { setError('Filename is required.'); return; }
 
     setSaving(true);
     setError('');
@@ -77,13 +81,20 @@ export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: P
         {/* Filename */}
         <div className="flex flex-col gap-1">
           <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Filename</label>
-          <input
-            autoFocus
-            value={filename}
-            onChange={(e) => { setFilename(e.target.value); setError(''); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') close(); }}
-            className="px-2.5 py-1.5 rounded-md bg-gray-800 border border-gray-700 text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
-          />
+          <div className="flex items-stretch rounded-md border border-gray-700 bg-gray-800 focus-within:border-blue-500 transition-colors overflow-hidden">
+            <input
+              autoFocus
+              value={stem}
+              onChange={(e) => { setStem(e.target.value); setError(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') close(); }}
+              className="flex-1 px-2.5 py-1.5 bg-transparent text-xs font-mono text-gray-200 focus:outline-none min-w-0"
+            />
+            {ext && (
+              <span className="px-2 py-1.5 text-xs font-mono text-gray-500 bg-gray-750 border-l border-gray-700 select-none shrink-0">
+                {ext}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Folder — Tauri only */}
