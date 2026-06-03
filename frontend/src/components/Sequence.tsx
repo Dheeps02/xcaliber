@@ -1,8 +1,10 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import {
   Play, Plus, X, ArrowSquareOut, FolderOpen, ListBullets, Timer,
 } from '@phosphor-icons/react';
 import { Toggle } from './Toggle';
+import { SpinInput } from './SpinInput';
+import { ExpandDetailFlat } from './PacketDetail';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import { CMD_DEFS } from '../lib/cmd-defs';
@@ -71,6 +73,7 @@ export function Sequence() {
   const activeSequenceId     = useAppStore((s) => s.activeSequenceId);
   const seqSelectedStepId    = useAppStore((s) => s.seqSelectedStepId);
   const seqRunResult         = useAppStore((s) => s.seqRunResult);
+  const packets              = useAppStore((s) => s.packets);
   const setSequences         = useAppStore((s) => s.setSequences);
   const setActiveSequenceId  = useAppStore((s) => s.setActiveSequenceId);
   const setSeqSelectedStepId = useAppStore((s) => s.setSeqSelectedStepId);
@@ -85,6 +88,28 @@ export function Sequence() {
   const runStatus = seqRunResult?.status ?? 'idle';
   const isRunning = runStatus === 'running';
   const canRun    = !!activeSeq && connected && !isRunning && (activeSeq.steps.length > 0);
+
+  // Animation state
+  const [newStepIds, setNewStepIds]     = useState<Set<string>>(new Set());
+  const [exitingIds, setExitingIds]     = useState<Set<string>>(new Set());
+  const prevStepIdsRef                  = useRef<Set<string>>(new Set());
+
+  // Detect newly added steps and trigger enter animation
+  const stepIdKey = activeSeq?.steps.map((s) => s.id).join(',') ?? '';
+  useEffect(() => {
+    const currentIds = new Set(activeSeq?.steps.map((s) => s.id) ?? []);
+    const added = new Set<string>();
+    for (const id of currentIds) {
+      if (!prevStepIdsRef.current.has(id)) added.add(id);
+    }
+    prevStepIdsRef.current = currentIds;
+    if (added.size === 0) return;
+    setNewStepIds((prev) => new Set([...prev, ...added]));
+    const t = setTimeout(() => {
+      setNewStepIds((prev) => { const n = new Set(prev); added.forEach((id) => n.delete(id)); return n; });
+    }, 320);
+    return () => clearTimeout(t);
+  }, [stepIdKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── actions ───────────────────────────────────────────────────────
 
@@ -120,8 +145,12 @@ export function Sequence() {
 
   function deleteStep(stepId: string) {
     if (!activeSeq) return;
-    updateSequence({ ...activeSeq, steps: activeSeq.steps.filter((s) => s.id !== stepId) });
-    if (seqSelectedStepId === stepId) setSeqSelectedStepId(null);
+    setExitingIds((prev) => new Set([...prev, stepId]));
+    setTimeout(() => {
+      updateSequence({ ...activeSeq, steps: activeSeq.steps.filter((s) => s.id !== stepId) });
+      setExitingIds((prev) => { const n = new Set(prev); n.delete(stepId); return n; });
+      if (seqSelectedStepId === stepId) setSeqSelectedStepId(null);
+    }, 200);
   }
 
   async function runSequence() {
@@ -247,14 +276,12 @@ export function Sequence() {
             <div className="w-px h-4 bg-gray-800 shrink-0" />
             <div className="flex items-center gap-1.5 shrink-0">
               <Timer size={13} className="text-gray-600 shrink-0" />
-              <input
-                type="number"
+              <SpinInput
+                value={activeSeq.stepDelayMs}
+                onChange={(v) => updateSequence({ ...activeSeq, stepDelayMs: v })}
                 min={0}
                 step={10}
-                value={activeSeq.stepDelayMs}
-                onChange={(e) => updateSequence({ ...activeSeq, stepDelayMs: Math.max(0, Number(e.target.value)) })}
-                title="Delay between steps (ms)"
-                className="w-14 h-6 px-2 bg-gray-800 border border-gray-700 rounded text-[10px] font-mono text-gray-200 focus:outline-none focus:border-blue-500"
+                inputClassName="h-6 px-2 bg-gray-800 border border-gray-700 rounded text-[10px] font-mono text-gray-200 focus:outline-none focus:border-blue-500"
               />
               <span className="text-[10px] text-gray-600">ms</span>
             </div>
@@ -314,9 +341,14 @@ export function Sequence() {
             const result = seqRunResult?.stepResults.find((r) => r.stepId === step.id);
             const isSelected = seqSelectedStepId === step.id;
             const isStepRunning = isRunning && !result;
+            const isExiting = exitingIds.has(step.id);
+            const isNew = newStepIds.has(step.id);
+            // Find matching packets for ExpandDetailFlat
+            const txPacket = result?.txHex ? [...packets].reverse().find((p) => p.hex === result.txHex && p.direction === 'tx') : undefined;
+            const rxPacket = result?.rxHex ? [...packets].reverse().find((p) => p.hex === result.rxHex && p.direction === 'rx') : undefined;
 
             return (
-              <div key={step.id}>
+              <div key={step.id} className={isExiting ? 'row-out' : isNew ? 'daq-row-enter' : ''}>
                 <div
                   className={`seq-step-hdr group${isSelected ? ' active' : ''}`}
                   onClick={() => onStepClick(step.id)}
@@ -361,27 +393,15 @@ export function Sequence() {
                   </button>
                 </div>
 
-                {/* Inline TX/RX expand */}
-                {isSelected && result && (result.txHex || result.rxHex || result.errorMsg) && (
-                  <div className="seq-step-detail px-5 py-2 text-[11px] font-mono flex flex-col gap-0.5">
-                    {result.txHex && (
-                      <div className="flex gap-3 items-baseline">
-                        <span className="text-gray-600 w-5 shrink-0 text-[10px]">TX</span>
-                        <span className="text-blue-300">{result.txHex}</span>
-                      </div>
-                    )}
-                    {result.rxHex && (
-                      <div className="flex gap-3 items-baseline">
-                        <span className="text-gray-600 w-5 shrink-0 text-[10px]">RX</span>
-                        <span className={result.outcome === 'fail' || result.outcome === 'error' ? 'text-red-400' : 'text-green-400'}>
-                          {result.rxHex}
-                        </span>
-                      </div>
-                    )}
-                    {result.errorMsg && (
-                      <div className="text-red-400 text-[10px]">{result.errorMsg}</div>
-                    )}
-                  </div>
+                {/* Inline packet detail — same as trace view */}
+                {isSelected && txPacket && (
+                  <ExpandDetailFlat p={txPacket} open />
+                )}
+                {isSelected && rxPacket && (
+                  <ExpandDetailFlat p={rxPacket} open />
+                )}
+                {isSelected && result?.errorMsg && (
+                  <div className="seq-step-detail px-5 py-2 text-[10px] text-red-400">{result.errorMsg}</div>
                 )}
               </div>
             );
