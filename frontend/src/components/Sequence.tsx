@@ -91,7 +91,7 @@ export function Sequence() {
   const canRun    = !!activeSeq && connected && !isRunning && (activeSeq.steps.length > 0);
 
   // Expand/collapse state — mirrors trace view
-  const [collapsedSteps, setCollapsedSteps]   = useState<Set<string>>(new Set());
+  const [expandedSteps, setExpandedSteps]     = useState<Set<string>>(new Set());
   const [expandedSubRows, setExpandedSubRows] = useState<Set<string>>(new Set());
 
   // Animation state — packet-new with stagger delays (same as trace view)
@@ -184,7 +184,7 @@ export function Sequence() {
     setActiveCmd(step.cmdKey);
     step.bytes.forEach((b, i) => setByteValue(i, b));
     // Toggle sub-row collapse — same as trace group header click
-    setCollapsedSteps((prev) => {
+    setExpandedSteps((prev) => {
       const next = new Set(prev);
       if (next.has(stepId)) next.delete(stepId); else next.add(stepId);
       return next;
@@ -425,7 +425,7 @@ export function Sequence() {
             const isExiting     = exitingIds.has(step.id);
             const isNew         = newStepIds.has(step.id);
             const staggerDelay  = staggerDelaysRef.current.get(step.id) ?? 0;
-            const isCollapsed   = collapsedSteps.has(step.id);
+            const isCollapsed   = !expandedSteps.has(step.id);
             const txKey = `${step.id}:tx`;
             const rxKey = `${step.id}:rx`;
 
