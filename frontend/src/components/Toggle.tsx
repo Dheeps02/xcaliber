@@ -1,4 +1,5 @@
-export function Toggle({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+export function Toggle({ active, onClick, label, activeColor = 'blue' }: { active: boolean; onClick: () => void; label: string; activeColor?: 'blue' | 'orange' }) {
+  const activeCls = activeColor === 'orange' ? 'text-orange-400' : 'text-blue-400';
   return (
     <div onClick={onClick} className="flex items-center gap-2 select-none cursor-pointer">
       <svg
@@ -6,7 +7,7 @@ export function Toggle({ active, onClick, label }: { active: boolean; onClick: (
         width={28}
         height={28}
         fill="currentColor"
-        className={`transition-colors shrink-0 ${active ? 'text-blue-400' : 'text-gray-600'}`}
+        className={`transition-colors shrink-0 ${active ? activeCls : 'text-gray-600'}`}
       >
         <path
           fillRule="evenodd"

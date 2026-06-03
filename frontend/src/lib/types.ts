@@ -175,3 +175,44 @@ export interface DaqDtoEvent {
   timestamp_ms: number;
   values: Record<string, number>;
 }
+
+// ── Sequence ──────────────────────────────────────────────────────
+
+export type SeqStepResp = 'neg' | 'either' | 'pos';
+
+export interface SeqStep {
+  id: string;
+  cmdKey: string;
+  bytes: string[];
+  resp: SeqStepResp;
+  disabled?: boolean;
+}
+
+export interface Sequence {
+  id: string;
+  name: string;
+  abortOnError: boolean;
+  stepDelayMs: number;
+  steps: SeqStep[];
+}
+
+export type SeqRunStatus = 'idle' | 'running' | 'done' | 'aborted';
+export type SeqStepOutcome = 'pending' | 'pass' | 'fail' | 'skipped' | 'error';
+
+export interface SeqStepResult {
+  stepId: string;
+  outcome: SeqStepOutcome;
+  txHex?: string;
+  rxHex?: string;
+  errorMsg?: string;
+}
+
+export interface SeqRunResult {
+  status: SeqRunStatus;
+  stepResults: SeqStepResult[];
+}
+
+export interface SeqFile {
+  version: 1;
+  sequences: Sequence[];
+}

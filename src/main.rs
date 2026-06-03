@@ -44,6 +44,8 @@ async fn run_server() {
         .route("/api/daq/start",     axum::routing::post(http::routes::daq_start))
         .route("/api/daq/stop",      axum::routing::post(http::routes::daq_stop))
         .route("/api/daq/free",      axum::routing::post(http::routes::daq_free))
+        // ── Sequence ──────────────────────────────────────────────
+        .route("/api/sequence/run",  axum::routing::post(http::routes::seq_run))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

@@ -103,6 +103,25 @@
 
   @keyframes val-flash { 0%,100%{color:inherit} 40%{color:#fbbf24} }
   .val-flash { animation:val-flash 400ms ease; }
+
+  /* ── Sequence ───────────────────────────────────────────────── */
+  .seq-step-hdr { display:flex; align-items:center; gap:8px; padding:5px 12px 5px 16px; cursor:pointer; user-select:none; border-bottom:1px solid rgba(31,41,55,0.9); transition:background 100ms; }
+  .seq-step-hdr:hover { background:rgba(55,65,81,0.18); }
+  .seq-step-hdr.active { background:rgba(59,130,246,0.07); border-left:2px solid #3b82f6; padding-left:14px; }
+  .seq-step-status { width:14px; height:14px; border-radius:50%; border:2px solid #4b5563; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:all 200ms; }
+  .seq-step-status.pass { border-color:#22c55e; background:#22c55e; }
+  .seq-step-status.fail { border-color:#ef4444; background:#ef4444; }
+  .seq-step-status.skipped { border-color:#374151; background:#374151; }
+  .seq-step-status.running { border-color:#fbbf24; }
+  @keyframes result-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .seq-step-status.running { animation:result-pulse 0.9s ease-in-out infinite; }
+  .seq-step-detail { background:rgba(3,7,18,0.5); border-bottom:1px solid rgba(31,41,55,0.9); }
+  .resp-toggle { display:inline-flex; border:1px solid #374151; border-radius:4px; overflow:hidden; flex-shrink:0; }
+  .resp-btn { padding:2px 6px; font-size:9px; color:#6b7280; background:transparent; border:none; cursor:pointer; transition:all 100ms; font-weight:600; letter-spacing:.02em; }
+  .resp-btn:hover { color:#d1d5db; background:rgba(55,65,81,0.5); }
+  .resp-btn.active { background:#374151; color:#d1d5db; }
+  .resp-btn.active[data-val="neg"] { background:rgba(239,68,68,0.15); color:#f87171; }
+  .resp-btn.active[data-val="pos"] { background:rgba(34,197,94,0.15); color:#4ade80; }
 </style>
 </head>
 <body class="bg-gray-950 text-gray-100 h-screen flex flex-col overflow-hidden">
@@ -159,6 +178,71 @@
   <div class="flex gap-1.5 mt-3">
     <button onclick="saveEntry()" class="flex-1 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">Save</button>
     <button onclick="closeEntryPopover()" class="px-3 py-1 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700 transition-colors">Cancel</button>
+  </div>
+</div>
+
+<!-- Step editor popover -->
+<div id="step-popover" class="fixed bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-[9998] hidden p-3" style="width:320px;">
+  <p class="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-3">Step Editor</p>
+  <div class="space-y-2">
+    <div>
+      <label class="text-[10px] text-gray-500 block mb-0.5">Label (optional)</label>
+      <input id="sp-label" placeholder="e.g. Connect to ECU" class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500"/>
+    </div>
+    <div>
+      <label class="text-[10px] text-gray-500 block mb-0.5">Command</label>
+      <select id="sp-cmd" onchange="onStepCmdChange()" class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500">
+        <option value="connect">FF — CONNECT</option>
+        <option value="disconnect">FE — DISCONNECT</option>
+        <option value="get-status">FD — GET_STATUS</option>
+        <option value="get-comm-mode-info">FB — GET_COMM_MODE_INFO</option>
+        <option value="get-id-ascii">FA — GET_ID (ASCII)</option>
+        <option value="set-mta">F6 — SET_MTA</option>
+        <option value="upload">F5 — UPLOAD</option>
+        <option value="download">F0 — DOWNLOAD</option>
+        <option value="short-upload">F4 — SHORT_UPLOAD</option>
+        <option value="short-download">ED — SHORT_DOWNLOAD</option>
+        <option value="get-cal-page">EA — GET_CAL_PAGE</option>
+        <option value="set-cal-page">EB — SET_CAL_PAGE</option>
+      </select>
+    </div>
+    <div>
+      <label class="text-[10px] text-gray-500 block mb-1">Bytes</label>
+      <div id="sp-bytes" class="grid grid-cols-8 gap-1"></div>
+    </div>
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="checkbox" id="sp-disabled" class="accent-blue-500"/>
+      <span class="text-[10px] text-gray-400">Skip this step</span>
+    </label>
+    <div class="border-t border-gray-800 pt-2">
+      <label class="flex items-center gap-2 cursor-pointer mb-2">
+        <input type="checkbox" id="sp-assert-en" onchange="toggleAssertBody()" class="accent-blue-500"/>
+        <span class="text-[10px] text-gray-400">Assert response</span>
+      </label>
+      <div id="sp-assert-body" style="display:none" class="space-y-1.5">
+        <div>
+          <label class="text-[10px] text-gray-500 block mb-0.5">Mode</label>
+          <select id="sp-assert-mode" onchange="onAssertModeChange()" class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500">
+            <option value="pid_ok">pid_ok — positive response (0xFF)</option>
+            <option value="byte_eq">byte_eq — specific byte equals value</option>
+          </select>
+        </div>
+        <div id="sp-assert-byte-eq" style="display:none" class="flex gap-2">
+          <div class="flex-1">
+            <label class="text-[10px] text-gray-500 block mb-0.5">Byte offset</label>
+            <input id="sp-assert-offset" type="number" min="0" max="7" value="0" class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"/>
+          </div>
+          <div class="flex-1">
+            <label class="text-[10px] text-gray-500 block mb-0.5">Expected (hex)</label>
+            <input id="sp-assert-value" placeholder="FF" maxlength="2" class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"/>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="flex gap-1.5 mt-3">
+    <button onclick="saveStep()" class="flex-1 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">Save</button>
+    <button onclick="closeStepPopover()" class="px-3 py-1 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700 transition-colors">Cancel</button>
   </div>
 </div>
 
@@ -338,14 +422,22 @@
       </div>
       <div id="cmd-bar-content" class="px-4 pt-2.5 pb-2 border-t border-gray-800/60">
         <div id="byte-bar" class="flex gap-2 w-full"></div>
-        <button onclick="sendRaw()" class="w-full mt-2 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">Send</button>
+        <div id="bytebar-send-row" class="mt-2">
+          <button onclick="sendRaw()" class="w-full py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">Send</button>
+        </div>
+        <div id="bytebar-seq-row" style="display:none" class="mt-2 flex gap-2">
+          <button onclick="addStepFromBytebar()" class="flex-1 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors">+ Add to Sequence</button>
+          <button id="bytebar-remove-btn" onclick="removeSelectedStep()" disabled
+                  class="px-3 py-1.5 rounded-md text-xs font-medium border border-gray-700 text-gray-600 bg-gray-900 cursor-not-allowed transition-colors">Remove</button>
+        </div>
       </div>
     </div>
 
     <!-- Main tab strip -->
     <div class="flex items-end gap-0 px-3 pt-1.5 border-b border-gray-800 bg-gray-900 shrink-0" style="height:32px;">
       <button id="mtab-trace" onclick="switchMainTab('trace')" class="px-3 pb-1 text-xs font-medium transition-colors mtab-active">Packet Trace</button>
-      <button id="mtab-daq"   onclick="switchMainTab('daq')"   class="px-3 pb-1 text-xs font-medium transition-colors mtab-inactive">DAQ</button>
+      <button id="mtab-daq"      onclick="switchMainTab('daq')"      class="px-3 pb-1 text-xs font-medium transition-colors mtab-inactive">DAQ</button>
+      <button id="mtab-sequence" onclick="switchMainTab('sequence')" class="px-3 pb-1 text-xs font-medium transition-colors mtab-inactive">Sequence</button>
     </div>
 
     <!-- ══ Packet Trace ══════════════════════════════════════════ -->
@@ -614,6 +706,45 @@
       </div>
     </div>
 
+    <!-- ══ Sequence panel ═══════════════════════════════════════════ -->
+    <div id="panel-sequence" class="flex-1 flex flex-col overflow-hidden hidden">
+
+      <!-- Toolbar -->
+      <div class="flex items-center gap-2 px-4 h-10 border-b border-gray-800 bg-gray-900/60 shrink-0">
+        <span id="seq-led" class="w-2 h-2 rounded-full shrink-0 blinker-grey"></span>
+        <span id="seq-state-label" class="text-[10px] text-gray-500">Idle</span>
+        <div class="w-px h-4 bg-gray-800"></div>
+        <button id="seq-run-btn" onclick="runSequence()" disabled
+                class="px-3 py-1 rounded text-[10px] font-medium border transition-colors opacity-40 cursor-not-allowed text-green-400 border-green-500/30 bg-green-500/10">
+          ▶ Run
+        </button>
+        <!-- Sequence selector -->
+        <select id="seq-selector" onchange="onSeqSelect()"
+                class="px-2 py-1 bg-gray-900 border border-gray-700 rounded text-xs text-gray-300 focus:outline-none focus:border-blue-500 max-w-40">
+        </select>
+        <button onclick="addSequence()" title="New sequence"
+                class="text-gray-500 hover:text-blue-400 transition-colors text-sm leading-none px-0.5">+</button>
+        <button id="seq-del-btn" onclick="deleteActiveSeq()" title="Delete sequence"
+                class="text-gray-700 hover:text-red-400 transition-colors text-[10px] px-0.5">✕</button>
+        <div class="w-px h-4 bg-gray-800"></div>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-gray-600">Abort on error</span>
+          <div id="seq-abort-toggle" onclick="toggleAbortOnError()"
+               class="w-7 h-4 rounded-full relative cursor-pointer bg-gray-700">
+            <div id="seq-abort-thumb" class="absolute left-0.5 top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all duration-150"></div>
+          </div>
+        </div>
+        <div class="flex-1"></div>
+        <label class="px-2 py-1 rounded text-[10px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 border border-gray-700 transition-colors cursor-pointer">
+          Import…<input type="file" accept=".seq,.json" class="hidden"/>
+        </label>
+        <button disabled class="px-2 py-1 rounded text-[10px] text-gray-600 border border-gray-800 bg-gray-900 cursor-not-allowed">Export</button>
+      </div>
+
+      <!-- Step list -->
+      <div id="seq-steps" class="flex-1 overflow-y-auto"></div>
+    </div>
+
   </main>
 </div>
 
@@ -724,14 +855,15 @@ function buildByteBar() {
 }
 function sendRaw() { console.log('Send'); }
 
-// ── Main tab (Trace / DAQ) ────────────────────────────────────────
+// ── Main tab (Trace / DAQ / Sequence) ────────────────────────────
 function switchMainTab(tab) {
-  ['trace','daq'].forEach(t => {
+  ['trace','daq','sequence'].forEach(t => {
     document.getElementById('panel-'+t).classList.toggle('hidden', t!==tab);
     const btn = document.getElementById('mtab-'+t);
-    btn.className = btn.className.replace('mtab-active','').replace('mtab-inactive','').trim()+(t===tab?' mtab-active':' mtab-inactive');
+    if (btn) btn.className = btn.className.replace('mtab-active','').replace('mtab-inactive','').trim()+(t===tab?' mtab-active':' mtab-inactive');
   });
-  document.getElementById('mta-bar').classList.toggle('hidden', tab==='daq');
+  document.getElementById('mta-bar').classList.toggle('hidden', tab!=='trace');
+  showSeqBytebarMode(tab === 'sequence');
 }
 
 // ── Command builder collapse ──────────────────────────────────────
@@ -1114,15 +1246,326 @@ document.addEventListener('click',e=>{
   if(pidPopoverOpen&&!pop.contains(e.target)&&!document.getElementById('pid-filter-btn').contains(e.target)){pop.classList.add('hidden');pidPopoverOpen=false;}
   const ep=document.getElementById('entry-popover');
   if(!ep.classList.contains('hidden')&&!ep.contains(e.target)&&!e.target.closest('.daq-entry-row')&&!e.target.closest('[onclick*="openEntryPopover"]'))closeEntryPopover();
+  const sp=document.getElementById('step-popover');
+  if(sp&&!sp.classList.contains('hidden')&&!sp.contains(e.target)&&!e.target.closest('.seq-step-row')&&!e.target.closest('[onclick*="openStepPopover"]'))sp.classList.add('hidden');
   if(!document.getElementById('settings-modal').classList.contains('hidden')&&e.target===document.getElementById('settings-modal'))closeSettings();
   const ms=document.getElementById('mta-suggestions');
   if(!ms.classList.contains('hidden')&&!ms.contains(e.target)&&e.target.id!=='mta-addr')ms.classList.add('hidden');
 });
 
+// ── Sequence ──────────────────────────────────────────────────────
+const SEQ_CMD_DEFS = {
+  'connect':            { pid:'FF', label:'CONNECT',           prefill:{0:'FF',1:'00'}, fields:['pid','mode','','','','','',''] },
+  'disconnect':         { pid:'FE', label:'DISCONNECT',        prefill:{0:'FE'},        fields:['pid','','','','','','',''] },
+  'get-status':         { pid:'FD', label:'GET_STATUS',        prefill:{0:'FD'},        fields:['pid','','','','','','',''] },
+  'get-comm-mode-info': { pid:'FB', label:'GET_COMM_MODE_INFO',prefill:{0:'FB'},        fields:['pid','','','','','','',''] },
+  'get-id-ascii':       { pid:'FA', label:'GET_ID (ASCII)',    prefill:{0:'FA',1:'00'}, fields:['pid','type','','','','','',''] },
+  'set-mta':            { pid:'F6', label:'SET_MTA',           prefill:{0:'F6'},        fields:['pid','rsv','rsv','ext','a0','a1','a2','a3'] },
+  'upload':             { pid:'F5', label:'UPLOAD',            prefill:{0:'F5'},        fields:['pid','size','','','','','',''] },
+  'download':           { pid:'F0', label:'DOWNLOAD',          prefill:{0:'F0'},        fields:['pid','len','d0','d1','d2','d3','d4','d5'] },
+  'short-upload':       { pid:'F4', label:'SHORT_UPLOAD',      prefill:{0:'F4'},        fields:['pid','size','rsv','ext','a0','a1','a2','a3'] },
+  'short-download':     { pid:'ED', label:'SHORT_DOWNLOAD',    prefill:{0:'ED'},        fields:['pid','len','rsv','ext','a0','a1','a2','a3'] },
+  'get-cal-page':       { pid:'EA', label:'GET_CAL_PAGE',      prefill:{0:'EA'},        fields:['pid','mode','seg','','','','',''] },
+  'set-cal-page':       { pid:'EB', label:'SET_CAL_PAGE',      prefill:{0:'EB'},        fields:['pid','mode','seg','page','','','',''] },
+};
+
+let seqData = [
+  { id:'seq-1', name:'Init Sequence', abortOnError:true, steps:[
+    { id:'s1', cmdKey:'connect',     bytes:['FF','00','','','','','',''], resp:'pos' },
+    { id:'s2', cmdKey:'get-status',  bytes:['FD','','','','','','',''],   resp:'pos' },
+    { id:'s3', cmdKey:'get-id-ascii',bytes:['FA','00','','','','','',''], resp:'pos' },
+    { id:'s4', cmdKey:'disconnect',  bytes:['FE','','','','','','',''],   resp:'either' },
+  ]},
+  { id:'seq-2', name:'Cal Page Check', abortOnError:false, steps:[
+    { id:'s5', cmdKey:'get-cal-page', bytes:['EA','00','00','','','','',''], resp:'either' },
+    { id:'s6', cmdKey:'set-cal-page', bytes:['EB','01','00','00','','','',''], resp:'pos' },
+    { id:'s7', cmdKey:'get-cal-page', bytes:['EA','00','00','','','','',''], resp:'pos' },
+  ]},
+];
+let activeSeqId = 'seq-1';
+let selectedStepId = null;
+let nextSeqId = 3, nextStepId = 8;
+let seqRunResult = null;
+let seqRunStatus = 'idle';
+
+function getActiveSeq() { return seqData.find(s => s.id === activeSeqId) || null; }
+
+function setSeqStatus(status) {
+  seqRunStatus = status;
+  const led = document.getElementById('seq-led');
+  const lbl = document.getElementById('seq-state-label');
+  const cfg = {
+    idle:    { cls:'blinker-grey',   text:'Idle',    lCls:'text-gray-500' },
+    running: { cls:'blinker-yellow', text:'Running', lCls:'text-yellow-400' },
+    done:    { cls:'blinker-on',     text:'Done',    lCls:'text-green-400' },
+    aborted: { cls:'blinker-off',    text:'Aborted', lCls:'text-red-400' },
+  }[status];
+  if (!cfg || !led) return;
+  led.className = 'w-2 h-2 rounded-full shrink-0 ' + cfg.cls;
+  lbl.textContent = cfg.text;
+  lbl.className = 'text-[10px] ' + cfg.lCls;
+  const runBtn = document.getElementById('seq-run-btn');
+  const canRun = status !== 'running' && !!getActiveSeq() && connected;
+  runBtn.disabled = !canRun;
+  runBtn.className = `px-3 py-1 rounded text-[10px] font-medium border transition-colors text-green-400 border-green-500/30 bg-green-500/10${canRun?' hover:bg-green-500/20':' opacity-40 cursor-not-allowed'}`;
+}
+
+function updateAbortToggle() {
+  const seq = getActiveSeq();
+  const tog = document.getElementById('seq-abort-toggle');
+  const thumb = document.getElementById('seq-abort-thumb');
+  if (!seq || !tog) return;
+  const on = seq.abortOnError;
+  tog.className = `w-7 h-4 rounded-full relative cursor-pointer ${on?'bg-blue-600':'bg-gray-700'}`;
+  thumb.style.cssText = `position:absolute;${on?'right':'left'}:2px;top:2px;width:12px;height:12px;border-radius:50%;background:white;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:all 150ms`;
+}
+
+function toggleAbortOnError() {
+  const seq = getActiveSeq(); if (!seq) return;
+  seq.abortOnError = !seq.abortOnError;
+  updateAbortToggle();
+}
+
+function rebuildSeqSelector() {
+  const sel = document.getElementById('seq-selector');
+  sel.innerHTML = '';
+  seqData.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id; opt.textContent = s.name;
+    if (s.id === activeSeqId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function onSeqSelect() {
+  activeSeqId = document.getElementById('seq-selector').value;
+  selectedStepId = null;
+  updateAbortToggle();
+  setSeqStatus(seqRunStatus);
+  renderSeqSteps();
+  updateBytebarSeqBtns();
+}
+
+function addSequence() {
+  const id = 'seq-' + (nextSeqId++);
+  seqData.push({ id, name:'New Sequence', abortOnError:false, steps:[] });
+  activeSeqId = id;
+  selectedStepId = null;
+  rebuildSeqSelector();
+  updateAbortToggle();
+  setSeqStatus('idle');
+  renderSeqSteps();
+  updateBytebarSeqBtns();
+}
+
+function deleteActiveSeq() {
+  if (!activeSeqId || seqData.length <= 1) return;
+  seqData = seqData.filter(s => s.id !== activeSeqId);
+  activeSeqId = seqData[0].id;
+  selectedStepId = null;
+  rebuildSeqSelector();
+  updateAbortToggle();
+  renderSeqSteps();
+  updateBytebarSeqBtns();
+}
+
+function removeStep(stepId) {
+  const seq = getActiveSeq(); if (!seq) return;
+  seq.steps = seq.steps.filter(s => s.id !== stepId);
+  if (selectedStepId === stepId) { selectedStepId = null; updateBytebarSeqBtns(); }
+  renderSeqSteps();
+}
+
+function setStepResp(stepId, val) {
+  const seq = getActiveSeq(); if (!seq) return;
+  const step = seq.steps.find(s => s.id === stepId); if (!step) return;
+  step.resp = val;
+  renderSeqSteps();
+}
+
+// Load a step into the ByteBar
+function loadStepToByteBar(step) {
+  const def = SEQ_CMD_DEFS[step.cmdKey];
+  // find the matching CMD_DEFS key and select it
+  const cmdBarKey = Object.keys(CMD_DEFS).find(k => {
+    const d = CMD_DEFS[k]; return d.prefill?.[0] === def?.pid;
+  });
+  if (cmdBarKey) selectCmd(cmdBarKey, document.querySelector(`.cmd-btn[onclick*="${cmdBarKey}"]`) || document.querySelector('.cmd-btn'));
+  // Fill byte values
+  step.bytes.forEach((b, i) => {
+    const inp = document.getElementById('byte-' + i);
+    if (inp && !inp.disabled) inp.value = b || '';
+  });
+}
+
+function onStepClick(stepId) {
+  selectedStepId = stepId;
+  const seq = getActiveSeq(); if (!seq) return;
+  const step = seq.steps.find(s => s.id === stepId); if (!step) return;
+  loadStepToByteBar(step);
+  updateBytebarSeqBtns();
+  renderSeqSteps();
+}
+
+// Save current ByteBar values back to the selected step
+function saveByteBarToStep() {
+  const seq = getActiveSeq(); if (!seq || !selectedStepId) return;
+  const step = seq.steps.find(s => s.id === selectedStepId); if (!step) return;
+  step.bytes = Array.from({length:8}, (_,i) => document.getElementById('byte-'+i)?.value || '');
+  // derive cmdKey from active CMD_DEFS entry
+  if (activeCmd) {
+    const d = CMD_DEFS[activeCmd];
+    const match = Object.keys(SEQ_CMD_DEFS).find(k => SEQ_CMD_DEFS[k].pid === d?.prefill?.[0] || SEQ_CMD_DEFS[k].pid === d?.pid);
+    if (match) step.cmdKey = match;
+  }
+  renderSeqSteps();
+}
+
+function addStepFromBytebar() {
+  const seq = getActiveSeq(); if (!seq) return;
+  const bytes = Array.from({length:8}, (_,i) => document.getElementById('byte-'+i)?.value || '');
+  const pid = bytes[0]?.toUpperCase();
+  const cmdKey = Object.keys(SEQ_CMD_DEFS).find(k => SEQ_CMD_DEFS[k].pid === pid) || 'get-status';
+  const step = { id:'s'+(nextStepId++), cmdKey, bytes, resp:'either' };
+  seq.steps.push(step);
+  selectedStepId = step.id;
+  updateBytebarSeqBtns();
+  renderSeqSteps();
+}
+
+function removeSelectedStep() {
+  if (selectedStepId) removeStep(selectedStepId);
+}
+
+function updateBytebarSeqBtns() {
+  const removeBtn = document.getElementById('bytebar-remove-btn');
+  if (!removeBtn) return;
+  const hasSelected = !!selectedStepId;
+  removeBtn.disabled = !hasSelected;
+  removeBtn.className = `px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${hasSelected?'border-gray-600 text-gray-400 bg-gray-800 hover:text-red-400 hover:border-red-500/50 cursor-pointer':'border-gray-700 text-gray-600 bg-gray-900 cursor-not-allowed'}`;
+}
+
+// Render step list
+function renderSeqSteps() {
+  const container = document.getElementById('seq-steps');
+  const seq = getActiveSeq();
+  if (!seq) { container.innerHTML = ''; return; }
+  if (!seq.steps.length) {
+    container.innerHTML = `<div class="flex flex-col items-center justify-center h-32 text-gray-700 text-xs">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" class="w-8 h-8 mb-2 opacity-40"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
+      No steps — use the Command Builder above to add one</div>`;
+    return;
+  }
+  container.innerHTML = '';
+  seq.steps.forEach(step => {
+    const sr = seqRunResult?.seqId === seq.id ? seqRunResult.stepResults.find(r => r.stepId === step.id) : null;
+    const outcome = sr?.outcome;
+    const cmdDef = SEQ_CMD_DEFS[step.cmdKey];
+    const isActive = step.id === selectedStepId;
+    const bytePreview = step.bytes.filter(b => b).join(' ');
+    const isExpanded = isActive && sr && (outcome === 'pass' || outcome === 'fail' || outcome === 'error');
+
+    // Status circle
+    const statusCls = outcome === 'pass' ? 'pass' : outcome === 'fail' ? 'fail' : outcome === 'skipped' ? 'skipped' : seqRunStatus === 'running' ? 'running' : '';
+    const checkSvg = `<svg viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-2 h-2"><polyline points="1.5,5 4,7.5 8.5,2.5"/></svg>`;
+    const crossSvg = `<svg viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" class="w-2 h-2"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>`;
+    const statusInner = outcome === 'pass' ? checkSvg : outcome === 'fail' || outcome === 'error' ? crossSvg : '';
+
+    // Response toggle
+    const respOpts = [['neg','NEG'],['either','—'],['pos','POS']];
+    const respHtml = `<div class="resp-toggle" onclick="event.stopPropagation()">${
+      respOpts.map(([v,l]) => `<button class="resp-btn${step.resp===v?' active':''}" data-val="${v}" onclick="setStepResp('${step.id}','${v}')">${l}</button>`).join('')
+    }</div>`;
+
+    const hdr = document.createElement('div');
+    hdr.className = 'seq-step-hdr group' + (isActive ? ' active' : '');
+    hdr.onclick = () => onStepClick(step.id);
+    hdr.innerHTML = `
+      <div class="seq-step-status ${statusCls}">${statusInner}</div>
+      <div class="flex-1 min-w-0">
+        <span class="text-gray-300 text-xs font-mono font-medium">${cmdDef?.label || step.cmdKey}</span>
+        <span class="text-gray-700 text-[10px] font-mono ml-2">${bytePreview}</span>
+      </div>
+      ${respHtml}
+      <button class="text-gray-700 hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-all ml-1 shrink-0"
+              onclick="event.stopPropagation();removeStep('${step.id}')">✕</button>`;
+    container.appendChild(hdr);
+
+    // Inline TX/RX expand (after run, when step is selected)
+    if (isExpanded) {
+      const txBytes = step.bytes.filter(b => b).join(' ');
+      const det = document.createElement('div');
+      det.className = 'seq-step-detail';
+      det.innerHTML = `
+        <div class="flex items-center gap-3 px-8 py-1.5 font-mono text-xs border-b border-gray-800/30 hover:bg-gray-700/10 transition-colors">
+          <div class="text-gray-600 text-[10px] w-16 shrink-0">Request</div>
+          <span class="badge-tx px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0">TX</span>
+          <span class="hex-tx">${txBytes}</span>
+        </div>
+        <div class="flex items-center gap-3 px-8 py-1.5 font-mono text-xs hover:bg-gray-700/10 transition-colors">
+          <div class="text-gray-600 text-[10px] w-16 shrink-0">Response</div>
+          <span class="${outcome==='pass'?'badge-rx':'badge-err'} px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0">RX</span>
+          <span class="${outcome==='pass'?'hex-rx':'text-red-400'}">${sr?.responseHex || ''}</span>
+        </div>`;
+      container.appendChild(det);
+    }
+  });
+}
+
+// ── ByteBar ↔ Sequence tab switching ────────────────────────────
+function showSeqBytebarMode(on) {
+  document.getElementById('bytebar-send-row').style.display = on ? 'none' : 'block';
+  document.getElementById('bytebar-seq-row').style.display  = on ? 'flex'  : 'none';
+}
+
+// ── Run sequence (mock) ──────────────────────────────────────────
+function runSequence() {
+  const seq = getActiveSeq(); if (!seq || !connected) return;
+  const total = seq.steps.filter(s => !s.disabled).length;
+  seqRunResult = { status:'running', seqId:seq.id, stepResults:[], stepsTotal:total, stepsDone:0 };
+  setSeqStatus('running'); renderSeqSteps();
+  let idx = 0;
+  function next() {
+    if (idx >= seq.steps.length) {
+      seqRunResult.status = 'done'; seqRunResult.stepsDone = total;
+      setSeqStatus('done'); renderSeqSteps(); return;
+    }
+    const step = seq.steps[idx++];
+    if (step.disabled) {
+      seqRunResult.stepResults.push({ stepId:step.id, outcome:'skipped' });
+      renderSeqSteps(); setTimeout(next, 60); return;
+    }
+    setTimeout(() => {
+      const pass = Math.random() > 0.25;
+      const outcome = pass ? 'pass' : (step.resp === 'neg' ? 'pass' : 'fail');
+      const hexOk = ['FF 01 00 00','FF 00 00 00 00 00','FF 02 00 00 00 00 00 00'];
+      seqRunResult.stepResults.push({
+        stepId: step.id, outcome,
+        responseHex: outcome === 'pass' ? hexOk[idx % hexOk.length] : 'FE 20',
+      });
+      seqRunResult.stepsDone = seqRunResult.stepResults.filter(r => r.outcome !== 'skipped').length;
+      renderSeqSteps();
+      if (outcome === 'fail' && seq.abortOnError) {
+        for (let i = idx; i < seq.steps.length; i++)
+          seqRunResult.stepResults.push({ stepId:seq.steps[i].id, outcome:'skipped' });
+        seqRunResult.status = 'aborted';
+        setSeqStatus('aborted'); renderSeqSteps(); return;
+      }
+      setTimeout(next, 320);
+    }, 380);
+  }
+  setTimeout(next, 80);
+}
+
 // ── Init ──────────────────────────────────────────────────────────
 buildByteBar();
 renderDaqTree();
 setDaqState('idle');
+rebuildSeqSelector();
+renderSeqSteps();
+setSeqStatus('idle');
+updateAbortToggle();
+updateBytebarSeqBtns();
 </script>
 </body>
 </html>

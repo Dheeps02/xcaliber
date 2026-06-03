@@ -1377,11 +1377,12 @@ function PaneSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
 
 // ── Root DAQ component ───────────────────────────────────────────
 export function Daq() {
-  const daqLists           = useAppStore(s => s.daqLists);
-  const setDaqLists        = useAppStore(s => s.setDaqLists);
-  const setDaqStatus       = useAppStore(s => s.setDaqStatus);
-  const clearDaqLiveValues = useAppStore(s => s.clearDaqLiveValues);
-  const showToast          = useAppStore(s => s.showToast);
+  const daqLists              = useAppStore(s => s.daqLists);
+  const setDaqLists           = useAppStore(s => s.setDaqLists);
+  const setDaqStatus          = useAppStore(s => s.setDaqStatus);
+  const clearDaqLiveValues    = useAppStore(s => s.clearDaqLiveValues);
+  const showToast             = useAppStore(s => s.showToast);
+  const setDaqListsFromFile   = useAppStore(s => s.setDaqListsFromFile);
 
   const [treePaneWidth, setTreePaneWidth] = useState(300);
   const [configuring, setConfiguring] = useState(false);
@@ -1549,6 +1550,7 @@ export function Daq() {
         odts: (l.odts ?? []).map((o: DaqOdt, oi: number) => ({ ...o, id: oi })),
       }));
       setDaqLists(reIndexed);
+      setDaqListsFromFile(true);
       if (data.colors) {
         setOdtColors(data.colors);
       }

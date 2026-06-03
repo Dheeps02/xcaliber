@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef, DaqList, DaqStatus, DaqLiveValue, DaqEntryType, EventDef, A2lVariable, UserCmdDef } from '../lib/types';
+import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef, DaqList, DaqStatus, DaqLiveValue, DaqEntryType, EventDef, A2lVariable, UserCmdDef, Sequence, SeqRunResult, SeqStepResult } from '../lib/types';
 import { CMD_DEFS } from '../lib/cmd-defs';
 
 const NUM_CELLS = 8;
@@ -50,8 +50,8 @@ interface AppStore {
   showToast: (message: string, type?: Toast['type'], detail?: string) => void;
   dismissToast: (id: number) => void;
   setAnimationWatermark: (v: number) => void;
-  activeMainTab: 'trace' | 'daq';
-  setActiveMainTab: (tab: 'trace' | 'daq') => void;
+  activeMainTab: 'trace' | 'daq' | 'sequence';
+  setActiveMainTab: (tab: 'trace' | 'daq' | 'sequence') => void;
   byteBarCollapsed: boolean;
   setByteBarCollapsed: (v: boolean) => void;
 
@@ -74,13 +74,32 @@ interface AppStore {
   setUserCmds: (cmds: UserCmdDef[]) => void;
 
   alertMsg: string | null;
-  showAlert: (msg: string) => void;
+  alertAction: { label: string; fn: () => Promise<void> } | null;
+  showAlert: (msg: string, action?: { label: string; fn: () => Promise<void> }) => void;
   clearAlert: () => void;
 
   settingsOpen: boolean;
   settingsInitialTab: string;
   openSettings: (tab?: string) => void;
   closeSettings: () => void;
+
+  daqListsFromFile: boolean;
+  slaveDropped: boolean;
+  setDaqListsFromFile: (v: boolean) => void;
+  setSlaveDropped: (v: boolean) => void;
+  resetSession: () => void;
+
+  // ── Sequence ──────────────────────────────────────────────────────
+  sequences: Sequence[];
+  activeSequenceId: string | null;
+  seqSelectedStepId: string | null;
+  seqRunResult: SeqRunResult | null;
+  setSequences: (seqs: Sequence[]) => void;
+  setActiveSequenceId: (id: string | null) => void;
+  setSeqSelectedStepId: (id: string | null) => void;
+  updateSequence: (seq: Sequence) => void;
+  setSeqRunResult: (r: SeqRunResult | null) => void;
+  updateSeqStepResult: (sr: SeqStepResult) => void;
 }
 
 function buildUserCmdDefs(userCmds: UserCmdDef[]): Record<string, CmdDef> {
@@ -161,6 +180,12 @@ export const useAppStore = create<AppStore>((set) => ({
   a2lVariables: [],
   userCmds: [],
   userCmdDefs: {},
+  daqListsFromFile: false,
+  slaveDropped: false,
+  sequences: [],
+  activeSequenceId: null,
+  seqSelectedStepId: null,
+  seqRunResult: null,
 
   setConnected: (connected, slave) =>
     set((s) => ({
@@ -243,7 +268,7 @@ export const useAppStore = create<AppStore>((set) => ({
   dismissToast: (id) =>
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setAnimationWatermark: (v) => set({ animationWatermark: v }),
-  setActiveMainTab: (tab) => set({ activeMainTab: tab, ...(tab === 'daq' ? { byteBarCollapsed: true } : {}) }),
+  setActiveMainTab: (tab) => set({ activeMainTab: tab, ...(tab === 'daq' ? { byteBarCollapsed: true } : tab === 'sequence' ? { byteBarCollapsed: false } : {}) }),
   setByteBarCollapsed: (byteBarCollapsed) => set({ byteBarCollapsed }),
 
   setDaqStatus: (daqStatus) => set({ daqStatus }),
@@ -254,8 +279,31 @@ export const useAppStore = create<AppStore>((set) => ({
   setUserCmds: (userCmds) => set({ userCmds, userCmdDefs: buildUserCmdDefs(userCmds) }),
 
   alertMsg: null,
-  showAlert: (msg) => set({ alertMsg: msg }),
-  clearAlert: () => set({ alertMsg: null }),
+  alertAction: null,
+  showAlert: (msg, action) => set({ alertMsg: msg, alertAction: action ?? null }),
+  clearAlert: () => set({ alertMsg: null, alertAction: null }),
+
+  setDaqListsFromFile: (daqListsFromFile) => set({ daqListsFromFile }),
+  setSlaveDropped: (slaveDropped) => set({ slaveDropped }),
+  resetSession: () =>
+    set((s) => ({
+      packets: [],
+      txCount: 0,
+      rxCount: 0,
+      lastPacketId: 0,
+      connected: false,
+      slaveInfo: null,
+      daqStatus: 'idle' as DaqStatus,
+      daqLiveValues: new Map(),
+      daqDtoRate: 0,
+      animationWatermark: null,
+      activeCmd: null,
+      byteValues: Array<string>(NUM_CELLS).fill(''),
+      toasts: [],
+      alertMsg: null,
+      alertAction: null,
+      ...(s.daqListsFromFile ? {} : { daqLists: [] }),
+    })),
 
   settingsOpen: false,
   settingsInitialTab: 'appearance',
@@ -281,5 +329,21 @@ export const useAppStore = create<AppStore>((set) => ({
         next.set(key, { listId, odtId, entryName: name, addr, typeName: type, value, history });
       }
       return { daqLiveValues: next };
+    }),
+
+  setSequences: (sequences) => set({ sequences }),
+  setActiveSequenceId: (activeSequenceId) => set({ activeSequenceId }),
+  setSeqSelectedStepId: (seqSelectedStepId) => set({ seqSelectedStepId }),
+  updateSequence: (seq) =>
+    set((s) => ({ sequences: s.sequences.map((q) => (q.id === seq.id ? seq : q)) })),
+  setSeqRunResult: (seqRunResult) => set({ seqRunResult }),
+  updateSeqStepResult: (sr) =>
+    set((s) => {
+      if (!s.seqRunResult) return {};
+      const existing = s.seqRunResult.stepResults.find((r) => r.stepId === sr.stepId);
+      const stepResults = existing
+        ? s.seqRunResult.stepResults.map((r) => (r.stepId === sr.stepId ? sr : r))
+        : [...s.seqRunResult.stepResults, sr];
+      return { seqRunResult: { ...s.seqRunResult, stepResults } };
     }),
 }));

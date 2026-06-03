@@ -3,18 +3,72 @@
 XCP-on-Ethernet mock slave (UDP).
 
 Supports all XCP commands implemented in xcp-client, including full DAQ with
-simulated test variables that change over time.
+50 simulated test variables grouped by category.
 
-Test variables (use these addresses when building DAQ lists):
-  addr    name               type  range
-  0x1000  engine_rpm         f32   0–8000 RPM       (sine, 0.5 Hz)
-  0x1004  coolant_temp       f32   80–105 °C        (sine, 0.08 Hz)
-  0x1008  throttle_pos       f32   0–100 %          (triangle, 0.2 Hz)
-  0x100C  vehicle_speed      f32   0–120 km/h       (sine, 0.25 Hz)
-  0x1010  battery_voltage    f32   12.0–14.4 V      (sine + noise)
-  0x2000  counter_u8         u8    0–255            (wrapping, 10/s)
-  0x2001  counter_u16        u16   0–65535          (wrapping, 100/s)
-  0x2003  counter_u32        u32   0–2^32           (wrapping, 1000/s)
+  ── Powertrain ────────────────────────────────────────────────────
+  addr    name                      type  range
+  0x1000  engine_rpm                f32   0–8000 RPM
+  0x1008  throttle_pos              f32   0–100 %
+  0x1014  engine_load               f32   20–95 %
+  0x1018  intake_manifold_pressure  f32   40–100 kPa
+  0x101C  injection_timing          f32   10–35 °BTDC
+  0x1020  ignition_advance          f32   8–40 °
+  0x1024  torque_demand             f32   0–400 Nm
+  0x1028  torque_actual             f32   0–380 Nm
+  0x100C  vehicle_speed             f32   0–120 km/h
+  0x102C  gear_position             u8    0–6
+
+  ── Thermal ───────────────────────────────────────────────────────
+  0x1004  coolant_temp              f32   80–105 °C
+  0x1100  oil_temp                  f32   85–115 °C
+  0x1104  exhaust_temp              f32   400–850 °C
+  0x1108  intake_air_temp           f32   20–45 °C
+  0x110C  trans_fluid_temp          f32   70–100 °C
+  0x1110  fuel_temp                 f32   15–35 °C
+
+  ── Electrical ────────────────────────────────────────────────────
+  0x1010  battery_voltage           f32   12.0–14.4 V
+  0x1200  alternator_voltage        f32   13.8–14.5 V
+  0x1204  battery_current           f32   -20–80 A
+  0x1208  starter_current           f32   0–250 A
+  0x120C  fuel_pump_duty            f32   40–100 %
+  0x1210  fan_duty                  f32   0–100 %
+
+  ── Sensors ───────────────────────────────────────────────────────
+  0x1300  lambda_sensor_1           f32   0.85–1.15
+  0x1304  lambda_sensor_2           f32   0.85–1.15
+  0x1308  map_sensor                f32   40–100 kPa
+  0x130C  maf_sensor                f32   2–40 g/s
+  0x1310  oil_pressure              f32   2.5–6.5 bar
+  0x1314  fuel_pressure             f32   3.5–4.5 bar
+  0x1318  brake_pressure_front      f32   0–120 bar
+  0x131C  brake_pressure_rear       f32   0–80 bar
+
+  ── Chassis ───────────────────────────────────────────────────────
+  0x1400  wheel_speed_fl            f32   0–130 km/h
+  0x1404  wheel_speed_fr            f32   0–130 km/h
+  0x1408  wheel_speed_rl            f32   0–130 km/h
+  0x140C  wheel_speed_rr            f32   0–130 km/h
+  0x1410  steering_angle            f32   -540–540 °
+  0x1414  lateral_accel             f32   -2.0–2.0 g
+  0x1418  longitudinal_accel        f32   -1.5–1.5 g
+  0x141C  yaw_rate                  f32   -45–45 °/s
+  0x1420  traction_control_slip     f32   0–15 %
+
+  ── Fuel System ───────────────────────────────────────────────────
+  0x1500  fuel_level                f32   20–100 %
+  0x1504  fuel_flow_rate            f32   2–80 ml/min
+  0x1508  injector_duty_cyl1        f32   15–85 %
+  0x150C  injector_duty_cyl2        f32   15–85 %
+
+  ── Counters ──────────────────────────────────────────────────────
+  0x2000  counter_u8                u8    0–255
+  0x2001  counter_u16               u16   0–65535
+  0x2003  counter_u32               u32   0–2^32
+  0x2100  engine_runtime            u32   seconds
+  0x2104  total_distance            u32   metres
+  0x2108  fuel_consumed             u32   ml
+  0x210C  injection_count           u32   count
 
 DAQ DTOs are sent at 10 Hz once START_STOP_SYNCH(start) is received.
 
@@ -57,6 +111,15 @@ CMD_START_STOP_SYNCH    = 0xDD
 CMD_SET_DAQ_PTR         = 0xE2
 CMD_WRITE_DAQ           = 0xE1
 
+# Event channel rate definitions (Hz). Clients assign DAQ lists to channels
+# via SET_DAQ_LIST_MODE; the send loop fires each channel at its own rate.
+EVENT_CHANNELS = {
+    0: 1000.0,  # 1 kHz  — high-speed counters / fast sensors
+    1: 100.0,   # 100 Hz — counters, fast diagnostics
+    2: 10.0,    # 10 Hz  — standard ECU signals
+    3: 1.0,     # 1 Hz   — slow/background data
+}
+
 CMD_NAMES = {
     CMD_CONNECT:             "CONNECT",
     CMD_DISCONNECT:          "DISCONNECT",
@@ -94,24 +157,200 @@ _T0 = time.time()
 
 def read_mem(addr: int, size: int) -> bytes:
     t = time.time() - _T0
-    if addr == 0x1000:
+
+    # ── Powertrain ──────────────────────────────────────────────────────
+    if addr == 0x1000:  # engine_rpm  (sine, 0.5 Hz, 0–8000)
         return struct.pack('<f', 4000 + 4000 * math.sin(t * 0.5))
-    if addr == 0x1004:
-        return struct.pack('<f', 92.5 + 12.5 * math.sin(t * 0.08))
-    if addr == 0x1008:
+
+    if addr == 0x1008:  # throttle_pos  (triangle, 0.2 Hz, 0–100 %)
         p = (t * 0.2) % 1.0
         tri = p * 2 if p < 0.5 else 2.0 - p * 2
         return struct.pack('<f', tri * 100.0)
-    if addr == 0x100C:
-        return struct.pack('<f', 60 + 60 * math.sin(t * 0.25))
-    if addr == 0x1010:
-        return struct.pack('<f', 13.2 + 1.2 * math.sin(t * 0.04) + random.uniform(-0.05, 0.05))
-    if addr == 0x2000:
+
+    if addr == 0x1014:  # engine_load  (blended throttle + rpm, 20–95 %)
+        p = (t * 0.2) % 1.0
+        tri = p * 2 if p < 0.5 else 2.0 - p * 2
+        rpm_norm = 0.5 + 0.5 * math.sin(t * 0.5)
+        return struct.pack('<f', 20.0 + 75.0 * (0.6 * tri + 0.4 * rpm_norm))
+
+    if addr == 0x1018:  # intake_manifold_pressure  (40–100 kPa, tracks throttle)
+        p = (t * 0.2) % 1.0
+        tri = p * 2 if p < 0.5 else 2.0 - p * 2
+        return struct.pack('<f', 40.0 + 60.0 * tri)
+
+    if addr == 0x101C:  # injection_timing  (10–35 °BTDC, scales with rpm)
+        rpm_norm = 0.5 + 0.5 * math.sin(t * 0.5)
+        return struct.pack('<f', 10.0 + 25.0 * rpm_norm)
+
+    if addr == 0x1020:  # ignition_advance  (8–40 °, scales with rpm + noise)
+        rpm_norm = 0.5 + 0.5 * math.sin(t * 0.5)
+        return struct.pack('<f', 8.0 + 32.0 * rpm_norm + random.uniform(-1.0, 1.0))
+
+    if addr == 0x1024:  # torque_demand  (0–400 Nm, follows throttle)
+        p = (t * 0.2) % 1.0
+        tri = p * 2 if p < 0.5 else 2.0 - p * 2
+        return struct.pack('<f', tri * 400.0)
+
+    if addr == 0x1028:  # torque_actual  (0–380 Nm, lagged + noise)
+        p = ((t - 0.4) * 0.2) % 1.0
+        tri = p * 2 if p < 0.5 else 2.0 - p * 2
+        return struct.pack('<f', tri * 380.0 + random.uniform(-5.0, 5.0))
+
+    if addr == 0x100C:  # vehicle_speed  (sine, 0.25 Hz, 0–120 km/h)
+        return struct.pack('<f', 60.0 + 60.0 * math.sin(t * 0.25))
+
+    if addr == 0x102C:  # gear_position  (u8, derived from speed)
+        speed = 60.0 + 60.0 * math.sin(t * 0.25)
+        gear = (0 if speed < 5   else
+                1 if speed < 20  else
+                2 if speed < 40  else
+                3 if speed < 65  else
+                4 if speed < 90  else
+                5 if speed < 110 else 6)
+        return struct.pack('B', gear)
+
+    # ── Thermal ─────────────────────────────────────────────────────────
+    if addr == 0x1004:  # coolant_temp  (sine, ~10 s period, 80–105 °C)
+        return struct.pack('<f', 92.5 + 12.5 * math.sin(t * 0.6))
+
+    if addr == 0x1100:  # oil_temp  (85–115 °C, ~12 s period)
+        return struct.pack('<f', 100.0 + 15.0 * math.sin(t * 0.5))
+
+    if addr == 0x1104:  # exhaust_temp  (400–850 °C, tracks rpm)
+        rpm_norm = 0.5 + 0.5 * math.sin(t * 0.5)
+        return struct.pack('<f', 625.0 + 225.0 * rpm_norm + random.uniform(-10.0, 10.0))
+
+    if addr == 0x1108:  # intake_air_temp  (20–45 °C, ~15 s period)
+        return struct.pack('<f', 32.5 + 12.5 * math.sin(t * 0.4))
+
+    if addr == 0x110C:  # trans_fluid_temp  (70–100 °C, ~14 s period)
+        return struct.pack('<f', 85.0 + 15.0 * math.sin(t * 0.45))
+
+    if addr == 0x1110:  # fuel_temp  (15–35 °C, ~18 s period)
+        return struct.pack('<f', 25.0 + 10.0 * math.sin(t * 0.35))
+
+    # ── Electrical ──────────────────────────────────────────────────────
+    if addr == 0x1010:  # battery_voltage  (12.0–14.4 V, ~12 s period + noise)
+        return struct.pack('<f', 13.2 + 1.2 * math.sin(t * 0.5) + random.uniform(-0.05, 0.05))
+
+    if addr == 0x1200:  # alternator_voltage  (13.8–14.5 V, ~10 s period + noise)
+        return struct.pack('<f', 14.15 + 0.35 * math.sin(t * 0.6) + random.uniform(-0.03, 0.03))
+
+    if addr == 0x1204:  # battery_current  (-20–80 A, tracks rpm)
+        rpm_norm = 0.5 + 0.5 * math.sin(t * 0.5)
+        return struct.pack('<f', -10.0 + 90.0 * rpm_norm + random.uniform(-3.0, 3.0))
+
+    if addr == 0x1208:  # starter_current  (brief crank pulse every 30 s)
+        phase = t % 30.0
+        val = 200.0 * math.exp(-phase * 8.0) if phase < 1.0 else 0.0
+        return struct.pack('<f', val)
+
+    if addr == 0x120C:  # fuel_pump_duty  (40–100 %, tracks load)
+        p = (t * 0.2) % 1.0
+        tri = p * 2 if p < 0.5 else 2.0 - p * 2
+        return struct.pack('<f', 40.0 + 60.0 * tri)
+
+    if addr == 0x1210:  # fan_duty  (0–100 %, kicks in above 90 °C, tracks coolant)
+        ct = 92.5 + 12.5 * math.sin(t * 0.6)
+        duty = max(0.0, min(100.0, (ct - 90.0) / 15.0 * 100.0))
+        return struct.pack('<f', duty)
+
+    # ── Sensors ─────────────────────────────────────────────────────────
+    if addr == 0x1300:  # lambda_sensor_1  (dithers around stoich 1.0)
+        return struct.pack('<f', 1.0 + 0.08 * math.sin(t * 2.5) + random.uniform(-0.015, 0.015))
+
+    if addr == 0x1304:  # lambda_sensor_2  (slight phase offset)
+        return struct.pack('<f', 1.0 + 0.08 * math.sin(t * 2.5 + 0.6) + random.uniform(-0.015, 0.015))
+
+    if addr == 0x1308:  # map_sensor  (40–100 kPa, same wave as IMP)
+        p = (t * 0.2) % 1.0
+        tri = p * 2 if p < 0.5 else 2.0 - p * 2
+        return struct.pack('<f', 40.0 + 60.0 * tri)
+
+    if addr == 0x130C:  # maf_sensor  (2–40 g/s, tracks throttle)
+        p = (t * 0.2) % 1.0
+        tri = p * 2 if p < 0.5 else 2.0 - p * 2
+        return struct.pack('<f', 2.0 + 38.0 * tri + random.uniform(-0.5, 0.5))
+
+    if addr == 0x1310:  # oil_pressure  (2.5–6.5 bar, tracks rpm)
+        rpm_norm = 0.5 + 0.5 * math.sin(t * 0.5)
+        return struct.pack('<f', 2.5 + 4.0 * rpm_norm + random.uniform(-0.1, 0.1))
+
+    if addr == 0x1314:  # fuel_pressure  (3.5–4.5 bar, ~8 s period + noise)
+        return struct.pack('<f', 4.0 + 0.5 * math.sin(t * 0.8) + random.uniform(-0.04, 0.04))
+
+    if addr == 0x1318:  # brake_pressure_front  (0–120 bar, occasional presses)
+        bp = max(0.0, 60.0 * math.sin(t * 0.15))
+        return struct.pack('<f', bp)
+
+    if addr == 0x131C:  # brake_pressure_rear  (0–80 bar)
+        bp = max(0.0, 40.0 * math.sin(t * 0.15))
+        return struct.pack('<f', bp)
+
+    # ── Chassis ─────────────────────────────────────────────────────────
+    if addr in (0x1400, 0x1404, 0x1408, 0x140C):  # wheel speeds fl/fr/rl/rr
+        base = 60.0 + 60.0 * math.sin(t * 0.25)
+        offsets = {0x1400: 0.0, 0x1404: 0.2, 0x1408: 0.4, 0x140C: 0.6}
+        noise = random.uniform(-0.8, 0.8)
+        return struct.pack('<f', max(0.0, base + offsets[addr] * math.sin(t * 1.1) + noise))
+
+    if addr == 0x1410:  # steering_angle  (-180–180 °, slow sine)
+        return struct.pack('<f', 180.0 * math.sin(t * 0.07))
+
+    if addr == 0x1414:  # lateral_accel  (-2.0–2.0 g)
+        return struct.pack('<f', 1.2 * math.sin(t * 0.18) + random.uniform(-0.04, 0.04))
+
+    if addr == 0x1418:  # longitudinal_accel  (-1.5–1.5 g)
+        return struct.pack('<f', 0.8 * math.sin(t * 0.25) + random.uniform(-0.04, 0.04))
+
+    if addr == 0x141C:  # yaw_rate  (-45–45 °/s)
+        return struct.pack('<f', 30.0 * math.sin(t * 0.18) + random.uniform(-0.8, 0.8))
+
+    if addr == 0x1420:  # traction_control_slip  (0–15 %, mostly near 0)
+        raw = 4.0 * math.sin(t * 0.4) + random.uniform(-0.5, 0.5)
+        return struct.pack('<f', max(0.0, min(15.0, raw)))
+
+    # ── Fuel System ─────────────────────────────────────────────────────
+    if addr == 0x1500:  # fuel_level  (sawtooth 100→20 % over 60 s, then resets)
+        return struct.pack('<f', 100.0 - (t % 60.0) / 60.0 * 80.0)
+
+    if addr == 0x1504:  # fuel_flow_rate  (2–80 ml/min, tracks throttle)
+        p = (t * 0.2) % 1.0
+        tri = p * 2 if p < 0.5 else 2.0 - p * 2
+        return struct.pack('<f', 2.0 + 78.0 * tri + random.uniform(-1.0, 1.0))
+
+    if addr == 0x1508:  # injector_duty_cyl1  (15–85 %)
+        p = (t * 0.2) % 1.0
+        tri = p * 2 if p < 0.5 else 2.0 - p * 2
+        return struct.pack('<f', 15.0 + 70.0 * tri + random.uniform(-1.5, 1.5))
+
+    if addr == 0x150C:  # injector_duty_cyl2  (15–85 %, slight phase offset)
+        p = ((t + 0.12) * 0.2) % 1.0
+        tri = p * 2 if p < 0.5 else 2.0 - p * 2
+        return struct.pack('<f', 15.0 + 70.0 * tri + random.uniform(-1.5, 1.5))
+
+    # ── Counters ─────────────────────────────────────────────────────────
+    if addr == 0x2000:  # counter_u8  (wraps at 255, 10/s)
         return struct.pack('B', int(t * 10) & 0xFF)
-    if addr == 0x2001:
+
+    if addr == 0x2001:  # counter_u16  (wraps, 100/s)
         return struct.pack('<H', int(t * 100) & 0xFFFF)
-    if addr == 0x2003:
+
+    if addr == 0x2003:  # counter_u32  (wraps, 1000/s)
         return struct.pack('<I', int(t * 1000) & 0xFFFFFFFF)
+
+    if addr == 0x2100:  # engine_runtime  (seconds since start)
+        return struct.pack('<I', int(t) & 0xFFFFFFFF)
+
+    if addr == 0x2104:  # total_distance  (metres, ~60 km/h avg)
+        return struct.pack('<I', int(t * 60000.0 / 3600.0) & 0xFFFFFFFF)
+
+    if addr == 0x2108:  # fuel_consumed  (ml, ~8 L/100 km at avg speed)
+        return struct.pack('<I', int(t * 1.33) & 0xFFFFFFFF)
+
+    if addr == 0x210C:  # injection_count  (4-cyl, ~133 injections/s at avg rpm)
+        return struct.pack('<I', int(t * 133) & 0xFFFFFFFF)
+
     # fallback: pattern bytes
     return bytes((addr + i) & 0xFF for i in range(size))
 
@@ -152,19 +391,23 @@ _mta_ext  = 0
 # ── DAQ DTO send loop ─────────────────────────────────────────────────
 
 def _daq_send_loop():
-    """Send DTOs at 10 Hz. Snapshots the PID→entries map on entry."""
+    """Send DTOs at their event-channel rate. Snapshots channel→pids map on entry."""
     with _lock:
-        pid_map = {}
+        # channel_id -> [(pid, entries)]
+        ch_map: dict[int, list] = {}
         pid = 0
         for lst in _daq_lists:
+            ch = lst['event_channel']
             for odt in lst['odts']:
                 entries = list(odt['entries'])
                 if entries:
-                    pid_map[pid] = entries
+                    ch_map.setdefault(ch, []).append((pid, entries))
                 pid += 1
 
-    if not pid_map:
+    if not ch_map:
         return
+
+    last_sent = {ch: time.monotonic() for ch in ch_map}
 
     while True:
         with _lock:
@@ -174,13 +417,18 @@ def _daq_send_loop():
             sock = _sock_ref
 
         if addr and sock:
-            for p in sorted(pid_map):
-                payload = bytearray([p])
-                for e in pid_map[p]:
-                    payload += read_mem(e['addr'], e['size'])
-                _send(sock, addr, bytes(payload))
+            now = time.monotonic()
+            for ch, pid_list in ch_map.items():
+                period = 1.0 / EVENT_CHANNELS.get(ch, 10.0)
+                if now - last_sent[ch] >= period:
+                    last_sent[ch] = now
+                    for pid, entries in pid_list:
+                        payload = bytearray([pid])
+                        for e in entries:
+                            payload += read_mem(e['addr'], e['size'])
+                        _send(sock, addr, bytes(payload))
 
-        time.sleep(0.1)
+        time.sleep(0.001)  # 1 ms poll granularity
 
 # ── Command handlers ──────────────────────────────────────────────────
 
@@ -332,7 +580,6 @@ def handle_start_stop_daq_list(payload):
             _daq_selected.add(list_num)
         elif mode == 0x00:
             _daq_selected.discard(list_num)
-        # first_pid = sum of ODT counts for all earlier lists
         first_pid = sum(len(_daq_lists[i]['odts']) for i in range(list_num)
                         if i < len(_daq_lists))
     return bytes([PID_POSITIVE, first_pid & 0xFF])
@@ -387,15 +634,64 @@ def serve(host: str, port: int) -> None:
         _sock_ref = sock
 
     print(f"XCP mock slave listening on {host}:{port}  (Ctrl-C to stop)\n")
-    print("Test variables:")
-    print("  0x1000  engine_rpm        f32  0–8000 RPM")
-    print("  0x1004  coolant_temp      f32  80–105 °C")
-    print("  0x1008  throttle_pos      f32  0–100 %")
-    print("  0x100C  vehicle_speed     f32  0–120 km/h")
-    print("  0x1010  battery_voltage   f32  12–14.4 V")
-    print("  0x2000  counter_u8        u8   0–255")
-    print("  0x2001  counter_u16       u16  0–65535")
-    print("  0x2003  counter_u32       u32  0–2^32")
+    print("Variables (50 total):")
+    print("  Powertrain:")
+    print("    0x1000  engine_rpm                f32  0–8000 RPM")
+    print("    0x1008  throttle_pos              f32  0–100 %")
+    print("    0x1014  engine_load               f32  20–95 %")
+    print("    0x1018  intake_manifold_pressure  f32  40–100 kPa")
+    print("    0x101C  injection_timing          f32  10–35 °BTDC")
+    print("    0x1020  ignition_advance          f32  8–40 °")
+    print("    0x1024  torque_demand             f32  0–400 Nm")
+    print("    0x1028  torque_actual             f32  0–380 Nm")
+    print("    0x100C  vehicle_speed             f32  0–120 km/h")
+    print("    0x102C  gear_position             u8   0–6")
+    print("  Thermal:")
+    print("    0x1004  coolant_temp              f32  80–105 °C")
+    print("    0x1100  oil_temp                  f32  85–115 °C")
+    print("    0x1104  exhaust_temp              f32  400–850 °C")
+    print("    0x1108  intake_air_temp           f32  20–45 °C")
+    print("    0x110C  trans_fluid_temp          f32  70–100 °C")
+    print("    0x1110  fuel_temp                 f32  15–35 °C")
+    print("  Electrical:")
+    print("    0x1010  battery_voltage           f32  12.0–14.4 V")
+    print("    0x1200  alternator_voltage        f32  13.8–14.5 V")
+    print("    0x1204  battery_current           f32  -20–80 A")
+    print("    0x1208  starter_current           f32  0 A (idle)")
+    print("    0x120C  fuel_pump_duty            f32  40–100 %")
+    print("    0x1210  fan_duty                  f32  0–100 %")
+    print("  Sensors:")
+    print("    0x1300  lambda_sensor_1           f32  0.85–1.15")
+    print("    0x1304  lambda_sensor_2           f32  0.85–1.15")
+    print("    0x1308  map_sensor                f32  40–100 kPa")
+    print("    0x130C  maf_sensor                f32  2–40 g/s")
+    print("    0x1310  oil_pressure              f32  2.5–6.5 bar")
+    print("    0x1314  fuel_pressure             f32  3.5–4.5 bar")
+    print("    0x1318  brake_pressure_front      f32  0–120 bar")
+    print("    0x131C  brake_pressure_rear       f32  0–80 bar")
+    print("  Chassis:")
+    print("    0x1400  wheel_speed_fl            f32  0–130 km/h")
+    print("    0x1404  wheel_speed_fr            f32  0–130 km/h")
+    print("    0x1408  wheel_speed_rl            f32  0–130 km/h")
+    print("    0x140C  wheel_speed_rr            f32  0–130 km/h")
+    print("    0x1410  steering_angle            f32  -180–180 °")
+    print("    0x1414  lateral_accel             f32  -2.0–2.0 g")
+    print("    0x1418  longitudinal_accel        f32  -1.5–1.5 g")
+    print("    0x141C  yaw_rate                  f32  -45–45 °/s")
+    print("    0x1420  traction_control_slip     f32  0–15 %")
+    print("  Fuel System:")
+    print("    0x1500  fuel_level                f32  20–100 %")
+    print("    0x1504  fuel_flow_rate            f32  2–80 ml/min")
+    print("    0x1508  injector_duty_cyl1        f32  15–85 %")
+    print("    0x150C  injector_duty_cyl2        f32  15–85 %")
+    print("  Counters:")
+    print("    0x2000  counter_u8                u8   0–255")
+    print("    0x2001  counter_u16               u16  0–65535")
+    print("    0x2003  counter_u32               u32  0–2^32")
+    print("    0x2100  engine_runtime            u32  seconds")
+    print("    0x2104  total_distance            u32  metres")
+    print("    0x2108  fuel_consumed             u32  ml")
+    print("    0x210C  injection_count           u32  count")
     print()
 
     while True:
