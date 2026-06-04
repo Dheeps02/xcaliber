@@ -59,9 +59,15 @@ export function MemoryBar() {
   const [downloadFlying, setDownloadFlying]   = useState(false);
   const [downloadJiggling, setDownloadJiggling] = useState(false);
 
-  // ── rotating previews ─────────────────────────────────────────────────────
-  const mtaPreview  = useRotatingPreview(['0x20003A40', 'VarName', '0x00000000'], { interval: 3200 });
-  const dataPreview = useRotatingPreview(['FF 01 A3', '0xFF', '255', '01 02 03'], { interval: 3000 });
+  // ── rotating previews — single shared epoch keeps both fields in sync ────
+  const [previewEpoch, setPreviewEpoch] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setPreviewEpoch((e) => e + 1), 3400);
+    return () => clearInterval(id);
+  }, []);
+
+  const mtaPreview  = useRotatingPreview(['0x20003A40', 'VarName', '0x00000000'], { epoch: previewEpoch });
+  const dataPreview = useRotatingPreview(['FF 01 A3', '0xFF', '255', '01 02 03'], { epoch: previewEpoch });
   const [mtaAnimKey, setMtaAnimKey]     = useState(0);
   const prevMtaPreview  = useRef(mtaPreview);
   const prevDataPreview = useRef(dataPreview);
