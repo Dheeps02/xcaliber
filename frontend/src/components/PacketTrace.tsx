@@ -30,15 +30,15 @@ function dirColor(dir: string): string {
 }
 
 function dirBgColor(dir: string): string {
-  if (dir === 'tx') return 'rgba(96,165,250,0.022)';
-  if (dir === 'rx') return 'rgba(74,222,128,0.016)';
-  return 'rgba(248,113,113,0.028)';
+  if (dir === 'tx') return 'color-mix(in srgb, var(--tx) 5%, transparent)';
+  if (dir === 'rx') return 'color-mix(in srgb, var(--rx) 4%, transparent)';
+  return 'color-mix(in srgb, var(--status-err) 5%, transparent)';
 }
 
 function dirBgHover(dir: string): string {
-  if (dir === 'tx') return 'rgba(96,165,250,0.055)';
-  if (dir === 'rx') return 'rgba(74,222,128,0.044)';
-  return 'rgba(248,113,113,0.065)';
+  if (dir === 'tx') return 'color-mix(in srgb, var(--tx) 10%, transparent)';
+  if (dir === 'rx') return 'color-mix(in srgb, var(--rx) 8%, transparent)';
+  return 'color-mix(in srgb, var(--status-err) 10%, transparent)';
 }
 
 // ── ExpandPanel ──────────────────────────────────────────────────────────
@@ -125,11 +125,11 @@ function PidPopover({ anchor, pids, selected, onToggle, onAll, onClose }: PidPop
   return createPortal(
     <div
       ref={popRef}
-      className="fixed rounded-lg shadow-2xl z-[9998]"
+      className="xcb-glass fixed rounded-lg shadow-2xl z-[9998]"
       style={{
         top: rect.bottom + 4, left: x, width: 192,
-        background: 'var(--surface-overlay)',
         border: '1px solid var(--border-strong)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.35)',
       }}
     >
       <div className="p-2" style={{ borderBottom: '1px solid var(--border)' }}>
@@ -139,12 +139,7 @@ function PidPopover({ anchor, pids, selected, onToggle, onAll, onClose }: PidPop
           maxLength={2}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-2 py-1 rounded text-xs font-mono focus:outline-none"
-          style={{
-            background: 'var(--surface-base)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-primary)',
-          }}
+          className="xcb-input w-full px-2 py-1 rounded text-xs font-mono"
         />
       </div>
       <div className="p-1 max-h-44 overflow-y-auto">
@@ -294,12 +289,8 @@ export function PacketTrace() {
 
       {/* ── Toolbar ───────────────────────────────────────────────── */}
       <div
-        className="flex items-center justify-between px-3.5 shrink-0"
-        style={{
-          height: 36,
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--surface-raised)',
-        }}
+        className="xcb-glass flex items-center justify-between px-3.5 shrink-0"
+        style={{ height: 36, borderBottom: '1px solid var(--border)' }}
       >
         <div className="flex items-center gap-2">
           <SegmentControl items={DIR_ITEMS} value={dirFilter} onChange={setDirFilter} size="sm" />
@@ -352,14 +343,14 @@ export function PacketTrace() {
 
         {/* Sticky column headers */}
         <div
-          className="sticky top-0 z-10 grid text-[10px] font-semibold uppercase tracking-[0.09em] px-4"
+          className="xcb-glass sticky top-0 z-10 grid text-[10px] font-semibold uppercase tracking-[0.09em]"
           style={{
             gridTemplateColumns: 'minmax(160px,1.2fr) 110px 1fr',
             paddingLeft: 20,
             paddingTop: 5,
             paddingBottom: 5,
+            paddingRight: 16,
             borderBottom: '1px solid var(--border)',
-            background: 'var(--surface-raised)',
             color: 'var(--text-muted)',
           }}
         >
