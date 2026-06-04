@@ -3,12 +3,12 @@ import { toTitleCase } from '../lib/utils';
 import type { PacketEntry } from '../lib/types';
 
 export function HexCell({ hex, dir }: { hex: string; dir: 'tx' | 'rx' }) {
-  const cls = dir === 'tx' ? 'text-blue-400' : 'text-green-400';
-  if (!hex) return <span className="text-gray-600 italic">—</span>;
+  if (!hex) return <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>;
+  const color = dir === 'tx' ? 'var(--tx)' : 'var(--rx)';
   return (
     <>
       {hex.split(' ').map((b, i) => (
-        <span key={i} className={cls}>{b} </span>
+        <span key={i} style={{ color }}>{b} </span>
       ))}
     </>
   );
@@ -16,11 +16,9 @@ export function HexCell({ hex, dir }: { hex: string; dir: 'tx' | 'rx' }) {
 
 export function dirBadgeCls(p: PacketEntry) {
   const isErr = p.pid === 'FE';
-  return p.direction === 'tx'
-    ? 'bg-[#1e3a8a] text-[#93c5fd] border border-[#3b82f6]'
-    : isErr
-    ? 'bg-red-900/30 text-red-400 border border-red-500/50'
-    : 'bg-[#064e3b] text-[#6ee7b7] border border-[#10b981]';
+  if (p.direction === 'tx') return 'dir-badge tx';
+  if (isErr)                return 'dir-badge err';
+  return 'dir-badge rx';
 }
 
 export function flattenDecoded(decoded: Record<string, unknown>): [string, unknown][] {
@@ -52,15 +50,17 @@ export function ExpandDetailFlat({ p, open, extraFields }: {
   extraFields?: [string, unknown][];
 }) {
   const isErr = p.pid === 'FE';
-  const valueCls = isErr ? 'text-red-400' : p.direction === 'tx' ? 'text-blue-400' : 'text-green-400';
+  const valueColor = isErr
+    ? 'var(--status-err)'
+    : p.direction === 'tx' ? 'var(--tx)' : 'var(--rx)';
   const allFields = flattenDecoded(p.decoded);
-  const baseRows = p.direction === 'tx' ? allFields.filter(([k]) => k !== 'command') : allFields;
-  const rows = extraFields && extraFields.length > 0 ? extraFields : baseRows;
+  const baseRows  = p.direction === 'tx' ? allFields.filter(([k]) => k !== 'command') : allFields;
+  const rows      = extraFields && extraFields.length > 0 ? extraFields : baseRows;
 
   return (
-    <div className="bg-gray-900/60 overflow-hidden">
+    <div style={{ background: 'var(--surface-base)', overflow: 'hidden' }}>
       <div className={`expand-content ${open ? 'px-6 pb-3 pt-1' : 'closed'}`} style={{ maxHeight: open ? '300px' : undefined }}>
-        <div className={`text-[10px] mb-1.5 uppercase tracking-wider ${isErr ? 'text-red-500' : 'text-gray-500'}`}>
+        <div className="text-[10px] mb-1.5 uppercase tracking-wider" style={{ color: isErr ? 'var(--status-err)' : 'var(--text-muted)' }}>
           {p.direction === 'tx'
             ? <><PaperPlaneTilt size={11} className="inline mr-1" />TX · PID 0x{p.pid}</>
             : isErr
@@ -72,12 +72,12 @@ export function ExpandDetailFlat({ p, open, extraFields }: {
           {rows.length > 0 ? (
             rows.map(([k, v]) => (
               <div key={k}>
-                <span className="w-36 inline-block text-gray-500">{toTitleCase(k)}</span>
-                <span className={valueCls}>{formatValue(v)}</span>
+                <span className="w-36 inline-block" style={{ color: 'var(--text-muted)' }}>{toTitleCase(k)}</span>
+                <span style={{ color: valueColor }}>{formatValue(v)}</span>
               </div>
             ))
           ) : (
-            <span className="text-gray-700 italic">no field data</span>
+            <span style={{ color: 'var(--border-strong)', fontStyle: 'italic' }}>no field data</span>
           )}
         </div>
       </div>

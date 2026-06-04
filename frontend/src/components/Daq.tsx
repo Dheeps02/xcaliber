@@ -1,473 +1,744 @@
 import {
-  useRef,
-  useState,
-  useEffect,
-  useLayoutEffect,
-  useCallback,
-  useMemo,
+  useRef, useState, useEffect, useLayoutEffect,
   memo,
-  Fragment,
-  useId,
-  type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Trash, Wrench, Play, Stop, Pulse, ArrowSquareOut, FolderOpen,
-  Database, Plus, PencilSimple, X, DotsSixVertical, ChartLine,
-  Rows, FloppyDisk, MagnifyingGlass, Waveform,
+  Trash, Wrench, Pulse, ArrowSquareOut, FolderOpen,
+  Plus, X, DotsSixVertical, Waveform,
 } from '@phosphor-icons/react';
-import { useAppStore } from '../stores/app-store';
+import { useAppStore, SPARK_ZOOM_MIN_MS, SPARK_ZOOM_MAX_MS } from '../stores/app-store';
 import { api } from '../lib/api';
 import type { DaqList, DaqOdt, DaqEntry, DaqEntryType, A2lVariable } from '../lib/types';
 import { ExportDialog } from './ExportDialog';
+import { Button } from './ui/Button';
+import { RunStopButton } from './ui/RunStopButton';
 
 // ── constants ────────────────────────────────────────────────────
 const TYPE_SIZES: Record<DaqEntryType, number> = {
   u8: 1, i8: 1, u16: 2, i16: 2, u32: 4, i32: 4, f32: 4, f64: 8,
 };
-const DEFAULT_COL_WIDTHS = { signal: 160, value: 96, type: 52, address: 100, listOdt: 64 };
 const ODT_COLORS = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#ec4899','#84cc16'];
+const SPARK_H = 22;
+const LIVE_THRESHOLD_MS = 3000;
+
+// ── zoom helpers ──────────────────────────────────────────────────
+const LOG_MIN = Math.log2(SPARK_ZOOM_MIN_MS);
+const LOG_MAX = Math.log2(SPARK_ZOOM_MAX_MS);
+const sliderToMs = (v: number) => Math.round(Math.pow(2, LOG_MIN + (v / 100) * (LOG_MAX - LOG_MIN)));
+const msToSlider = (ms: number) => ((Math.log2(ms) - LOG_MIN) / (LOG_MAX - LOG_MIN)) * 100;
+function fmtZoom(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = ms / 1000;
+  return `${s % 1 === 0 ? s : s.toFixed(1)}s`;
+}
 
 // ── Sparkline ────────────────────────────────────────────────────
-const Sparkline = memo(function Sparkline({ history, color = '#10b981', zoom = 40, onZoomChange, lineStyle }: {
-  history: number[];
-  color?: string;
-  zoom?: number;
-  onZoomChange?: (dir: number) => void;
-  lineStyle?: React.CSSProperties;
+const Sparkline = memo(function Sparkline({
+  liveKey, color,
+}: {
+  liveKey: string;
+  color: string;
 }) {
-  const W = 200, H = 22;
-  const svgRef = useRef<SVGSVGElement>(null);
-  const rawId = useId();
-  const gradId = `sg${rawId.replace(/[^a-z0-9]/gi, '')}`;
+  const canvasRef  = useRef<HTMLCanvasElement>(null);
+  const rafRef     = useRef<number>(0);
+  const colorRef   = useRef(color);
+  const yRangeRef  = useRef<{ mn: number; mx: number } | null>(null);
+  useEffect(() => { colorRef.current = color; }, [color]);
 
+  // Non-passive wheel listener so we can preventDefault and avoid page scroll
   useEffect(() => {
-    const el = svgRef.current;
-    if (!el || !onZoomChange) return;
+    const el = canvasRef.current;
+    if (!el) return;
     function onWheel(e: WheelEvent) {
       e.preventDefault();
-      onZoomChange!(e.deltaY > 0 ? 1 : -1);
+      e.stopPropagation();
+      const { sparkWindowMs, setSparkWindowMs } = useAppStore.getState();
+      const next = Math.max(SPARK_ZOOM_MIN_MS, Math.min(SPARK_ZOOM_MAX_MS,
+        Math.round(sparkWindowMs * (e.deltaY > 0 ? 1.25 : 1 / 1.25))
+      ));
+      setSparkWindowMs(next);
     }
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [onZoomChange]);
+  }, []);
 
-  const slice = history.slice(-zoom);
-  if (slice.length < 2) {
-    return (
-      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" className="block opacity-30">
-        <line x1={0} y1={H / 2} x2={W} y2={H / 2} stroke="#374151" strokeWidth={1} />
-      </svg>
-    );
-  }
+  useEffect(() => {
+    yRangeRef.current = null;
 
-  const mn = Math.min(...slice);
-  const mx = Math.max(...slice);
-  const range = mx - mn || 1;
-  const points = slice.map((v, i) => ({
-    x: (i / (slice.length - 1)) * (W - 4) + 2,
-    y: (H - 4) - ((v - mn) / range) * (H - 8) + 2,
-  }));
+    function render() {
+      const canvas = canvasRef.current;
+      if (!canvas) { rafRef.current = requestAnimationFrame(render); return; }
 
-  const pts = points.map(p => `${p.x},${p.y}`).join(' ');
+      const W   = canvas.offsetWidth;
+      const H   = SPARK_H;
+      if (W === 0) { rafRef.current = requestAnimationFrame(render); return; }
 
-  // Closed path for the gradient fill: follow the line then drop to the bottom
-  const first = points[0], last = points[points.length - 1];
-  const fillPath = `M ${first.x},${first.y} `
-    + points.slice(1).map(p => `L ${p.x},${p.y}`).join(' ')
-    + ` L ${last.x},${H} L ${first.x},${H} Z`;
+      const dpr = window.devicePixelRatio || 1;
+      const pw  = Math.round(W * dpr);
+      const ph  = Math.round(H * dpr);
+      if (canvas.width !== pw || canvas.height !== ph) {
+        canvas.width  = pw;
+        canvas.height = ph;
+      }
+
+      const ctx = canvas.getContext('2d')!;
+      ctx.clearRect(0, 0, pw, ph);
+      ctx.save();
+      ctx.scale(dpr, dpr);
+
+      const col = colorRef.current;
+      const r   = parseInt(col.slice(1, 3), 16);
+      const g   = parseInt(col.slice(3, 5), 16);
+      const b   = parseInt(col.slice(5, 7), 16);
+
+      const now           = Date.now();
+      const sparkWindowMs = useAppStore.getState().sparkWindowMs;
+      const hist = useAppStore.getState().daqLiveValues.get(liveKey)?.history ?? [];
+      const winStart = hist.length > 0
+        ? Math.max(hist[0].ts, now - sparkWindowMs)
+        : now - sparkWindowMs;
+
+      function flatLine(y: number, muted: boolean) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.strokeStyle = muted ? 'rgba(255,255,255,0.12)' : col;
+        ctx.lineWidth   = 1;
+        ctx.stroke();
+      }
+
+      if (hist.length === 0) {
+        flatLine(H / 2, true);
+        ctx.restore();
+        rafRef.current = requestAnimationFrame(render);
+        return;
+      }
+
+      // Y-scale: expand immediately on new extremes, shrink slowly when they leave
+      let mn = hist[0].value, mx = hist[0].value;
+      for (const p of hist) {
+        if (p.value < mn) mn = p.value;
+        if (p.value > mx) mx = p.value;
+      }
+      if (!yRangeRef.current) {
+        yRangeRef.current = { mn, mx };
+      } else {
+        const EXPAND = 0.2;   // ~10 frames to 90% — brief edge-clip on new extremes
+        const SHRINK = 0.03;  // ~75 frames to 90% — slow drift as old extremes age out
+        const mnRate = mn < yRangeRef.current.mn ? EXPAND : SHRINK;
+        const mxRate = mx > yRangeRef.current.mx ? EXPAND : SHRINK;
+        yRangeRef.current.mn += (mn - yRangeRef.current.mn) * mnRate;
+        yRangeRef.current.mx += (mx - yRangeRef.current.mx) * mxRate;
+      }
+      const dispMn = yRangeRef.current.mn;
+      const dispMx = yRangeRef.current.mx;
+      const range  = Math.max(dispMx - dispMn, 1);
+      const norm   = (v: number) => Math.max(1, Math.min(H - 1, (H - 4) - ((v - dispMn) / range) * (H - 8) + 2));
+
+      // Split history at winStart
+      const inWindow: { value: number; ts: number }[] = [];
+      let lastBefore: { value: number; ts: number } | undefined;
+      for (const p of hist) {
+        if (p.ts < winStart) lastBefore = p;
+        else                 inWindow.push(p);
+      }
+
+      // Left-edge interpolation for smooth entry
+      if (lastBefore !== undefined) {
+        if (inWindow.length > 0) {
+          const next = inWindow[0];
+          const t = next.ts > lastBefore.ts
+            ? (winStart - lastBefore.ts) / (next.ts - lastBefore.ts) : 0;
+          inWindow.unshift({ value: lastBefore.value + t * (next.value - lastBefore.value), ts: winStart });
+        } else {
+          inWindow.push({ value: lastBefore.value, ts: winStart });
+        }
+      }
+
+      if (inWindow.length < 2) {
+        flatLine(norm(hist[hist.length - 1].value), false);
+        ctx.restore();
+        rafRef.current = requestAnimationFrame(render);
+        return;
+      }
+
+      const pts = inWindow.map(p => ({
+        x: ((p.ts - winStart) / sparkWindowMs) * W,
+        y: norm(p.value),
+      }));
+
+      // Pin right edge only when window is full to prevent jitter
+      const windowFull = hist[0].ts <= now - sparkWindowMs;
+      const last = pts[pts.length - 1];
+      if (windowFull && last.x < W) pts.push({ x: W, y: last.y });
+
+      const first = pts[0];
+      const tail  = pts[pts.length - 1];
+
+      // Fill
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, `rgba(${r},${g},${b},0.25)`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.beginPath();
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.lineTo(tail.x, H);
+      ctx.lineTo(first.x, H);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Line — canvas rasterises as one path, no per-segment alpha accumulation
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.strokeStyle = col;
+      ctx.lineWidth   = 1.5;
+      ctx.lineJoin    = 'round';
+      ctx.lineCap     = 'butt';
+      ctx.stroke();
+
+      ctx.restore();
+      rafRef.current = requestAnimationFrame(render);
+    }
+
+    rafRef.current = requestAnimationFrame(render);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [liveKey]);
 
   return (
-    <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" className="block">
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2={H} gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-          <stop offset="100%" stopColor={color} stopOpacity={0} />
-        </linearGradient>
-      </defs>
-
-      {/* Background — fades with row, not clipped */}
-      <rect width={W} height={H} fill={color} fillOpacity={0.06} />
-
-      {/* Line + fill — clipped by reveal animation */}
-      <g style={lineStyle}>
-        <path d={fillPath} fill={`url(#${gradId})`} />
-        <polyline points={pts} fill="none" style={{ stroke: color, transition: 'stroke 300ms ease' }} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
-      </g>
-    </svg>
+    <canvas
+      ref={canvasRef}
+      style={{ display: 'block', width: '100%', height: SPARK_H }}
+    />
   );
 });
 
-// ── Animated count for DAQ summary ───────────────────────────────
-function DaqAnimNum({ value }: { value: number }) {
+// ── DtoRateCount ─────────────────────────────────────────────────
+function DtoRateCount({ value }: { value: number }) {
   const [displayed, setDisplayed] = useState(value);
-  const [rev, setRev] = useState(0);
+  const [key, setKey]             = useState(0);
+  const [cls, setCls]             = useState('');
   const prevRef = useRef(value);
+  const timer   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (prevRef.current === value) return;
+    if (value === prevRef.current) return;
+    const up = value > prevRef.current;
     prevRef.current = value;
     setDisplayed(value);
-    setRev((r) => r + 1);
+    setKey(k => k + 1);
+    setCls(up ? 'count-tick' : 'count-enter-from-top');
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setCls(''), 260);
   }, [value]);
 
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
   return (
-    <span key={rev} className={rev > 0 ? 'count-tick' : ''} style={{ display: 'inline-block' }}>
+    <span key={key} className={cls} style={{ display: 'inline-block', overflow: 'hidden' }}>
       {displayed}
     </span>
   );
 }
 
-// ── Entry Edit Popover ───────────────────────────────────────────
-interface EntryPopoverProps {
-  listId: number;
-  odtId: number;
-  entryIdx: number | null; // null = new
-  initial?: DaqEntry;
-  anchor: { x: number; y: number };
-  onSave: (entry: DaqEntry, listId: number, odtId: number, entryIdx: number | null) => void;
-  onClose: () => void;
+// ── DaqToolbar ───────────────────────────────────────────────────
+interface ToolbarProps {
+  lists: DaqList[];
+  configuring: boolean;
+  onConfigure: () => void;
+  onStart: () => void;
+  onStop: () => void;
+  onFree: () => void;
+  onSave: () => void;
+  onLoad: (file: File) => void;
 }
 
-function resolveEntryAddr(input: string, a2lVars: A2lVariable[]): number | null {
-  const t = input.trim();
-  if (/^(?:0x)?[0-9a-fA-F]+$/i.test(t)) {
-    const n = parseInt(t.replace(/^0x/i, ''), 16);
-    return isNaN(n) ? null : n;
-  }
-  const v = a2lVars.find((v) => v.name === t);
-  return v ? v.addr : null;
-}
+function DaqToolbar({
+  lists, configuring,
+  onConfigure, onStart, onStop, onFree, onSave, onLoad,
+}: ToolbarProps) {
+  const daqStatus     = useAppStore(s => s.daqStatus);
+  const connected     = useAppStore(s => s.connected);
+  const daqDtoRate    = useAppStore(s => s.daqDtoRate);
+  const sparkWindowMs = useAppStore(s => s.sparkWindowMs);
+  const setSparkWindowMs = useAppStore(s => s.setSparkWindowMs);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [wrenchKey,      setWrenchKey]      = useState(0);
+  const [runPending,     setRunPending]     = useState(false);
+  const [confirmOpen,    setConfirmOpen]    = useState(false);
+  const [confirmExiting, setConfirmExiting] = useState(false);
+  const prevStatusRef = useRef(daqStatus);
 
-function EntryPopover({ listId, odtId, entryIdx, initial, anchor, onSave, onClose }: EntryPopoverProps) {
-  const a2lVars  = useAppStore((s) => s.a2lVariables);
-  const showToast = useAppStore((s) => s.showToast);
-  const [name, setName] = useState(initial?.name ?? '');
-  const [addr, setAddr] = useState(initial ? `0x${initial.addr.toString(16).padStart(8, '0').toUpperCase()}` : '');
-  const [ext, setExt] = useState(String(initial?.addr_ext ?? 0));
-  const [typeName, setTypeName] = useState<DaqEntryType>(initial?.type_name ?? 'u32');
-  const [errors, setErrors] = useState<{ name?: boolean; addr?: boolean }>({});
-  const [nameSuggs, setNameSuggs] = useState<A2lVariable[]>([]);
-  const [nameSuggOpen, setNameSuggOpen] = useState(false);
-  const [addrSuggs, setAddrSuggs] = useState<A2lVariable[]>([]);
-  const [addrSuggOpen, setAddrSuggOpen] = useState(false);
-  const popRef = useRef<HTMLDivElement>(null);
-  const nameInputRef = useRef<HTMLInputElement>(null);
-
-  // Label field: filter A2L suggestions by name
   useEffect(() => {
-    if (!name.trim() || a2lVars.length === 0) { setNameSuggs([]); return; }
-    const q = name.toLowerCase();
-    setNameSuggs(a2lVars.filter(v => v.name.toLowerCase().includes(q)).slice(0, 8));
-  }, [name, a2lVars]);
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = daqStatus;
+    if (prev === 'idle' && daqStatus === 'configured') setWrenchKey(k => k + 1);
+    // Clear pending once the status actually changes
+    if (prev === 'configured' && daqStatus === 'running')    setRunPending(false);
+    if (prev === 'running'    && daqStatus === 'configured') setRunPending(false);
+  }, [daqStatus]);
 
-  // Address field: filter A2L suggestions when not a hex string
-  useEffect(() => {
-    const t = addr.trim();
-    if (!t || /^0x/i.test(t) || a2lVars.length === 0) { setAddrSuggs([]); return; }
-    const q = t.toLowerCase();
-    setAddrSuggs(a2lVars.filter(v => v.name.toLowerCase().includes(q)).slice(0, 8));
-    setAddrSuggOpen(true);
-  }, [addr, a2lVars]);
-
-  function selectNameSuggestion(v: A2lVariable) {
-    setName(v.name);
-    setAddr(`0x${v.addr.toString(16).padStart(8, '0').toUpperCase()}`);
-    if (v.type) setTypeName(v.type);
-    setNameSuggs([]);
-    setNameSuggOpen(false);
-    setErrors({});
+  function closeConfirm() {
+    setConfirmExiting(true);
+    setTimeout(() => { setConfirmOpen(false); setConfirmExiting(false); }, 130);
   }
 
-  function selectAddrSuggestion(v: A2lVariable) {
-    setAddr(`0x${v.addr.toString(16).padStart(8, '0').toUpperCase()}`);
-    if (v.type) setTypeName(v.type);
-    setAddrSuggs([]);
-    setAddrSuggOpen(false);
-    setErrors(p => ({ ...p, addr: false }));
-  }
+  const canConfigure = !configuring && daqStatus === 'idle' && connected && lists.some(l => l.odts.some(o => o.entries.length > 0));
+  const canStart     = daqStatus === 'configured';
+  const canStop      = daqStatus === 'running';
+  const canFree      = daqStatus !== 'idle';
 
-  // Close on outside click
-  useEffect(() => {
-    function onDown(e: MouseEvent) {
-      if (popRef.current && !popRef.current.contains(e.target as Node)) onClose();
-    }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [onClose]);
+  const ledClass     = daqStatus === 'running' ? 'blinker-on' : daqStatus === 'configured' ? 'blinker-yellow' : 'blinker-grey';
+  const stateLabel   = daqStatus === 'running' ? 'Running' : daqStatus === 'configured' ? 'Configured' : 'Idle';
+  const stateColor   = daqStatus === 'running' ? 'var(--status-ok)' : daqStatus === 'configured' ? 'var(--status-warn)' : 'var(--text-muted)';
 
-  function handleSave() {
-    const addrTrim = addr.trim();
-    const isHex = /^(?:0x)?[0-9a-fA-F]+$/i.test(addrTrim);
-    const resolvedAddr = resolveEntryAddr(addr, a2lVars);
-    const errs: { name?: boolean; addr?: boolean } = {};
-    if (!name.trim()) errs.name = true;
-    if (resolvedAddr === null) {
-      errs.addr = true;
-      if (!isHex) {
-        showToast(
-          a2lVars.length === 0
-            ? 'No A2L file loaded — load one to resolve variable names'
-            : 'Unknown variable name',
-          'error'
-        );
-      }
-    }
-    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
-    onSave(
-      { name: name.trim(), addr: resolvedAddr!, addr_ext: Number(ext) || 0, size: TYPE_SIZES[typeName], type_name: typeName },
-      listId, odtId, entryIdx
-    );
-  }
+  return (
+    <div
+      className="flex items-center gap-2 px-3 h-9 shrink-0"
+      style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border)' }}
+    >
+      <input ref={fileInputRef} type="file" accept=".daq,.json" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) { onLoad(f); e.target.value = ''; } }}
+      />
 
-  // Smart positioning: prefer below anchor, flip above if not enough room
-  const POPUP_H = (nameSuggs.length > 0 && nameSuggOpen) || (addrSuggs.length > 0 && addrSuggOpen) ? 340 : 268;
-  const POPUP_W = 244;
-  const MARGIN = 8;
-  const below = anchor.y + MARGIN;
-  let top: number;
-  if (below + POPUP_H < window.innerHeight - MARGIN) {
-    top = below;
-  } else {
-    const above = anchor.y - POPUP_H - MARGIN;
-    top = above >= MARGIN ? above : Math.max(MARGIN, window.innerHeight - POPUP_H - MARGIN);
-  }
-  let left = anchor.x;
-  if (left + POPUP_W > window.innerWidth - MARGIN) left = anchor.x - POPUP_W;
-  left = Math.max(MARGIN, left);
+      <span className={`w-2 h-2 rounded-full shrink-0 ${ledClass}`} />
+      <span className="text-[10px] w-16 shrink-0" style={{ color: stateColor }}>{stateLabel}</span>
+      <div className="xcb-vdiv" />
 
-  const style: React.CSSProperties = { position: 'fixed', top, left, width: POPUP_W, zIndex: 9998 };
+      <Button variant="ghost" className="!px-2 !py-0.5 !text-[10px] !gap-1" disabled={!canFree} onClick={() => setConfirmOpen(true)}>
+        <Trash size={13} />Free All
+      </Button>
+      <div className="xcb-vdiv" />
 
-  const inputCls = (err?: boolean) =>
-    `w-full px-2 py-1 bg-gray-800 rounded text-xs text-gray-200 focus:outline-none border ${
-      err ? 'border-red-500 focus:border-red-400' : 'border-gray-700 focus:border-blue-500'
-    }`;
+      <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" disabled={!canConfigure} onClick={onConfigure}>
+        {configuring ? (
+          <>
+            <svg className="animate-spin" width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.3" />
+              <path d="M5 1a4 4 0 0 1 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            Configuring…
+          </>
+        ) : (
+          <><Wrench key={wrenchKey} size={13} className={wrenchKey > 0 ? 'icon-wrench-crank' : ''} />Configure</>
+        )}
+      </Button>
 
-  return createPortal(
-    <div ref={popRef} style={style} className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2 flex items-center gap-1.5"><Rows size={13} />ODT Entry</p>
-      <div className="space-y-2">
-        <div className="relative">
-          <label className="text-[10px] text-gray-500 block mb-0.5">Label</label>
-          <input
-            ref={nameInputRef}
-            value={name}
-            onChange={e => { setName(e.target.value); setErrors(p => ({ ...p, name: false })); setNameSuggOpen(true); }}
-            onFocus={() => setNameSuggOpen(true)}
-            onBlur={() => setTimeout(() => setNameSuggOpen(false), 120)}
-            placeholder="EngineRPM"
-            className={inputCls(errors.name)}
-          />
-          {errors.name && <p className="text-[9px] text-red-400 mt-0.5">Label is required</p>}
-          {nameSuggOpen && nameSuggs.length > 0 && (
-            <div className="absolute z-10 left-0 right-0 top-full mt-0.5 bg-gray-800 border border-gray-700 rounded shadow-xl max-h-36 overflow-y-auto">
-              {nameSuggs.map(v => (
-                <div
-                  key={v.name}
-                  className="flex items-center justify-between px-2 py-1 hover:bg-gray-700 cursor-pointer transition-colors"
-                  onMouseDown={e => { e.preventDefault(); selectNameSuggestion(v); }}
-                >
-                  <span className="text-xs text-gray-200 truncate">{v.name}</span>
-                  <span className="text-[10px] text-gray-500 font-mono ml-2 shrink-0">
-                    0x{v.addr.toString(16).toUpperCase().padStart(8, '0')}
-                  </span>
-                </div>
-              ))}
+      <RunStopButton
+        running={daqStatus === 'running'}
+        pending={runPending}
+        canRun={canStart}
+        canStop={canStop}
+        onRun={() => { setRunPending(true); onStart(); }}
+        onStop={() => { setRunPending(true); onStop(); }}
+      />
+
+      <div className="flex-1" />
+
+      {/* Zoom / time-window slider */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span className="text-[9px] uppercase tracking-wider select-none" style={{ color: 'var(--text-muted)' }}>Window</span>
+        <input
+          type="range"
+          min={0} max={100} step={0.5}
+          value={msToSlider(sparkWindowMs)}
+          onChange={e => setSparkWindowMs(sliderToMs(Number(e.target.value)))}
+          style={{ width: 72, accentColor: 'var(--accent)', cursor: 'pointer' }}
+          title={`Spark window: ${fmtZoom(sparkWindowMs)}`}
+        />
+        <span className="text-[10px] font-mono tabular-nums shrink-0" style={{ width: 28, textAlign: 'right', color: 'var(--text-primary)' }}>
+          {fmtZoom(sparkWindowMs)}
+        </span>
+      </div>
+      <div className="xcb-vdiv" />
+
+      <span className="text-[10px] font-mono flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+        <Pulse size={13} /><DtoRateCount value={daqDtoRate} /> DTOs/s
+      </span>
+      <div className="xcb-vdiv" />
+
+      <Button variant="ghost" className="!px-2 !py-0.5 !text-[10px] !gap-1" title="Export" onClick={onSave}>
+        <ArrowSquareOut size={13} />Export
+      </Button>
+      <Button variant="ghost" className="!px-2 !py-0.5 !text-[10px] !gap-1" title="Import" onClick={() => fileInputRef.current?.click()}>
+        <FolderOpen size={13} />Import
+      </Button>
+
+      {confirmOpen && createPortal(
+        <div
+          className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 ${confirmExiting ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
+          onMouseDown={e => { if (e.target === e.currentTarget) closeConfirm(); }}
+        >
+          <div
+            className={`w-72 p-5 flex flex-col gap-4 rounded-lg shadow-2xl ${confirmExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}
+            style={{ background: 'var(--surface-raised)', border: '1px solid var(--border-strong)' }}
+          >
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+              Free all DAQ resources on the slave? This stops acquisition and releases all configured lists.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="ghost" onClick={closeConfirm}>Cancel</Button>
+              <button
+                onClick={() => { closeConfirm(); onFree(); }}
+                className="px-4 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 transition-opacity active:scale-95"
+                style={{ background: 'var(--status-err)', color: '#fff' }}
+                onMouseEnter={e => ((e.currentTarget as HTMLElement).style.opacity = '0.85')}
+                onMouseLeave={e => ((e.currentTarget as HTMLElement).style.opacity = '1')}
+              >
+                <Trash size={13} />Free All
+              </button>
             </div>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
-            <label className="text-[10px] text-gray-500 block mb-0.5">Address</label>
-            <input value={addr}
-              onChange={e => { setAddr(e.target.value); setErrors(p => ({ ...p, addr: false })); setAddrSuggOpen(true); }}
-              onBlur={() => setTimeout(() => setAddrSuggOpen(false), 120)}
-              placeholder="0x... or VarName"
-              className={`font-mono ${inputCls(errors.addr)}`} />
-            {errors.addr && <p className="text-[9px] text-red-400 mt-0.5">Invalid address or unknown variable</p>}
-            {addrSuggOpen && addrSuggs.length > 0 && (
-              <div className="absolute z-10 left-0 right-0 top-full mt-0.5 bg-gray-800 border border-gray-700 rounded shadow-xl max-h-36 overflow-y-auto">
-                {addrSuggs.map(v => (
-                  <div
-                    key={v.name}
-                    className="flex items-center justify-between px-2 py-1 hover:bg-gray-700 cursor-pointer transition-colors"
-                    onMouseDown={e => { e.preventDefault(); selectAddrSuggestion(v); }}
-                  >
-                    <span className="text-xs text-gray-200 truncate">{v.name}</span>
-                    <span className="text-[10px] text-gray-500 font-mono ml-2 shrink-0">
-                      0x{v.addr.toString(16).toUpperCase().padStart(8, '0')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-          <div style={{ width: 48 }}>
-            <label className="text-[10px] text-gray-500 block mb-0.5">Ext</label>
-            <input value={ext} onChange={e => setExt(e.target.value)} placeholder="0"
-              className={`font-mono ${inputCls()}`} />
-          </div>
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-500 block mb-0.5">Type</label>
-          <select value={typeName} onChange={e => setTypeName(e.target.value as DaqEntryType)}
-            className={inputCls()}>
-            {(['u8','u16','u32','i8','i16','i32','f32','f64'] as DaqEntryType[]).map(t => (
-              <option key={t} value={t}>{t} ({TYPE_SIZES[t]}B)</option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <div className="flex gap-1.5 mt-3">
-        <button onClick={handleSave}
-          className="flex-1 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center justify-center gap-1.5">
-          <FloppyDisk size={14} />Save
-        </button>
-        <button onClick={onClose}
-          className="px-3 py-1 rounded text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700 transition-colors">
-          Cancel
-        </button>
-      </div>
-    </div>,
-    document.body
+        </div>,
+        document.body
+      )}
+    </div>
   );
 }
 
-// ── DAQ List Tree ────────────────────────────────────────────────
-interface TreeProps {
-  lists: DaqList[];
-  odtColors: Record<string, string>;
-  onOdtColorChange: (listId: number, odtId: number, color: string) => void;
-  onAddList: () => void;
-  onDeleteList: (listId: number) => void;
-  onDeleteOdt: (listId: number, odtId: number) => void;
-  onSetEvent: (listId: number, ch: number) => void;
-  onAddOdt: (listId: number) => void;
-  onSaveEntry: (entry: DaqEntry, listId: number, odtId: number, entryIdx: number | null) => void;
-  onDeleteEntry: (listId: number, odtId: number, entryIdx: number) => void;
-  onRenameList: (listId: number, name: string | undefined) => void;
-  onRenameOdt: (listId: number, odtId: number, name: string | undefined) => void;
-  onMoveEntry: (fromListId: number, fromOdtId: number, fromIdx: number, toListId: number, toOdtId: number, toIdx: number) => void;
+// ── Inline entry editor ───────────────────────────────────────────
+interface InlineEditProps {
+  listId: number;
+  odtId: number;
+  onSave: (entry: DaqEntry) => void;
+  onCancel: () => void;
 }
 
-function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, onDeleteOdt, onSetEvent, onAddOdt, onSaveEntry, onDeleteEntry, onRenameList, onRenameOdt, onMoveEntry }: TreeProps) {
-  const storeEvents = useAppStore(s => s.events);
-  const events = storeEvents.length > 0 ? storeEvents : [
-    { id: 1, name: '1 ms' }, { id: 2, name: '10 ms' }, { id: 3, name: '100 ms' },
-    { id: 4, name: '1 s' }, { id: 5, name: '10 s' },
-  ];
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [exitingLists,   setExitingLists]   = useState<Set<number>>(new Set());
-  const [exitingOdts,    setExitingOdts]    = useState<Set<string>>(new Set());
-  const [exitingEntries, setExitingEntries] = useState<Set<string>>(new Set());
-  const [popover, setPopover] = useState<{ listId: number; odtId: number; entryIdx: number | null; initial?: DaqEntry; anchor: { x: number; y: number } } | null>(null);
-  const [renamingKey, setRenamingKey] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
-  const renameInputRef = useRef<HTMLInputElement>(null);
-  const [colorPicker, setColorPicker] = useState<{ listId: number; odtId: number; x: number; y: number } | null>(null);
-  const [dragEntry, setDragEntry] = useState<{ listId: number; odtId: number; fromIdx: number } | null>(null);
-  const dragEntryRef = useRef<{ listId: number; odtId: number; fromIdx: number } | null>(null);
-  const [dropOver, setDropOver] = useState<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
-  const dropOverRef = useRef<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
-  const [recentlyMoved, setRecentlyMoved] = useState<string | null>(null);
-  const listsRef    = useRef(lists);
+function DaqInlineEdit({ onSave, onCancel }: InlineEditProps) {
+  const a2lVars   = useAppStore(s => s.a2lVariables);
+  const showToast = useAppStore(s => s.showToast);
+  const [name, setName]         = useState('');
+  const [addr, setAddr]         = useState('');
+  const [typeName, setTypeName] = useState<DaqEntryType>('u32');
+  const [ext,  setExt]          = useState('0');
+  const [suggs, setSuggs]       = useState<A2lVariable[]>([]);
+  const [suggOpen, setSuggOpen] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { nameRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    if (!name.trim() || a2lVars.length === 0) { setSuggs([]); return; }
+    const q = name.toLowerCase();
+    setSuggs(a2lVars.filter(v => v.name.toLowerCase().includes(q)).slice(0, 6));
+  }, [name, a2lVars]);
+
+  function pickSugg(v: A2lVariable) {
+    setName(v.name);
+    setAddr(`0x${v.addr.toString(16).padStart(8, '0').toUpperCase()}`);
+    if (v.type) setTypeName(v.type);
+    setSuggs([]); setSuggOpen(false);
+  }
+
+  function commit() {
+    const t = addr.trim();
+    const resolved = /^(?:0x)?[0-9a-fA-F]+$/i.test(t)
+      ? parseInt(t.replace(/^0x/i, ''), 16)
+      : a2lVars.find(v => v.name === t)?.addr ?? null;
+    if (!name.trim()) { showToast('Label is required', 'error'); return; }
+    if (resolved === null) {
+      showToast(a2lVars.length === 0 ? 'No A2L loaded — load one to resolve variable names' : 'Unknown variable', 'error');
+      return;
+    }
+    onSave({ name: name.trim(), addr: resolved, addr_ext: Number(ext) || 0, size: TYPE_SIZES[typeName], type_name: typeName });
+  }
+
+  const fieldStyle = (extra?: React.CSSProperties): React.CSSProperties => ({
+    background: 'none', outline: 'none',
+    border: 'none', borderBottom: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+    color: 'var(--text-muted)', padding: '1px 2px',
+    ...extra,
+  });
+
+  return (
+    <div
+      className="flex items-center h-[30px]"
+      style={{
+        borderTop: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+        borderBottom: '1px solid var(--border)',
+        background: 'color-mix(in srgb, var(--accent) 4%, transparent)',
+        paddingLeft: 36, paddingRight: 12, position: 'relative',
+      }}
+    >
+      {/* waveform slot */}
+      <span className="shrink-0 mr-2" style={{ color: 'var(--accent)', lineHeight: 0 }}>
+        <Plus size={12} />
+      </span>
+
+      {/* Signal column */}
+      <div style={{ position: 'relative', width: 148, flexShrink: 0 }}>
+        <input
+          ref={nameRef}
+          value={name}
+          onChange={e => { setName(e.target.value); setSuggOpen(true); }}
+          onFocus={() => setSuggOpen(true)}
+          onBlur={() => setTimeout(() => setSuggOpen(false), 120)}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') onCancel(); }}
+          placeholder="signal_name"
+          style={fieldStyle({ width: '100%', fontSize: 11, color: 'var(--text-primary)', fontFamily: 'inherit' })}
+        />
+        {suggOpen && suggs.length > 0 && (
+          <div style={{
+            position: 'absolute', bottom: '100%', left: 0, marginBottom: 2, width: 240,
+            background: 'var(--surface-overlay)', border: '1px solid var(--border-strong)',
+            borderRadius: 4, boxShadow: '0 -8px 24px rgba(0,0,0,0.4)', zIndex: 100,
+            maxHeight: 160, overflowY: 'auto',
+          }}>
+            {suggs.map(v => (
+              <div
+                key={v.name}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px', cursor: 'pointer' }}
+                onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-raised)')}
+                onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '')}
+                onMouseDown={e => { e.preventDefault(); pickSugg(v); }}
+              >
+                <span style={{ fontSize: 11, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.name}</span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', marginLeft: 8, flexShrink: 0 }}>
+                  0x{v.addr.toString(16).toUpperCase().padStart(8, '0')}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Value column — no value for a new entry */}
+      <span
+        className="font-mono text-[12px] tabular-nums"
+        style={{ width: 90, flexShrink: 0, color: 'var(--text-muted)' }}
+      >
+        —
+      </span>
+
+      {/* Type column */}
+      <select
+        value={typeName}
+        onChange={e => setTypeName(e.target.value as DaqEntryType)}
+        onKeyDown={e => { if (e.key === 'Escape') onCancel(); }}
+        style={fieldStyle({ width: 48, flexShrink: 0, fontSize: 10, fontFamily: 'monospace', cursor: 'pointer', appearance: 'none' })}
+      >
+        {(['u8','u16','u32','i8','i16','i32','f32','f64'] as DaqEntryType[]).map(t => (
+          <option key={t} value={t}>{t}</option>
+        ))}
+      </select>
+
+      {/* Address column */}
+      <input
+        value={addr}
+        onChange={e => setAddr(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') onCancel(); }}
+        placeholder="0x00000000"
+        spellCheck={false}
+        style={fieldStyle({ width: 96, flexShrink: 0, fontSize: 10, fontFamily: 'monospace' })}
+      />
+
+      {/* Sparkline slot: ext + actions */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '0 4px' }}>
+        <span
+          style={{ fontSize: 9, color: 'var(--text-muted)', flexShrink: 0 }}
+          title="XCP address extension — normally 0 unless the target uses segmented addressing"
+        >
+          Ext
+        </span>
+        <input
+          value={ext}
+          onChange={e => setExt(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') onCancel(); }}
+          placeholder="0"
+          style={fieldStyle({ width: 28, flexShrink: 0, fontSize: 10, fontFamily: 'monospace' })}
+        />
+        <div style={{ flex: 1 }} />
+        <Button variant="primary" className="!px-2 !py-0.5 !text-[10px]" onClick={commit}>Save</Button>
+        <button
+          onClick={onCancel}
+          style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+          onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
+          onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── DaqEntryRow ───────────────────────────────────────────────────
+interface EntryRowProps {
+  entry: DaqEntry;
+  color: string;
+  liveKey: string;
+  exiting: boolean;
+  recentlyMoved: boolean;
+  onDelete: () => void;
+  onPointerDown: (e: React.PointerEvent) => void;
+  entryRef: (el: HTMLElement | null) => void;
+  dataAttrs: Record<string, string | number>;
+}
+
+function DaqEntryRow({
+  entry, color, liveKey,
+  exiting, recentlyMoved, onDelete, onPointerDown, entryRef, dataAttrs,
+}: EntryRowProps) {
+  // Per-signal subscriptions — only this row re-renders when its value changes
+  const value     = useAppStore(s => s.daqLiveValues.get(liveKey)?.value ?? null);
+  const lastTs    = useAppStore(s => s.daqLiveValues.get(liveKey)?.history.at(-1)?.ts);
+  const daqRunning = useAppStore(s => s.daqStatus === 'running');
+  const isLive    = daqRunning && lastTs !== undefined && (Date.now() - lastTs) < LIVE_THRESHOLD_MS;
+
+  function fmt(v: number | null): string {
+    if (v === null) return '—';
+    if (entry.type_name === 'f32' || entry.type_name === 'f64') return v.toFixed(4);
+    return String(v);
+  }
+
+  return (
+    <div
+      ref={entryRef}
+      className={`group flex items-center h-[30px] transition-colors${exiting ? ' daq-exiting' : ''}${recentlyMoved ? ' daq-moved' : ''}`}
+      style={{ borderBottom: '1px solid var(--border)', paddingLeft: 36, paddingRight: 12, position: 'relative' }}
+      onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-raised)')}
+      onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '')}
+      {...dataAttrs}
+    >
+      {/* drag handle */}
+      <span
+        className="absolute opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing select-none"
+        style={{ left: 14, color: 'var(--text-muted)' }}
+        onPointerDown={onPointerDown}
+      >
+        <DotsSixVertical size={13} />
+      </span>
+
+      {/* waveform icon */}
+      <span
+        className={`shrink-0 mr-2 ${isLive ? 'waveform-live' : ''}`}
+        style={{ color: isLive ? color : 'var(--text-muted)', lineHeight: 0 }}
+      >
+        <Waveform size={12} />
+      </span>
+
+      {/* name */}
+      <span className="text-[11px] truncate" style={{ width: 148, flexShrink: 0, color: 'var(--text-primary)' }}>
+        {entry.name}
+      </span>
+
+      {/* value */}
+      <span
+        className="font-mono text-[12px] tabular-nums"
+        style={{ width: 90, flexShrink: 0, color: value !== null ? 'var(--status-ok)' : 'var(--text-muted)' }}
+      >
+        {fmt(value)}
+      </span>
+
+      {/* type */}
+      <span className="font-mono text-[10px]" style={{ width: 48, flexShrink: 0, color: 'var(--text-muted)' }}>
+        {entry.type_name}
+      </span>
+
+      {/* address */}
+      <span className="font-mono text-[10px]" style={{ width: 96, flexShrink: 0, color: 'var(--text-muted)' }}>
+        0x{entry.addr.toString(16).padStart(8, '0').toUpperCase()}
+      </span>
+
+      {/* sparkline */}
+      <div style={{ flex: 1, minWidth: 0, padding: '0 4px' }}>
+        <Sparkline liveKey={liveKey} color={color} />
+      </div>
+
+      {/* delete */}
+      <button
+        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center"
+        style={{ color: 'var(--text-muted)' }}
+        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
+        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
+        onClick={e => { e.stopPropagation(); onDelete(); }}
+      >
+        <X size={13} />
+      </button>
+    </div>
+  );
+}
+
+// ── DaqOdtSection ─────────────────────────────────────────────────
+interface OdtSectionProps {
+  list: DaqList;
+  odt: DaqOdt;
+  color: string;
+  exiting: boolean;
+  onColorChange: (color: string) => void;
+  onDelete: () => void;
+  onSaveEntry: (entry: DaqEntry, idx: number | null) => void;
+  onDeleteEntry: (idx: number) => void;
+  onMoveEntry: (fromOdtId: number, fromIdx: number, toListId: number, toOdtId: number, toIdx: number) => void;
+}
+
+function DaqOdtSection({
+  list, odt, color, exiting,
+  onColorChange, onDelete, onSaveEntry, onDeleteEntry, onMoveEntry,
+}: OdtSectionProps) {
+  const [collapsed,      setCollapsed]      = useState(false);
+  const [addingEntry,    setAddingEntry]    = useState(false);
+  const [colorPickerPos, setColorPickerPos] = useState<{ x: number; y: number } | null>(null);
+  const [exitingEntries, setExitingEntries] = useState<Set<number>>(new Set());
+  const [recentlyMoved,  setRecentlyMoved]  = useState<string | null>(null);
+  const [dragEntry,      setDragEntry]      = useState<{ odtId: number; fromIdx: number } | null>(null);
+  const dragRef     = useRef<{ odtId: number; fromIdx: number } | null>(null);
+  const dropRef     = useRef<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const entryElsRef = useRef<Map<string, HTMLElement>>(new Map());
   const snapshotRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
-    if (renamingKey && renameInputRef.current) {
-      renameInputRef.current.focus();
-      renameInputRef.current.select();
-    }
-  }, [renamingKey]);
-
-  useEffect(() => {
-    if (!colorPicker) return;
+    if (!colorPickerPos) return;
     function onDown(e: MouseEvent) {
-      if (!(e.target as Element).closest('#daq-tree-color-picker')) setColorPicker(null);
+      if (!(e.target as Element).closest('#daq-color-picker')) setColorPickerPos(null);
     }
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [colorPicker]);
+  }, [colorPickerPos]);
 
-  // Keep listsRef in sync so the pointer-up handler can read entry names
-  useEffect(() => { listsRef.current = lists; }, [lists]);
-
-  // Pointer-event based drag (replaces HTML5 drag-and-drop which is unreliable in webkit2gtk)
   useEffect(() => {
     function onPointerMove(e: PointerEvent) {
-      if (!dragEntryRef.current) return;
+      if (!dragRef.current) return;
       const els = document.elementsFromPoint(e.clientX, e.clientY);
-
-      // Try to find an entry row first
-      const entryEl = els.find(
-        (el) => (el as HTMLElement).dataset?.entryIdx !== undefined
-      ) as HTMLElement | undefined;
-      if (entryEl) {
-        const lId  = parseInt(entryEl.dataset.entryList ?? '');
-        const oId  = parseInt(entryEl.dataset.entryOdt  ?? '');
-        const eIdx = parseInt(entryEl.dataset.entryIdx  ?? '');
+      const target = els.find(el => (el as HTMLElement).dataset?.entryIdx !== undefined) as HTMLElement | undefined;
+      if (target) {
+        const lId  = parseInt(target.dataset.entryList ?? '');
+        const oId  = parseInt(target.dataset.entryOdt  ?? '');
+        const eIdx = parseInt(target.dataset.entryIdx  ?? '');
         if (isNaN(lId) || isNaN(oId) || isNaN(eIdx)) return;
-        const rect  = entryEl.getBoundingClientRect();
-        const above = e.clientY < rect.top + rect.height / 2;
-        const val   = { listId: lId, odtId: oId, toIdx: eIdx, above };
-        dropOverRef.current = val;
-        setDropOver(val);
-        return;
-      }
-
-      // Fallback: hovering over an empty ODT body
-      const odtEl = els.find(
-        (el) => (el as HTMLElement).dataset?.odtBody !== undefined
-      ) as HTMLElement | undefined;
-      if (odtEl) {
-        const lId = parseInt(odtEl.dataset.odtBodyList ?? '');
-        const oId = parseInt(odtEl.dataset.odtBodyOdt  ?? '');
-        if (isNaN(lId) || isNaN(oId)) return;
-        const targetOdt = listsRef.current.find(l => l.id === lId)?.odts.find(o => o.id === oId);
-        const entryCount = targetOdt?.entries.length ?? 0;
-        const val = { listId: lId, odtId: oId, toIdx: entryCount, above: true };
-        dropOverRef.current = val;
-        setDropOver(val);
+        const rect  = target.getBoundingClientRect();
+        dropRef.current = { listId: lId, odtId: oId, toIdx: eIdx, above: e.clientY < rect.top + rect.height / 2 };
       }
     }
 
     function onPointerUp() {
-      if (!dragEntryRef.current) return;
-      const de  = dragEntryRef.current;
-      const dov = dropOverRef.current;
-      dragEntryRef.current = null;
-      dropOverRef.current  = null;
-      document.body.style.cursor    = '';
-      document.body.style.userSelect = '';
+      if (!dragRef.current) return;
+      const de  = dragRef.current;
+      const dov = dropRef.current;
+      dragRef.current = null; dropRef.current = null;
+      document.body.style.cursor = document.body.style.userSelect = '';
       setDragEntry(null);
-      setDropOver(null);
       if (!dov) return;
-      const { fromIdx } = de;
-      const isSameOdt = dov.listId === de.listId && dov.odtId === de.odtId;
+
+      const isSameOdt = dov.listId === list.id && dov.odtId === de.odtId;
       const raw   = dov.above ? dov.toIdx : dov.toIdx + 1;
-      // When staying in the same ODT we account for the removed slot; cross-ODT we don't.
-      const toIdx = isSameOdt && raw > fromIdx ? raw - 1 : raw;
-      if (isSameOdt && toIdx === fromIdx) return;
-      const lst  = listsRef.current.find(l => l.id === de.listId);
-      const odt  = lst?.odts.find(o => o.id === de.odtId);
-      const name = odt?.entries[fromIdx]?.name ?? '';
-      setRecentlyMoved(`${de.listId}:${de.odtId}:${name}`);
+      const toIdx = isSameOdt && raw > de.fromIdx ? raw - 1 : raw;
+      if (isSameOdt && toIdx === de.fromIdx) return;
+
+      const name = odt.entries[de.fromIdx]?.name ?? '';
+      setRecentlyMoved(`${de.odtId}:${name}`);
       setTimeout(() => setRecentlyMoved(null), 450);
-      // Snapshot both ODTs so the FLIP can animate entries in both source and target
+
       const snap = new Map<string, number>();
-      const snapshotOdt = (lId: number, oId: number) => {
-        const o = listsRef.current.find(l => l.id === lId)?.odts.find(o => o.id === oId);
-        o?.entries.forEach(e => {
-          const k = `${lId}:${oId}:${e.name}`;
-          const el = entryElsRef.current.get(k);
-          if (el) snap.set(k, el.getBoundingClientRect().top);
-        });
-      };
-      snapshotOdt(de.listId, de.odtId);
-      if (!isSameOdt) snapshotOdt(dov.listId, dov.odtId);
+      odt.entries.forEach(e => {
+        const k  = `${de.odtId}:${e.name}`;
+        const el = entryElsRef.current.get(k);
+        if (el) snap.set(k, el.getBoundingClientRect().top);
+      });
       snapshotRef.current = snap;
-      onMoveEntry(de.listId, de.odtId, fromIdx, dov.listId, dov.odtId, toIdx);
+      onMoveEntry(de.odtId, de.fromIdx, dov.listId, dov.odtId, toIdx);
     }
 
     window.addEventListener('pointermove', onPointerMove);
@@ -476,10 +747,8 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup',   onPointerUp);
     };
-  }, [onMoveEntry]);
+  }, [list.id, odt, onMoveEntry]);
 
-  // FLIP: snapshot taken in onPointerUp right before onMoveEntry (positions are always current,
-  // never stale from an initial render mid-transition). transitionend cleans up inline styles.
   useLayoutEffect(() => {
     if (snapshotRef.current.size === 0) return;
     for (const [key, prevY] of snapshotRef.current) {
@@ -499,358 +768,133 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
       });
     }
     snapshotRef.current = new Map();
-  }, [lists]);
+  }, [odt.entries]);
 
-  function toggleCollapse(key: string) {
-    setCollapsed(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-  }
-
-  function startRename(key: string, currentName: string) {
-    setRenamingKey(key);
-    setRenameValue(currentName);
-  }
-
-  function commitRename() {
-    if (!renamingKey) return;
-    const trimmed = renameValue.trim();
-    if (renamingKey.startsWith('list-')) {
-      onRenameList(parseInt(renamingKey.slice(5)), trimmed || undefined);
-    } else {
-      const rest = renamingKey.slice(4);
-      const dash = rest.indexOf('-');
-      onRenameOdt(parseInt(rest.slice(0, dash)), parseInt(rest.slice(dash + 1)), trimmed || undefined);
-    }
-    setRenamingKey(null);
-  }
-
-  function cancelRename() { setRenamingKey(null); }
-
-  const ANIM_MS = 160;
-
-  function handleDeleteList(listId: number) {
-    setExitingLists(s => new Set(s).add(listId));
+  function handleDeleteEntry(idx: number) {
+    setExitingEntries(s => new Set(s).add(idx));
     setTimeout(() => {
-      onDeleteList(listId);
-      setExitingLists(s => { const n = new Set(s); n.delete(listId); return n; });
-    }, ANIM_MS);
+      onDeleteEntry(idx);
+      setExitingEntries(s => { const n = new Set(s); n.delete(idx); return n; });
+    }, 160);
   }
-
-  function handleDeleteOdt(listId: number, odtId: number) {
-    const key = `${listId}:${odtId}`;
-    setExitingOdts(s => new Set(s).add(key));
-    setTimeout(() => {
-      onDeleteOdt(listId, odtId);
-      setExitingOdts(s => { const n = new Set(s); n.delete(key); return n; });
-    }, ANIM_MS);
-  }
-
-  function handleDeleteEntry(listId: number, odtId: number, ei: number) {
-    const key = `${listId}:${odtId}:${ei}`;
-    setExitingEntries(s => new Set(s).add(key));
-    setTimeout(() => {
-      onDeleteEntry(listId, odtId, ei);
-      setExitingEntries(s => { const n = new Set(s); n.delete(key); return n; });
-    }, ANIM_MS);
-  }
-
-  function saveEntry(entry: DaqEntry, listId: number, odtId: number, entryIdx: number | null) {
-    onSaveEntry(entry, listId, odtId, entryIdx);
-    setPopover(null);
-  }
-
-  const totalEntries = lists.reduce((s, l) => s + l.odts.reduce((ss, o) => ss + o.entries.length, 0), 0);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5"><Database size={18} />DAQ Lists</span>
-        <button onClick={onAddList} className="flex items-center gap-1 text-[10px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 px-2 py-0.5 rounded transition-colors">
-          <Plus size={12} /> Add List
+    <div className={exiting ? 'daq-exiting' : ''} style={{ animation: exiting ? undefined : 'daq-enter 160ms ease-out' }}>
+      {/* ODT header */}
+      <div
+        className="group flex items-center gap-2 h-[26px] cursor-pointer select-none"
+        style={{ paddingLeft: 24, paddingRight: 12, borderBottom: '1px solid var(--border)' }}
+        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-raised)')}
+        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '')}
+        onClick={e => { if (!(e.target as Element).closest('[data-no-collapse]')) setCollapsed(c => !c); }}
+      >
+        <span style={{ fontSize: 9, color: 'var(--text-muted)', width: 8, flexShrink: 0 }}>{collapsed ? '▸' : '▾'}</span>
+        <button
+          data-no-collapse=""
+          className="shrink-0 transition-transform hover:scale-125"
+          style={{ width: 8, height: 8, borderRadius: 2, background: color, border: 'none', cursor: 'pointer', flexShrink: 0 }}
+          title="Change color"
+          onClick={e => { e.stopPropagation(); setColorPickerPos(p => p ? null : { x: e.clientX + 6, y: e.clientY + 6 }); }}
+        />
+        <span className="text-[10px] flex-1 truncate" style={{ color: 'var(--text-muted)' }}>
+          {odt.name ?? `ODT 0x${odt.id.toString(16).padStart(2, '0').toUpperCase()}`}
+        </span>
+        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{odt.entries.length}</span>
+        <button
+          data-no-collapse=""
+          className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0"
+          style={{ color: 'var(--text-muted)' }}
+          onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
+          onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
+          onClick={e => { e.stopPropagation(); onDelete(); }}
+        >
+          <X size={12} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2">
-        {lists.length === 0 && (
-          <p className="text-center text-gray-700 text-xs py-6">No DAQ lists. Click + Add List.</p>
-        )}
-        {lists.map((list) => {
-          const lKey = `list-${list.id}`;
-          const lCollapsed = collapsed.has(lKey);
-          return (
-            <div key={list.id} className={`daq-list-card mb-1.5${exitingLists.has(list.id) ? ' daq-exiting' : ''}`}>
-              {/* List header */}
-              <div className="daq-list-header group" onClick={(e) => { if (!(e.target as Element).closest('[data-no-collapse]')) toggleCollapse(lKey); }}>
-                <span className="text-gray-500 text-[10px] w-3 shrink-0">{lCollapsed ? '▸' : '▾'}</span>
-                {renamingKey === lKey ? (
-                  <input
-                    ref={renameInputRef}
-                    value={renameValue}
-                    onChange={e => setRenameValue(e.target.value)}
-                    onBlur={commitRename}
-                    onKeyDown={e => { if (e.key === 'Enter') commitRename(); else if (e.key === 'Escape') cancelRename(); }}
-                    onClick={e => e.stopPropagation()}
-                    className="px-1 bg-gray-800 border border-blue-500 rounded text-[11px] text-gray-200 focus:outline-none min-w-[4ch] max-w-[20ch]"
-                    style={{ width: `${Math.max(4, renameValue.length + 2)}ch` }}
-                  />
-                ) : (
-                  <div className="flex items-center gap-1 flex-1 min-w-0" data-no-collapse="">
-                    <span
-                      className="text-gray-300 text-[11px] font-semibold truncate cursor-text"
-                      onDoubleClick={e => { e.stopPropagation(); startRename(lKey, list.name ?? `List ${list.id}`); }}
-                    >
-                      {list.name ?? `List ${list.id}`}
-                    </span>
-                    <button
-                      onClick={e => { e.stopPropagation(); startRename(lKey, list.name ?? `List ${list.id}`); }}
-                      className="text-gray-700 hover:text-blue-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
-                      title="Rename list"
-                    ><PencilSimple size={12} /></button>
-                  </div>
-                )}
-                <select
-                  value={list.event_channel}
-                  onClick={e => e.stopPropagation()}
-                  onChange={e => { e.stopPropagation(); onSetEvent(list.id, Number(e.target.value)); }}
-                  className="px-1 py-0 bg-gray-900 border border-gray-700 rounded text-[10px] font-mono text-gray-400 focus:outline-none focus:border-blue-500 shrink-0"
-                >
-                  {events.map(ev => {
-                    const hex = `0x${ev.id.toString(16).padStart(2, '0').toUpperCase()}`;
-                    return <option key={ev.id} value={ev.id}>{hex} — {ev.name}</option>;
-                  })}
-                </select>
-                <button
-                  onClick={e => { e.stopPropagation(); handleDeleteList(list.id); }}
-                  className="ml-1 text-gray-600 hover:text-red-400 transition-colors shrink-0"
-                ><X size={12} /></button>
-              </div>
+      {/* entries */}
+      <div style={{ display: 'grid', gridTemplateRows: collapsed ? '0fr' : '1fr', transition: 'grid-template-rows 180ms ease' }}>
+        <div style={{ minHeight: 0, overflow: 'hidden' }}>
+          {odt.entries.map((entry, ei) => {
+            const liveKey = `${list.id}:${odt.id}:${entry.name}`;
 
-              {/* Animated list body */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateRows: lCollapsed ? '0fr' : '1fr',
-                  opacity: lCollapsed ? 0 : 1,
-                  transition: 'grid-template-rows 200ms ease, opacity 150ms ease',
+            return (
+              <DaqEntryRow
+                key={entry.name}
+                entry={entry}
+                color={color}
+                liveKey={liveKey}
+                exiting={exitingEntries.has(ei)}
+                recentlyMoved={recentlyMoved === `${odt.id}:${entry.name}`}
+                onDelete={() => handleDeleteEntry(ei)}
+                onPointerDown={e => {
+                  if (e.button !== 0) return;
+                  e.preventDefault(); e.stopPropagation();
+                  const val = { odtId: odt.id, fromIdx: ei };
+                  dragRef.current = val;
+                  setDragEntry(val);
+                  document.body.style.cursor = 'grabbing';
+                  document.body.style.userSelect = 'none';
                 }}
+                entryRef={el => {
+                  const k = `${odt.id}:${entry.name}`;
+                  if (el) entryElsRef.current.set(k, el);
+                  else    entryElsRef.current.delete(k);
+                }}
+                dataAttrs={{
+                  'data-entry-list': list.id,
+                  'data-entry-odt':  odt.id,
+                  'data-entry-idx':  ei,
+                  ...(dragEntry?.odtId === odt.id && dragEntry?.fromIdx === ei ? { 'data-dragging': '1' } : {}),
+                }}
+              />
+            );
+          })}
+
+          {/* Add entry button / inline edit */}
+          {addingEntry ? (
+            <DaqInlineEdit
+              listId={list.id}
+              odtId={odt.id}
+              onSave={entry => { onSaveEntry(entry, null); setAddingEntry(false); }}
+              onCancel={() => setAddingEntry(false)}
+            />
+          ) : (
+            <div style={{ borderBottom: '1px solid var(--border)' }}>
+              <button
+                className="flex items-center gap-1 text-[10px] w-full transition-colors"
+                style={{ padding: '4px 12px 4px 36px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--accent) 5%, transparent)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLElement).style.background = ''; }}
+                onClick={() => setAddingEntry(true)}
               >
-                <div style={{ minHeight: 0, overflow: 'hidden' }}>
-                  <div className="daq-list-body">
-                    {list.odts.map(odt => {
-                      const oKey = `${list.id}-${odt.id}`;
-                      const oRenameKey = `odt-${list.id}-${odt.id}`;
-                      const oCollapsed = collapsed.has(oKey);
-                      return (
-                        <div key={odt.id} className={`daq-odt-card${exitingOdts.has(`${list.id}:${odt.id}`) ? ' daq-exiting' : ''}`}>
-                          <div className="daq-odt-header group" onClick={(e) => { if (!(e.target as Element).closest('[data-no-collapse]')) toggleCollapse(oKey); }}>
-                            <span className="w-3 shrink-0">{oCollapsed ? '▸' : '▾'}</span>
-                            <button
-                              data-no-collapse=""
-                              className="w-2 h-2 rounded-full shrink-0 cursor-pointer hover:scale-125 transition-transform"
-                              style={{ background: odtColors[`${list.id}:${odt.id}`] ?? ODT_COLORS[0] }}
-                              title="Click to change ODT color"
-                              onClick={e => { e.stopPropagation(); setColorPicker(prev => prev?.listId === list.id && prev.odtId === odt.id ? null : { listId: list.id, odtId: odt.id, x: e.clientX + 6, y: e.clientY + 6 }); }}
-                            />
-                            {renamingKey === oRenameKey ? (
-                              <input
-                                ref={renameInputRef}
-                                value={renameValue}
-                                onChange={e => setRenameValue(e.target.value)}
-                                onBlur={commitRename}
-                                onKeyDown={e => { if (e.key === 'Enter') commitRename(); else if (e.key === 'Escape') cancelRename(); }}
-                                onClick={e => e.stopPropagation()}
-                                className="px-1 bg-gray-800 border border-blue-500 rounded text-[10px] text-gray-200 focus:outline-none min-w-[4ch] max-w-[18ch]"
-                                style={{ width: `${Math.max(4, renameValue.length + 2)}ch` }}
-                              />
-                            ) : (
-                              <div className="flex items-center gap-1 flex-1 min-w-0" data-no-collapse="">
-                                <span
-                                  className="truncate cursor-text"
-                                  onDoubleClick={e => { e.stopPropagation(); startRename(oRenameKey, odt.name ?? `ODT ${odt.id}`); }}
-                                >
-                                  {odt.name ?? `ODT ${odt.id}`}
-                                </span>
-                                <button
-                                  onClick={e => { e.stopPropagation(); startRename(oRenameKey, odt.name ?? `ODT ${odt.id}`); }}
-                                  className="text-gray-700 hover:text-blue-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
-                                  title="Rename ODT"
-                                ><PencilSimple size={12} /></button>
-                              </div>
-                            )}
-                            <span className="text-gray-600 shrink-0">{odt.entries.length} entries</span>
-                            <button
-                              onClick={e => { e.stopPropagation(); handleDeleteOdt(list.id, odt.id); }}
-                              className="ml-1 text-gray-600 hover:text-red-400 transition-colors shrink-0"
-                              title="Delete ODT"
-                            ><X size={12} /></button>
-                          </div>
-
-                          {/* Animated ODT body */}
-                          <div
-                            style={{
-                              display: 'grid',
-                              gridTemplateRows: oCollapsed ? '0fr' : '1fr',
-                              opacity: oCollapsed ? 0 : 1,
-                              transition: 'grid-template-rows 180ms ease, opacity 130ms ease',
-                            }}
-                          >
-                            <div style={{ minHeight: 0, overflow: 'hidden' }}>
-                              <div
-                                className="daq-odt-body"
-                                style={{ position: 'relative' }}
-                                data-odt-body=""
-                                data-odt-body-list={list.id}
-                                data-odt-body-odt={odt.id}
-                              >
-                                {/* Sliding drop indicator — always rendered in the TARGET ODT */}
-                                {(() => {
-                                  if (!dragEntry || !dropOver) return null;
-                                  if (dropOver.listId !== list.id || dropOver.odtId !== odt.id) return null;
-                                  const isSameOdt = dragEntry.listId === list.id && dragEntry.odtId === odt.id;
-                                  const raw = dropOver.above ? dropOver.toIdx : dropOver.toIdx + 1;
-                                  let lineIdx: number;
-                                  if (isSameOdt) {
-                                    const { fromIdx } = dragEntry;
-                                    const effectiveToIdx = raw > fromIdx ? raw - 1 : raw;
-                                    if (effectiveToIdx === fromIdx) return null;
-                                    lineIdx = fromIdx < effectiveToIdx ? effectiveToIdx + 1 : effectiveToIdx;
-                                  } else {
-                                    lineIdx = raw; // cross-ODT: no slot adjustment needed
-                                  }
-                                  const firstKey = `${list.id}:${odt.id}:${odt.entries[0]?.name ?? ''}`;
-                                  const entryH   = entryElsRef.current.get(firstKey)?.offsetHeight ?? 24;
-                                  return (
-                                    <div style={{
-                                      position: 'absolute', left: 0, right: 0,
-                                      top: lineIdx * entryH,
-                                      height: 2,
-                                      background: '#60a5fa',
-                                      borderRadius: 1,
-                                      transition: 'top 130ms cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                                      pointerEvents: 'none',
-                                      zIndex: 10,
-                                    }}>
-                                      <div style={{
-                                        position: 'absolute', left: 2, top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        width: 7, height: 7, borderRadius: '50%',
-                                        background: '#60a5fa',
-                                      }} />
-                                    </div>
-                                  );
-                                })()}
-                                {odt.entries.map((entry, ei) => {
-                                  const isDragging = dragEntry?.listId === list.id && dragEntry?.odtId === odt.id && dragEntry?.fromIdx === ei;
-                                  const movedKey = `${list.id}:${odt.id}:${entry.name}`;
-                                  return (
-                                  <div
-                                    key={entry.name}
-                                    ref={(el) => {
-                                      const k = `${list.id}:${odt.id}:${entry.name}`;
-                                      if (el) entryElsRef.current.set(k, el);
-                                      else    entryElsRef.current.delete(k);
-                                    }}
-                                    data-entry-list={list.id}
-                                    data-entry-odt={odt.id}
-                                    data-entry-idx={ei}
-                                    className={`daq-entry-row group${exitingEntries.has(`${list.id}:${odt.id}:${ei}`) ? ' daq-exiting' : ''}${isDragging ? ' opacity-40' : ''}${recentlyMoved === movedKey ? ' daq-moved' : ''}`}
-                                    onClick={(e) => {
-                                      if (dragEntryRef.current) return;
-                                      setPopover({ listId: list.id, odtId: odt.id, entryIdx: ei, initial: entry, anchor: { x: e.clientX, y: e.clientY } });
-                                    }}
-                                  >
-                                    <span
-                                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 shrink-0 cursor-grab active:cursor-grabbing select-none leading-none"
-                                      onPointerDown={(e) => {
-                                        if (e.button !== 0) return;
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        const val = { listId: list.id, odtId: odt.id, fromIdx: ei };
-                                        dragEntryRef.current = val;
-                                        setDragEntry(val);
-                                        document.body.style.cursor    = 'grabbing';
-                                        document.body.style.userSelect = 'none';
-                                      }}
-                                    ><DotsSixVertical size={13} /></span>
-                                    <span className="shrink-0 leading-none" style={{ color: odtColors[`${list.id}:${odt.id}`] ?? ODT_COLORS[0] }}><Waveform size={12} /></span>
-                                    <span className="text-gray-300 text-[11px] flex-1 truncate">{entry.name}</span>
-                                    <span className="font-mono text-gray-500 text-[10px] shrink-0">{entry.type_name}</span>
-                                    <button
-                                      className="ml-0.5 text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                                      onClick={e => { e.stopPropagation(); handleDeleteEntry(list.id, odt.id, ei); }}
-                                    ><X size={12} /></button>
-                                  </div>
-                                  );
-                                })}
-                                <div className="px-2 py-1">
-                                  <button
-                                    onClick={e => setPopover({ listId: list.id, odtId: odt.id, entryIdx: null, anchor: { x: e.clientX, y: e.clientY } })}
-                                    className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-blue-400 transition-colors"
-                                  >
-                                    <Plus size={12} /> Add Entry
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <button onClick={() => onAddOdt(list.id)}
-                      className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-blue-400 transition-colors px-1 py-0.5 mt-0.5">
-                      <Plus size={12} /> Add ODT
-                    </button>
-                  </div>
-                </div>
-              </div>
+                <Plus size={11} />Add entry
+              </button>
             </div>
-          );
-        })}
+          )}
+        </div>
       </div>
 
-      {/* Summary */}
-      <div className="px-3 py-1.5 border-t border-gray-800 shrink-0">
-        <span className="text-[10px] text-gray-500 font-mono">
-          <DaqAnimNum value={lists.length} /> lists · <DaqAnimNum value={totalEntries} /> signals
-        </span>
-      </div>
-
-      {/* Entry popover (rendered via portal in EntryPopover itself) */}
-      {popover && (
-        <EntryPopover
-          listId={popover.listId}
-          odtId={popover.odtId}
-          entryIdx={popover.entryIdx}
-          initial={popover.initial}
-          anchor={popover.anchor}
-          onSave={saveEntry}
-          onClose={() => setPopover(null)}
-        />
-      )}
-
-      {/* Color picker portal */}
-      {colorPicker && createPortal(
+      {/* color picker portal */}
+      {colorPickerPos && createPortal(
         <div
-          id="daq-tree-color-picker"
-          className="fixed bg-gray-900 border border-gray-700 rounded-lg p-2.5 shadow-2xl z-[9999]"
-          style={{ top: colorPicker.y, left: colorPicker.x }}
+          id="daq-color-picker"
+          style={{
+            position: 'fixed', top: colorPickerPos.y, left: colorPickerPos.x,
+            background: 'var(--surface-raised)', border: '1px solid var(--border-strong)',
+            borderRadius: 8, padding: 10, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', zIndex: 9999,
+          }}
         >
-          <p className="text-[9px] text-gray-500 uppercase tracking-wider mb-2">ODT Color</p>
-          <div className="flex gap-1.5">
-            {ODT_COLORS.map(c => {
-              const key = `${colorPicker.listId}:${colorPicker.odtId}`;
-              return (
-                <button
-                  key={c}
-                  className={`w-5 h-5 rounded-full transition-transform hover:scale-110 ${odtColors[key] === c ? 'ring-2 ring-white ring-offset-1 ring-offset-gray-900 scale-110' : ''}`}
-                  style={{ background: c }}
-                  onClick={() => { onOdtColorChange(colorPicker.listId, colorPicker.odtId, c); setColorPicker(null); }}
-                />
-              );
-            })}
+          <p style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>ODT Color</p>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {ODT_COLORS.map(c => (
+              <button
+                key={c}
+                className="w-5 h-5 rounded-full transition-transform hover:scale-110"
+                style={{ background: c, border: c === color ? '2px solid white' : '2px solid transparent' }}
+                onClick={() => { onColorChange(c); setColorPickerPos(null); }}
+              />
+            ))}
           </div>
         </div>,
         document.body
@@ -859,535 +903,138 @@ function DaqTree({ lists, odtColors, onOdtColorChange, onAddList, onDeleteList, 
   );
 }
 
-// ── Live Values Table ─────────────────────────────────────────────
-interface LiveTableProps {
-  lists: DaqList[];
+// ── DaqListGroup ──────────────────────────────────────────────────
+interface ListGroupProps {
+  list: DaqList;
   odtColors: Record<string, string>;
+  exiting: boolean;
+  onOdtColorChange: (odtId: number, color: string) => void;
+  onDeleteList: () => void;
+  onAddOdt: () => void;
+  onDeleteOdt: (odtId: number) => void;
+  onSetEvent: (ch: number) => void;
+  onSaveEntry: (odtId: number, entry: DaqEntry, idx: number | null) => void;
+  onDeleteEntry: (odtId: number, idx: number) => void;
+  onMoveEntry: (fromOdtId: number, fromIdx: number, toListId: number, toOdtId: number, toIdx: number) => void;
 }
 
-interface LiveRow {
-  key: string;
-  listId: number;
-  odtId: number;
-  entry: DaqEntry;
-  value: number | null;
-  history: number[];
-  isNew: boolean;
-}
+function DaqListGroup({
+  list, odtColors, exiting,
+  onOdtColorChange, onDeleteList, onAddOdt, onDeleteOdt, onSetEvent,
+  onSaveEntry, onDeleteEntry, onMoveEntry,
+}: ListGroupProps) {
+  const storeEvents = useAppStore(s => s.events);
+  const events = storeEvents.length > 0 ? storeEvents : [
+    { id: 1, name: '1 ms' }, { id: 2, name: '10 ms' }, { id: 3, name: '100 ms' },
+    { id: 4, name: '1 s'  }, { id: 5, name: '10 s'  },
+  ];
+  const [collapsed,    setCollapsed]    = useState(false);
+  const [exitingOdts,  setExitingOdts]  = useState<Set<number>>(new Set());
 
-const EXPAND_STAGGER  = 55;   // ms between each row fading in
-const EXPAND_FADE_DUR = 200;  // row fade-in duration
-const PLOT_REVEAL_DUR = 420;  // plot clip-reveal duration
-const PLOT_OFFSET     = 120;  // extra ms before plot starts (after row begins)
-const ROW_ENTER_DUR   = 280;  // daq-row-enter animation duration
-
-function DaqLiveTable({ lists, odtColors }: LiveTableProps) {
-  const liveValues = useAppStore(s => s.daqLiveValues);
-  const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS);
-  const [animatedKeys, setAnimatedKeys] = useState<Set<string>>(new Set());
-  const [zoom, setZoom] = useState(40);
-  const [collapsedLists, setCollapsedLists] = useState<Set<number>>(new Set());
-  const [expandingLists, setExpandingLists] = useState<Set<number>>(new Set());
-  const prevKeysRef  = useRef<Set<string>>(new Set());
-  const rowElsRef    = useRef<Map<string, HTMLElement>>(new Map());
-  const prevRowYRef  = useRef<Map<string, number>>(new Map());
-
-  // Stable zoom handler passed to each Sparkline
-  const handleZoom = useCallback((dir: number) => {
-    setZoom(p => Math.max(5, Math.min(200, p + dir * 10)));
-  }, []);
-
-  // Flatten all entries into rows
-  const rows: LiveRow[] = lists.flatMap(list =>
-    list.odts.flatMap(odt =>
-      odt.entries.map(entry => {
-        const key = `${list.id}:${odt.id}:${entry.name}`;
-        const live = liveValues.get(key);
-        return {
-          key,
-          listId: list.id,
-          odtId: odt.id,
-          entry,
-          value: live?.value ?? null,
-          history: live?.history ?? [],
-          isNew: false,
-        };
-      })
-    )
-  );
-
-  // Group rows by list for rendering
-  const rowsByList = useMemo(() =>
-    lists
-      .map(list => ({ list, rows: rows.filter(r => r.listId === list.id) }))
-      .filter(g => g.rows.length > 0),
-    [lists, rows] // eslint-disable-line react-hooks/exhaustive-deps
-  );
-
-  // Detect newly appearing rows and animate them
-  useEffect(() => {
-    const currentKeys = new Set(rows.map(r => r.key));
-    const newKeys = new Set<string>();
-    for (const k of currentKeys) {
-      if (!prevKeysRef.current.has(k)) newKeys.add(k);
-    }
-    prevKeysRef.current = currentKeys;
-    if (newKeys.size === 0) return;
-    setAnimatedKeys(prev => new Set([...prev, ...newKeys]));
-    const t = setTimeout(() => {
-      setAnimatedKeys(prev => {
-        const next = new Set(prev);
-        newKeys.forEach(k => next.delete(k));
-        return next;
-      });
-    }, 600);
-    return () => clearTimeout(t);
-  }, [rows.map(r => r.key).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // FLIP for live-table rows — same prevYRef pattern as DaqTree
-  useLayoutEffect(() => {
-    const prev = prevRowYRef.current;
-    const next = new Map<string, number>();
-    for (const [key, el] of rowElsRef.current) {
-      const currentY = el.getBoundingClientRect().top;
-      next.set(key, currentY);
-      const oldY = prev.get(key);
-      if (oldY === undefined) continue;
-      const dy = oldY - currentY;
-      if (Math.abs(dy) < 1) continue;
-      el.style.transition = 'none';
-      el.style.transform  = `translateY(${dy}px)`;
-      void el.offsetHeight;
-      el.style.transition = 'transform 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-      el.style.transform  = '';
-      el.addEventListener('transitionend', function onEnd(ev: Event) {
-        if ((ev as TransitionEvent).propertyName !== 'transform') return;
-        el.style.transition = '';
-        el.removeEventListener('transitionend', onEnd);
-      });
-    }
-    prevRowYRef.current = next;
-  }, [lists]);
-
-  function startResize(col: keyof typeof DEFAULT_COL_WIDTHS, e: ReactMouseEvent) {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = colWidths[col];
-    function onMove(ev: MouseEvent) {
-      setColWidths(prev => ({ ...prev, [col]: Math.max(50, startWidth + ev.clientX - startX) }));
-    }
-    function onUp() {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+  function handleDeleteOdt(odtId: number) {
+    setExitingOdts(s => new Set(s).add(odtId));
+    setTimeout(() => {
+      onDeleteOdt(odtId);
+      setExitingOdts(s => { const n = new Set(s); n.delete(odtId); return n; });
+    }, 160);
   }
 
-  function formatValue(v: number | null, type: DaqEntryType): string {
-    if (v === null) return '—';
-    if (type === 'f32' || type === 'f64') return v.toFixed(4);
-    return String(v);
-  }
-
-  return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5"><ChartLine size={18} />Live Values</span>
-        <span className="text-[10px] text-gray-600 font-mono flex items-center gap-1"><MagnifyingGlass size={12} />{zoom} pts</span>
-      </div>
-      <div className="flex-1 overflow-auto">
-        {rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-gray-700 text-xs">
-            <Database size={32} className="mb-2 opacity-40" />
-            Add signals to a DAQ list, then Configure → Start
-          </div>
-        ) : (
-          <table className="border-collapse text-xs font-mono" style={{ width: '100%', tableLayout: 'fixed' }}>
-            <colgroup>
-              <col style={{ width: colWidths.signal }} />
-              <col style={{ width: colWidths.value }} />
-              <col style={{ width: colWidths.type }} />
-              <col style={{ width: colWidths.address }} />
-              <col style={{ width: colWidths.listOdt }} />
-              <col />
-            </colgroup>
-            <thead className="sticky top-0 bg-gray-900 z-10">
-              <tr className="text-left text-[10px] text-gray-500 uppercase tracking-wider">
-                {(
-                  [
-                    ['signal', 'Signal'],
-                    ['value',  'Value'],
-                    ['type',   'Type'],
-                    ['address','Address'],
-                    ['listOdt','L/O'],
-                  ] as [keyof typeof DEFAULT_COL_WIDTHS, string][]
-                ).map(([col, label]) => (
-                  <th key={col} className="px-3 py-1.5 relative">
-                    {label}
-                    <div
-                      className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-blue-500/40 active:bg-blue-500/60"
-                      onMouseDown={(e) => startResize(col, e)}
-                    />
-                  </th>
-                ))}
-                <th className="px-3 py-1.5">Plot</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rowsByList.map(({ list, rows: listRows }, gi) => {
-                const isCollapsed = collapsedLists.has(list.id);
-                return (
-                  <Fragment key={list.id}>
-                    {/* List group header — click to collapse */}
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className={`px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-800 cursor-pointer select-none hover:bg-gray-800/40 transition-colors bg-gray-900/70 ${gi > 0 ? 'border-t border-t-gray-700' : ''}`}
-                        onClick={() => {
-                          const wasCollapsed = collapsedLists.has(list.id);
-                          setCollapsedLists(prev => {
-                            const next = new Set(prev);
-                            if (next.has(list.id)) next.delete(list.id); else next.add(list.id);
-                            return next;
-                          });
-                          if (wasCollapsed) {
-                            setExpandingLists(e => new Set([...e, list.id]));
-                            setTimeout(() => {
-                              setExpandingLists(e => { const n = new Set(e); n.delete(list.id); return n; });
-                            }, 50 + listRows.length * EXPAND_STAGGER + EXPAND_FADE_DUR + PLOT_REVEAL_DUR + 100);
-                          }
-                        }}
-                      >
-                        <span className="mr-1 inline-block">{isCollapsed ? '▸' : '▾'}</span>
-                        {list.name ?? `List ${list.id}`}
-                      </td>
-                    </tr>
-                    {/* Animated rows wrapper */}
-                    <tr>
-                      <td colSpan={6} style={{ padding: 0, border: 0 }}>
-                        <div
-                          style={{
-                            display: 'grid',
-                            gridTemplateRows: isCollapsed ? '0fr' : '1fr',
-                            transition: 'grid-template-rows 200ms ease',
-                          }}
-                        >
-                          <div style={{ minHeight: 0, overflow: 'hidden' }}>
-                            {listRows.map((row, ri) => {
-                              const isAnimating  = animatedKeys.has(row.key);
-                              const isExpanding  = expandingLists.has(list.id);
-                              const rowColor     = odtColors[`${row.listId}:${row.odtId}`] ?? ODT_COLORS[0];
-                              const rowBaseDelay = isExpanding ? 50 + ri * EXPAND_STAGGER : ri * 40;
-                              const rowStyle: React.CSSProperties | undefined =
-                                isAnimating ? { animationDelay: `${ri * 40}ms` } :
-                                isExpanding ? { animation: `daq-row-fade-in ${EXPAND_FADE_DUR}ms ease-out both`, animationDelay: `${rowBaseDelay}ms` } :
-                                undefined;
-                              const plotStyle: React.CSSProperties | undefined =
-                                (isAnimating || isExpanding) ? {
-                                  animation: `daq-plot-reveal ${PLOT_REVEAL_DUR}ms ease-out both`,
-                                  animationDelay: `${rowBaseDelay + (isAnimating ? ROW_ENTER_DUR - 30 : PLOT_OFFSET)}ms`,
-                                } : undefined;
-                              return (
-                                <div
-                                  key={row.key}
-                                  ref={(el) => { if (el) rowElsRef.current.set(row.key, el); else rowElsRef.current.delete(row.key); }}
-                                  className={`flex border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors text-xs font-mono ${isAnimating ? 'daq-row-enter' : ''}`}
-                                  style={rowStyle}
-                                >
-                                  <div className="px-3 py-1.5 text-gray-300 truncate overflow-hidden" style={{ width: colWidths.signal, flexShrink: 0 }}>{row.entry.name}</div>
-                                  <div className={`px-3 py-1.5 tabular-nums ${row.value !== null ? 'text-green-400' : 'text-gray-600'}`} style={{ width: colWidths.value, flexShrink: 0 }}>{formatValue(row.value, row.entry.type_name)}</div>
-                                  <div className="px-3 py-1.5 text-gray-500" style={{ width: colWidths.type, flexShrink: 0 }}>{row.entry.type_name}</div>
-                                  <div className="px-3 py-1.5 text-gray-500" style={{ width: colWidths.address, flexShrink: 0 }}>0x{row.entry.addr.toString(16).padStart(8, '0').toUpperCase()}</div>
-                                  <div className="px-3 py-1.5 text-gray-600" style={{ width: colWidths.listOdt, flexShrink: 0 }}>{row.listId}/{row.odtId}</div>
-                                  <div className="px-2 py-1 flex-1 min-w-0">
-                                    <Sparkline history={row.history} color={rowColor} zoom={zoom} onZoomChange={handleZoom} lineStyle={plotStyle} />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-    </div>
-  );
-}
-// ── Directional animated DTO rate counter ────────────────────────
-function DtoRateCount({ value }: { value: number }) {
-  const [displayed, setDisplayed] = useState(value);
-  const [animKey,   setAnimKey]   = useState(0);
-  const [animCls,   setAnimCls]   = useState('');
-  const prevRef = useRef(value);
-  const timer   = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (value === prevRef.current) return;
-    const up = value > prevRef.current;
-    prevRef.current = value;
-    setDisplayed(value);
-    setAnimKey(k => k + 1);
-    setAnimCls(up ? 'count-tick' : 'count-enter-from-top');
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setAnimCls(''), 260);
-  }, [value]);
-
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-  return (
-    <span key={animKey} className={animCls} style={{ display: 'inline-block', overflow: 'hidden' }}>
-      {displayed}
-    </span>
-  );
-}
-
-interface ToolbarProps {
-  lists: DaqList[];
-  configuring: boolean;
-  onConfigure: () => void;
-  onStart: () => void;
-  onStop: () => void;
-  onFree: () => void;
-  onSave: () => void;
-  onLoad: (file: File) => void;
-}
-
-function DaqToolbar({ lists, configuring, onConfigure, onStart, onStop, onFree, onSave, onLoad }: ToolbarProps) {
-  const daqStatus = useAppStore(s => s.daqStatus);
-  const connected = useAppStore(s => s.connected);
-  const daqDtoRate = useAppStore(s => s.daqDtoRate);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [wrenchKey,         setWrenchKey]         = useState(0);
-  const [playPopKey,        setPlayPopKey]         = useState(0);
-  const [stopPopKey,        setStopPopKey]         = useState(0);
-  const [freeConfirmOpen,   setFreeConfirmOpen]    = useState(false);
-  const [freeConfirmExiting,setFreeConfirmExiting] = useState(false);
-
-  const CONFIRM_EXIT_MS = 130;
-  function closeConfirm() {
-    setFreeConfirmExiting(true);
-    setTimeout(() => { setFreeConfirmOpen(false); setFreeConfirmExiting(false); }, CONFIRM_EXIT_MS);
-  }
-  const prevStatusRef = useRef(daqStatus);
-
-  useEffect(() => {
-    const prev = prevStatusRef.current;
-    prevStatusRef.current = daqStatus;
-    if (prev === 'idle'       && daqStatus === 'configured') setWrenchKey(k => k + 1);
-    if (prev === 'configured' && daqStatus === 'running')    setPlayPopKey(k => k + 1);
-    if (prev === 'running'    && daqStatus === 'configured') setStopPopKey(k => k + 1);
-  }, [daqStatus]);
-
-  const canConfigure = !configuring && daqStatus === 'idle' && connected && lists.some(l => l.odts.some(o => o.entries.length > 0));
-  const canStart     = daqStatus === 'configured';
-  const canStop      = daqStatus === 'running';
-  const canFree      = daqStatus !== 'idle';
-
-  const ledClass =
-    daqStatus === 'running'    ? 'blinker-on' :
-    daqStatus === 'configured' ? 'blinker-yellow' :
-    'blinker-grey';
-
-  const stateLabel =
-    daqStatus === 'running'    ? 'Running' :
-    daqStatus === 'configured' ? 'Configured' :
-    'Idle';
-
-  const stateLabelCls =
-    daqStatus === 'running'    ? 'text-green-400' :
-    daqStatus === 'configured' ? 'text-yellow-400' :
-    'text-gray-500';
-
-  return (
-    <div className="flex items-center gap-2 px-4 h-9 border-b border-gray-800 bg-gray-900/60 shrink-0">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".daq,.json"
-        className="hidden"
-        onChange={e => {
-          const file = e.target.files?.[0];
-          if (file) { onLoad(file); e.target.value = ''; }
-        }}
-      />
-      {/* Status */}
-      <div className="flex items-center gap-1.5 shrink-0">
-        <span className={`w-2 h-2 rounded-full shrink-0 ${ledClass}`} />
-        <span className={`text-[10px] w-16 ${stateLabelCls}`}>{stateLabel}</span>
-      </div>
-      <div className="w-px h-4 bg-gray-800" />
-
-      {/* Free All */}
-      <button
-        onClick={() => setFreeConfirmOpen(true)}
-        disabled={!canFree}
-        className={`h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors ${
-          canFree
-            ? 'text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer'
-            : 'text-gray-600 border-gray-800 bg-gray-900 cursor-not-allowed opacity-40'
-        }`}
-      >
-        <Trash size={18} />Free All
-      </button>
-      <div className="w-px h-4 bg-gray-800" />
-
-      {/* Configure */}
-      <button
-        onClick={onConfigure}
-        disabled={!canConfigure}
-        className={`h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors text-blue-400 border-blue-500/30 bg-blue-500/10 ${
-          canConfigure ? 'hover:bg-blue-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
-        }`}
-      >
-        {configuring ? (
-          <>
-            <svg className="animate-spin" width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.3" />
-              <path d="M5 1a4 4 0 0 1 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            Configuring DAQ
-          </>
-        ) : <><Wrench key={wrenchKey} size={18} className={wrenchKey > 0 ? 'icon-wrench-crank' : ''} />Configure</>}
-      </button>
-
-      {/* Play */}
-      <button
-        onClick={onStart}
-        disabled={!canStart}
-        title="Start DAQ"
-        className={`w-6 h-6 rounded flex items-center justify-center border transition-colors text-green-400 border-green-500/30 bg-green-500/10 ${
-          canStart ? 'hover:bg-green-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
-        }`}
-      ><Play key={playPopKey} size={14} className={playPopKey > 0 ? 'icon-pop' : ''} /></button>
-
-      {/* Stop */}
-      <button
-        onClick={onStop}
-        disabled={!canStop}
-        title="Stop DAQ"
-        className={`w-6 h-6 rounded flex items-center justify-center border transition-colors text-red-400 border-red-500/30 bg-red-500/10 ${
-          canStop ? 'hover:bg-red-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
-        }`}
-      ><Stop key={stopPopKey} size={14} className={stopPopKey > 0 ? 'icon-pop' : ''} /></button>
-
-      <div className="flex-1" />
-
-      {/* DTO rate */}
-      <span className="text-[10px] text-gray-600 font-mono flex items-center gap-1">
-        <Pulse size={13} /><DtoRateCount value={daqDtoRate} /> DTOs / s
-      </span>
-
-      <div className="w-px h-4 bg-gray-800" />
-
-      {/* Export / Import */}
-      <button
-        onClick={onSave}
-        title="Export DAQ lists to .daq file"
-        className="h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer"
-      >
-        <ArrowSquareOut size={14} />Export
-      </button>
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        title="Import DAQ lists from .daq file"
-        className="h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer"
-      >
-        <FolderOpen size={14} />Import
-      </button>
-
-      {/* Free All confirm dialog */}
-      {freeConfirmOpen && createPortal(
-        <div
-          className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 ${freeConfirmExiting ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
-          onMouseDown={e => { if (e.target === e.currentTarget) closeConfirm(); }}
-        >
-          <div className={`bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-72 p-5 flex flex-col gap-4 ${freeConfirmExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}>
-            <p className="text-sm text-gray-200 leading-relaxed">
-              Free all DAQ resources on the slave? This will stop acquisition and release all configured lists.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={closeConfirm}
-                className="px-3 py-1.5 rounded text-xs text-gray-400 hover:text-gray-200 border border-gray-700 hover:bg-gray-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => { closeConfirm(); onFree(); }}
-                className="px-4 py-1.5 rounded text-xs font-medium bg-red-600 hover:bg-red-500 text-white transition-colors active:scale-95 flex items-center gap-1.5"
-              >
-                <Trash size={18} />Free All
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-}
-
-// ── Resizable pane splitter ───────────────────────────────────────
-function PaneSplitter({ onDrag }: { onDrag: (dx: number) => void }) {
-  const dragging = useRef(false);
-  const last = useRef(0);
-
-  function onMouseDown(e: ReactMouseEvent) {
-    dragging.current = true;
-    last.current = e.clientX;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }
-
-  useEffect(() => {
-    function move(e: MouseEvent) {
-      if (!dragging.current) return;
-      onDrag(e.clientX - last.current);
-      last.current = e.clientX;
-    }
-    function up() {
-      if (!dragging.current) return;
-      dragging.current = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-    window.addEventListener('mousemove', move);
-    window.addEventListener('mouseup', up);
-    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
-  }, [onDrag]);
+  const totalSignals = list.odts.reduce((s, o) => s + o.entries.length, 0);
+  const eventHex = `0x${list.event_channel.toString(16).padStart(2, '0').toUpperCase()}`;
+  const eventName = events.find(e => e.id === list.event_channel)?.name ?? '';
 
   return (
     <div
-      className="w-1 cursor-col-resize shrink-0 hover:bg-blue-500 bg-gray-800 transition-colors"
-      onMouseDown={onMouseDown}
-    />
+      className={exiting ? 'daq-exiting' : ''}
+      style={{ borderBottom: '1px solid var(--border-strong)', animation: exiting ? undefined : 'daq-enter 180ms ease-out' }}
+    >
+      {/* list header */}
+      <div
+        className="group flex items-center gap-2 h-8 cursor-pointer select-none"
+        style={{ padding: '0 12px', background: 'var(--surface-raised)', borderBottom: '1px solid var(--border)' }}
+        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-overlay)')}
+        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-raised)')}
+        onClick={e => { if (!(e.target as Element).closest('[data-no-collapse]')) setCollapsed(c => !c); }}
+      >
+        <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{collapsed ? '▸' : '▾'}</span>
+        <span className="text-[11px] font-semibold flex-1" style={{ color: 'var(--text-secondary)' }}>
+          {list.name ?? `List ${list.id}`}
+        </span>
+        {/* event channel */}
+        <select
+          data-no-collapse=""
+          value={list.event_channel}
+          onClick={e => e.stopPropagation()}
+          onChange={e => { e.stopPropagation(); onSetEvent(Number(e.target.value)); }}
+          className="xcb-select"
+          style={{ width: 'auto', fontSize: 9, fontFamily: 'monospace', color: 'var(--text-muted)', flexShrink: 0 }}
+        >
+          {events.map(ev => (
+            <option key={ev.id} value={ev.id}>
+              0x{ev.id.toString(16).padStart(2,'0').toUpperCase()} — {ev.name}
+            </option>
+          ))}
+        </select>
+        <span className="text-[9px] shrink-0" style={{ color: 'var(--text-muted)' }}>
+          {eventHex} · {eventName} · {totalSignals} sig
+        </span>
+        <button
+          data-no-collapse=""
+          className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] flex items-center gap-1 shrink-0"
+          style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+          onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--accent)')}
+          onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
+          onClick={e => { e.stopPropagation(); onAddOdt(); }}
+        >
+          <Plus size={11} />ODT
+        </button>
+        <button
+          data-no-collapse=""
+          className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0"
+          style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+          onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
+          onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
+          onClick={e => { e.stopPropagation(); onDeleteList(); }}
+        >
+          <X size={13} />
+        </button>
+      </div>
+
+      {/* ODT sections */}
+      <div style={{ display: 'grid', gridTemplateRows: collapsed ? '0fr' : '1fr', transition: 'grid-template-rows 200ms ease' }}>
+        <div style={{ minHeight: 0, overflow: 'hidden' }}>
+          {list.odts.map(odt => (
+            <DaqOdtSection
+              key={odt.id}
+              list={list}
+              odt={odt}
+              color={odtColors[`${list.id}:${odt.id}`] ?? ODT_COLORS[0]}
+              exiting={exitingOdts.has(odt.id)}
+              onColorChange={color => onOdtColorChange(odt.id, color)}
+              onDelete={() => handleDeleteOdt(odt.id)}
+              onSaveEntry={(entry, idx) => onSaveEntry(odt.id, entry, idx)}
+              onDeleteEntry={idx => onDeleteEntry(odt.id, idx)}
+              onMoveEntry={onMoveEntry}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
 // ── Root DAQ component ───────────────────────────────────────────
 export function Daq() {
-  const daqLists              = useAppStore(s => s.daqLists);
-  const setDaqLists           = useAppStore(s => s.setDaqLists);
-  const setDaqStatus          = useAppStore(s => s.setDaqStatus);
-  const clearDaqLiveValues    = useAppStore(s => s.clearDaqLiveValues);
-  const showToast             = useAppStore(s => s.showToast);
-  const setDaqListsFromFile   = useAppStore(s => s.setDaqListsFromFile);
+  const daqLists           = useAppStore(s => s.daqLists);
+  const setDaqLists        = useAppStore(s => s.setDaqLists);
+  const setDaqStatus       = useAppStore(s => s.setDaqStatus);
+  const clearDaqLiveValues = useAppStore(s => s.clearDaqLiveValues);
+  const showToast          = useAppStore(s => s.showToast);
+  const setDaqListsFromFile = useAppStore(s => s.setDaqListsFromFile);
 
-  const [treePaneWidth, setTreePaneWidth] = useState(300);
-  const [configuring, setConfiguring] = useState(false);
+  const [configuring,   setConfiguring]   = useState(false);
   const [exportContent, setExportContent] = useState<string | null>(null);
+  const [exitingLists,  setExitingLists]  = useState<Set<number>>(new Set());
   const [odtColors, setOdtColors] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     let idx = 0;
@@ -1397,7 +1044,6 @@ export function Daq() {
     return init;
   });
 
-  // Add default color for newly added ODTs
   useEffect(() => {
     setOdtColors(prev => {
       const next = { ...prev };
@@ -1412,11 +1058,7 @@ export function Daq() {
     });
   }, [daqLists]);
 
-  const splitterDrag = useCallback((dx: number) => {
-    setTreePaneWidth(prev => Math.max(160, Math.min(520, prev + dx)));
-  }, []);
-
-  // ── Tree mutation handlers (local store only — synced to backend at Configure) ──
+  // ── list mutations ──────────────────────────────────────────────
 
   function handleAddList() {
     const id = daqLists.length > 0 ? Math.max(...daqLists.map(l => l.id)) + 1 : 0;
@@ -1424,7 +1066,11 @@ export function Daq() {
   }
 
   function handleDeleteList(listId: number) {
-    setDaqLists(daqLists.filter(l => l.id !== listId));
+    setExitingLists(s => new Set(s).add(listId));
+    setTimeout(() => {
+      setDaqLists(daqLists.filter(l => l.id !== listId));
+      setExitingLists(s => { const n = new Set(s); n.delete(listId); return n; });
+    }, 160);
   }
 
   function handleSetEvent(listId: number, ch: number) {
@@ -1439,7 +1085,13 @@ export function Daq() {
     }));
   }
 
-  function handleSaveEntry(entry: DaqEntry, listId: number, odtId: number, entryIdx: number | null) {
+  function handleDeleteOdt(listId: number, odtId: number) {
+    setDaqLists(daqLists.map(l =>
+      l.id !== listId ? l : { ...l, odts: l.odts.filter(o => o.id !== odtId) }
+    ));
+  }
+
+  function handleSaveEntry(listId: number, odtId: number, entry: DaqEntry, entryIdx: number | null) {
     setDaqLists(daqLists.map(l => {
       if (l.id !== listId) return l;
       return {
@@ -1455,37 +1107,16 @@ export function Daq() {
     }));
   }
 
-  function handleDeleteEntry(listId: number, odtId: number, entryIdx: number) {
-    setDaqLists(daqLists.map(l => {
-      if (l.id !== listId) return l;
-      return { ...l, odts: l.odts.map(o => o.id !== odtId ? o : { ...o, entries: o.entries.filter((_, i) => i !== entryIdx) }) };
-    }));
-  }
-
-  function handleDeleteOdt(listId: number, odtId: number) {
+  function handleDeleteEntry(listId: number, odtId: number, idx: number) {
     setDaqLists(daqLists.map(l =>
-      l.id !== listId ? l : { ...l, odts: l.odts.filter(o => o.id !== odtId) }
+      l.id !== listId ? l : { ...l, odts: l.odts.map(o => o.id !== odtId ? o : { ...o, entries: o.entries.filter((_, i) => i !== idx) }) }
     ));
   }
 
-  function handleRenameList(listId: number, name: string | undefined) {
-    setDaqLists(daqLists.map(l => l.id === listId ? { ...l, name } : l));
-  }
-
-  function handleRenameOdt(listId: number, odtId: number, name: string | undefined) {
-    setDaqLists(daqLists.map(l =>
-      l.id !== listId ? l : {
-        ...l,
-        odts: l.odts.map(o => o.id !== odtId ? o : { ...o, name }),
-      }
-    ));
-  }
-
-  function handleMoveEntry(fromListId: number, fromOdtId: number, fromIdx: number, toListId: number, toOdtId: number, toIdx: number) {
-    if (fromListId === toListId && fromOdtId === toOdtId) {
-      // Same ODT: reorder in place
+  function handleMoveEntry(listId: number, fromOdtId: number, fromIdx: number, toListId: number, toOdtId: number, toIdx: number) {
+    if (listId === toListId && fromOdtId === toOdtId) {
       setDaqLists(daqLists.map(l => {
-        if (l.id !== fromListId) return l;
+        if (l.id !== listId) return l;
         return {
           ...l,
           odts: l.odts.map(o => {
@@ -1498,12 +1129,10 @@ export function Daq() {
         };
       }));
     } else {
-      // Cross-ODT or cross-list: remove from source, insert into target atomically
-      const entry = daqLists.find(l => l.id === fromListId)?.odts.find(o => o.id === fromOdtId)?.entries[fromIdx];
+      const entry = daqLists.find(l => l.id === listId)?.odts.find(o => o.id === fromOdtId)?.entries[fromIdx];
       if (!entry) return;
       setDaqLists(daqLists.map(l => {
-        if (l.id === fromListId && l.id === toListId) {
-          // Same list, different ODT
+        if (l.id === listId && l.id === toListId) {
           return {
             ...l,
             odts: l.odts.map(o => {
@@ -1513,8 +1142,8 @@ export function Daq() {
             }),
           };
         }
-        if (l.id === fromListId) return { ...l, odts: l.odts.map(o => o.id !== fromOdtId ? o : { ...o, entries: o.entries.filter((_, i) => i !== fromIdx) }) };
-        if (l.id === toListId)   { return { ...l, odts: l.odts.map(o => { if (o.id !== toOdtId) return o; const e = [...o.entries]; e.splice(toIdx, 0, entry); return { ...o, entries: e }; }) }; }
+        if (l.id === listId)  return { ...l, odts: l.odts.map(o => o.id !== fromOdtId ? o : { ...o, entries: o.entries.filter((_, i) => i !== fromIdx) }) };
+        if (l.id === toListId) return { ...l, odts: l.odts.map(o => { if (o.id !== toOdtId) return o; const e = [...o.entries]; e.splice(toIdx, 0, entry); return { ...o, entries: e }; }) };
         return l;
       }));
     }
@@ -1535,30 +1164,21 @@ export function Daq() {
     try {
       const text = await file.text();
       const data = JSON.parse(text) as { version: number; lists: DaqList[]; colors?: Record<string, string> };
-      if (data.version !== 1 || !Array.isArray(data.lists)) {
-        showToast('Invalid .daq file format', 'error');
-        return;
-      }
+      if (data.version !== 1 || !Array.isArray(data.lists)) { showToast('Invalid .daq file', 'error'); return; }
       const reIndexed: DaqList[] = data.lists.map((l: DaqList, li: number) => ({
-        ...l,
-        id: li,
+        ...l, id: li,
         odts: (l.odts ?? []).map((o: DaqOdt, oi: number) => ({ ...o, id: oi })),
       }));
       setDaqLists(reIndexed);
       setDaqListsFromFile(true);
-      if (data.colors) {
-        setOdtColors(data.colors);
-      }
+      if (data.colors) setOdtColors(data.colors);
       showToast(`Loaded ${reIndexed.length} DAQ list(s)`, 'success');
-    } catch {
-      showToast('Failed to parse .daq file', 'error');
-    }
+    } catch { showToast('Failed to parse .daq file', 'error'); }
   }
-
-  // ── DAQ lifecycle handlers ──────────────────────────────────────
 
   async function handleConfigure() {
     setConfiguring(true);
+    clearDaqLiveValues();
     await new Promise<void>(r => setTimeout(r, 0));
     try {
       await api.daqReplaceLists(daqLists);
@@ -1569,25 +1189,18 @@ export function Daq() {
   }
 
   async function handleStart() {
-    try {
-      await api.daqStart();
-      setDaqStatus('running');
-    } catch (e) { showToast((e as Error).message, 'error'); }
+    try { await api.daqStart(); setDaqStatus('running'); }
+    catch (e) { showToast((e as Error).message, 'error'); }
   }
 
   async function handleStop() {
-    try {
-      await api.daqStop();
-      setDaqStatus('configured');
-    } catch (e) { showToast((e as Error).message, 'error'); }
+    try { await api.daqStop(); setDaqStatus('configured'); }
+    catch (e) { showToast((e as Error).message, 'error'); }
   }
 
   async function handleFree() {
-    try {
-      await api.daqFree();
-      setDaqStatus('idle');
-      clearDaqLiveValues();
-    } catch (e) { showToast((e as Error).message, 'error'); }
+    try { await api.daqFree(); setDaqStatus('idle'); clearDaqLiveValues(); }
+    catch (e) { showToast((e as Error).message, 'error'); }
   }
 
   return (
@@ -1602,29 +1215,54 @@ export function Daq() {
         onSave={handleSaveDaq}
         onLoad={handleLoadDaq}
       />
-      <div className="flex flex-1 overflow-hidden">
-        <div style={{ width: treePaneWidth, minWidth: 160 }} className="flex flex-col overflow-hidden border-r border-gray-800 bg-gray-950">
-          <DaqTree
-            lists={daqLists}
+
+      {/* sticky column header */}
+      <div
+        className="flex items-center h-[26px] shrink-0 sticky top-0 z-10"
+        style={{ paddingLeft: 36, paddingRight: 12, background: 'var(--surface-base)', borderBottom: '1px solid var(--border-strong)' }}
+      >
+        {[['Signal', 148 + 12 + 12], ['Value', 90], ['Type', 48], ['Address', 96]].map(([label, w]) => (
+          <span key={label as string} className="text-[9px] font-semibold uppercase tracking-wider" style={{ width: w as number, flexShrink: 0, color: 'var(--text-muted)' }}>
+            {label}
+          </span>
+        ))}
+        <span className="text-[9px] font-semibold uppercase tracking-wider flex-1" style={{ color: 'var(--text-muted)' }}>Plot</span>
+      </div>
+
+      {/* scrollable body */}
+      <div className="flex-1 overflow-y-auto" style={{ background: 'var(--surface-base)' }}>
+        {daqLists.map(list => (
+          <DaqListGroup
+            key={list.id}
+            list={list}
             odtColors={odtColors}
-            onOdtColorChange={(listId, odtId, color) => setOdtColors(prev => ({ ...prev, [`${listId}:${odtId}`]: color }))}
-            onAddList={handleAddList}
-            onDeleteList={handleDeleteList}
-            onDeleteOdt={handleDeleteOdt}
-            onSetEvent={handleSetEvent}
-            onAddOdt={handleAddOdt}
-            onSaveEntry={handleSaveEntry}
-            onDeleteEntry={handleDeleteEntry}
-            onRenameList={handleRenameList}
-            onRenameOdt={handleRenameOdt}
-            onMoveEntry={handleMoveEntry}
+            exiting={exitingLists.has(list.id)}
+            onOdtColorChange={(odtId, color) => setOdtColors(prev => ({ ...prev, [`${list.id}:${odtId}`]: color }))}
+            onDeleteList={() => handleDeleteList(list.id)}
+            onAddOdt={() => handleAddOdt(list.id)}
+            onDeleteOdt={odtId => handleDeleteOdt(list.id, odtId)}
+            onSetEvent={ch => handleSetEvent(list.id, ch)}
+            onSaveEntry={(odtId, entry, idx) => handleSaveEntry(list.id, odtId, entry, idx)}
+            onDeleteEntry={(odtId, idx) => handleDeleteEntry(list.id, odtId, idx)}
+            onMoveEntry={(fromOdtId, fromIdx, toListId, toOdtId, toIdx) =>
+              handleMoveEntry(list.id, fromOdtId, fromIdx, toListId, toOdtId, toIdx)
+            }
           />
-        </div>
-        <PaneSplitter onDrag={splitterDrag} />
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <DaqLiveTable lists={daqLists} odtColors={odtColors} />
+        ))}
+
+        <div style={{ padding: 12 }}>
+          <button
+            className="text-[10px] w-full flex items-center justify-center gap-1.5 rounded-md transition-colors"
+            style={{ padding: '6px 0', color: 'var(--text-muted)', background: 'none', border: '1px dashed var(--border-strong)', cursor: 'pointer' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--accent) 40%, transparent)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-strong)'; }}
+            onClick={handleAddList}
+          >
+            <Plus size={12} />Add DAQ List
+          </button>
         </div>
       </div>
+
       {exportContent !== null && (
         <ExportDialog
           defaultFilename="daq_config.daq"

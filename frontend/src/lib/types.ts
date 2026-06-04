@@ -160,7 +160,7 @@ export interface DaqLiveValue {
   addr: number;
   typeName: DaqEntryType;
   value: number | null;
-  history: number[];
+  history: { value: number; ts: number }[];
 }
 
 export interface A2lVariable {

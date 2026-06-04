@@ -1,16 +1,17 @@
 import { useRef, useState, useEffect } from 'react';
 import {
-  Play, Plus, X, ArrowSquareOut, FolderOpen, ListBullets, Timer,
+  Plus, X, ArrowSquareOut, FolderOpen, ListBullets, Timer,
   PaperPlaneTilt, DownloadSimple,
 } from '@phosphor-icons/react';
-import { Toggle } from './Toggle';
-import { SpinInput } from './SpinInput';
 import { ExpandDetailFlat, HexCell, dirBadgeCls } from './PacketDetail';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import { CMD_DEFS } from '../lib/cmd-defs';
 import type { Sequence as SeqType, SeqFile, SeqStepOutcome, SeqStepResp } from '../lib/types';
 import { ExportDialog } from './ExportDialog';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { RunStopButton } from './ui/RunStopButton';
 
 // ── helpers ───────────────────────────────────────────────────────
 
@@ -28,11 +29,11 @@ function statusLabel(status: string) {
   return 'Idle';
 }
 
-function statusLabelCls(status: string) {
-  if (status === 'running') return 'text-green-400';
-  if (status === 'done')    return 'text-green-400';
-  if (status === 'aborted') return 'text-red-400';
-  return 'text-gray-500';
+function statusColor(status: string): string {
+  if (status === 'running') return 'var(--status-ok)';
+  if (status === 'done')    return 'var(--status-ok)';
+  if (status === 'aborted') return 'var(--status-err)';
+  return 'var(--text-muted)';
 }
 
 function outcomeClass(outcome: SeqStepOutcome | undefined, running: boolean) {
@@ -93,15 +94,12 @@ export function Sequence() {
 
   const [exportContent, setExportContent] = useState<string | null>(null);
 
-  // Expand/collapse state — mirrors trace view
-  const [expandedSteps, setExpandedSteps]     = useState<Set<string>>(new Set());
-  const [expandedSubRows, setExpandedSubRows] = useState<Set<string>>(new Set());
-
-  // Animation state — packet-new with stagger delays (same as trace view)
-  const [newStepIds, setNewStepIds]     = useState<Set<string>>(new Set());
-  const [exitingIds, setExitingIds]     = useState<Set<string>>(new Set());
-  const prevStepIdsRef                  = useRef<Set<string>>(new Set());
-  const staggerDelaysRef                = useRef<Map<string, number>>(new Map());
+  const [expandedSteps,    setExpandedSteps]    = useState<Set<string>>(new Set());
+  const [expandedSubRows,  setExpandedSubRows]  = useState<Set<string>>(new Set());
+  const [newStepIds,       setNewStepIds]       = useState<Set<string>>(new Set());
+  const [exitingIds,       setExitingIds]       = useState<Set<string>>(new Set());
+  const prevStepIdsRef   = useRef<Set<string>>(new Set());
+  const staggerDelaysRef = useRef<Map<string, number>>(new Map());
 
   const stepIdKey = activeSeq?.steps.map((s) => s.id).join(',') ?? '';
   useEffect(() => {
@@ -112,7 +110,6 @@ export function Sequence() {
     }
     prevStepIdsRef.current = currentIds;
     if (added.length === 0) return;
-    // Assign ordered stagger delays — same formula as trace (capped at 3 × 120ms)
     added.forEach((id, i) => staggerDelaysRef.current.set(id, Math.min(i, 3) * 120));
     const addedSet = new Set(added);
     setNewStepIds((prev) => new Set([...prev, ...addedSet]));
@@ -123,33 +120,26 @@ export function Sequence() {
     return () => clearTimeout(t);
   }, [stepIdKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Runtime timer — tick every 10ms while running
   const [tick, setTick] = useState(0);
   const stepStartTimesRef = useRef<Map<string, number>>(new Map());
   const stepEndTimesRef   = useRef<Map<string, number>>(new Map());
+  const stepResultsLen    = seqRunResult?.stepResults.length ?? 0;
 
-  const stepResultsLen = seqRunResult?.stepResults.length ?? 0;
-
-  // Reset timers on new run
   useEffect(() => {
     if (runStatus === 'running') {
       stepStartTimesRef.current = new Map();
       stepEndTimesRef.current   = new Map();
-      // First non-disabled step starts now
       const first = activeSeq?.steps.find((s) => !s.disabled);
       if (first) stepStartTimesRef.current.set(first.id, Date.now());
     }
   }, [runStatus === 'running']); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When a new result arrives, record its end time + start time for next step
   useEffect(() => {
     if (!isRunning || !activeSeq) return;
     const completedIds = new Set(seqRunResult!.stepResults.map((r) => r.stepId));
-    // Record end time for newly completed steps
     for (const r of seqRunResult!.stepResults) {
       if (!stepEndTimesRef.current.has(r.stepId)) stepEndTimesRef.current.set(r.stepId, Date.now());
     }
-    // Start timer for next active step
     const next = activeSeq.steps.find((s) => !completedIds.has(s.id) && !s.disabled);
     if (next && !stepStartTimesRef.current.has(next.id)) stepStartTimesRef.current.set(next.id, Date.now());
   }, [stepResultsLen]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -182,11 +172,9 @@ export function Sequence() {
     if (!activeSeq) return;
     const step = activeSeq.steps.find((s) => s.id === stepId);
     if (!step) return;
-    // Load into ByteBar
     setSeqSelectedStepId(stepId);
     setActiveCmd(step.cmdKey);
     step.bytes.forEach((b, i) => setByteValue(i, b));
-    // Toggle sub-row collapse — same as trace group header click
     setExpandedSteps((prev) => {
       const next = new Set(prev);
       if (next.has(stepId)) next.delete(stepId); else next.add(stepId);
@@ -223,8 +211,6 @@ export function Sequence() {
     const payload = {
       ...activeSeq,
       steps: activeSeq!.steps.map((step) => {
-        // Mirror ByteBar's send logic: find the last explicitly-filled cell,
-        // then convert only up to that point (so '00' is preserved but trailing '' are dropped).
         let lastFilled = -1;
         for (let i = step.bytes.length - 1; i >= 0; i--) {
           if (step.bytes[i]?.trim()) { lastFilled = i; break; }
@@ -270,148 +256,106 @@ export function Sequence() {
     <div className="flex-1 flex flex-col overflow-hidden">
 
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 h-9 border-b border-gray-800 bg-gray-900/60 shrink-0">
+      <div
+        className="flex items-center gap-2 px-3 h-9 shrink-0"
+        style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border)' }}
+      >
         <input ref={importRef} type="file" accept=".seq,.json" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }} />
 
-        {/* Status LED + label */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className={`w-2 h-2 rounded-full shrink-0 ${ledClass(runStatus)}`} />
-          <span className={`text-[10px] w-14 ${statusLabelCls(runStatus)}`}>{statusLabel(runStatus)}</span>
-        </div>
-        <div className="w-px h-4 bg-gray-800 shrink-0" />
+        {/* Status */}
+        <span className={`w-2 h-2 rounded-full shrink-0 ${ledClass(runStatus)}`} />
+        <span className="text-[10px] w-14 shrink-0" style={{ color: statusColor(runStatus) }}>{statusLabel(runStatus)}</span>
+        <div className="xcb-vdiv" />
 
         {/* Run */}
-        <button
-          onClick={runSequence}
-          disabled={!canRun}
-          title="Run sequence"
-          className={`h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors text-green-400 border-green-500/30 bg-green-500/10 ${
-            canRun ? 'hover:bg-green-500/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
-          }`}
-        >
-          <Play size={12} />Run
-        </button>
-
-        <div className="w-px h-4 bg-gray-800 shrink-0" />
+        <RunStopButton
+          running={false}
+          pending={isRunning}
+          canRun={canRun}
+          onRun={runSequence}
+        />
+        <div className="xcb-vdiv" />
 
         {/* Sequence selector */}
         <select
           value={activeSequenceId ?? ''}
           onChange={(e) => { setActiveSequenceId(e.target.value || null); setSeqSelectedStepId(null); }}
-          className="h-6 bg-gray-800 border border-gray-700 text-gray-200 text-[10px] rounded px-2 max-w-[180px] focus:outline-none focus:border-blue-500"
+          className="xcb-select"
+          style={{ width: 160 }}
         >
           {sequences.length === 0 && <option value="">— no sequences —</option>}
           {sequences.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
 
-        {/* New sequence */}
-        <button
-          onClick={addSequence}
-          title="New sequence"
-          className="w-6 h-6 rounded flex items-center justify-center border transition-colors text-blue-400 border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 cursor-pointer"
-        >
+        {/* New / Delete */}
+        <Button variant="ghost" className="!w-7 !h-7 !p-0" title="New sequence" onClick={addSequence}>
           <Plus size={12} />
-        </button>
-
-        {/* Delete sequence */}
-        <button
-          onClick={deleteActiveSeq}
-          disabled={!activeSeq}
-          title="Delete sequence"
-          className={`w-6 h-6 rounded flex items-center justify-center border transition-colors text-gray-400 border-gray-700 bg-gray-800 ${
-            activeSeq ? 'hover:text-red-400 hover:border-red-500/40 hover:bg-red-500/10 cursor-pointer' : 'opacity-40 cursor-not-allowed'
-          }`}
-        >
+        </Button>
+        <Button variant="ghost" className="!w-7 !h-7 !p-0" title="Delete sequence" disabled={!activeSeq} onClick={deleteActiveSeq}>
           <X size={12} />
+        </Button>
+        <div className="xcb-vdiv" />
+
+        {/* Abort on error */}
+        <button
+          className={`xcb-pill${activeSeq?.abortOnError ? ' active' : ''}`}
+          disabled={!activeSeq}
+          onClick={() => activeSeq && updateSequence({ ...activeSeq, abortOnError: !activeSeq.abortOnError })}
+        >
+          Abort on error
         </button>
-
-        <div className="w-px h-4 bg-gray-800 shrink-0" />
-
-        {/* Abort-on-error toggle */}
-        <div className={activeSeq ? '' : 'opacity-40 pointer-events-none'}>
-          <Toggle
-            active={activeSeq?.abortOnError ?? false}
-            onClick={() => activeSeq && updateSequence({ ...activeSeq, abortOnError: !activeSeq.abortOnError })}
-            label="Abort on error"
-            activeColor="orange"
-          />
-        </div>
+        <div className="xcb-vdiv" />
 
         {/* Step delay */}
-        {activeSeq && (
-          <>
-            <div className="w-px h-4 bg-gray-800 shrink-0" />
-            <div className="flex items-center gap-1.5 shrink-0">
-              <Timer size={13} className="text-gray-600 shrink-0" />
-              <SpinInput
-                value={activeSeq.stepDelayMs}
-                onChange={(v) => updateSequence({ ...activeSeq, stepDelayMs: v })}
-                min={0}
-                step={10}
-                inputClassName="h-6 px-2 bg-gray-800 border border-gray-700 rounded text-[10px] font-mono text-gray-200 focus:outline-none focus:border-blue-500"
-              />
-              <span className="text-[10px] text-gray-600">ms</span>
-            </div>
-          </>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Timer size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          <Input
+            type="number"
+            value={activeSeq?.stepDelayMs ?? 0}
+            onChange={(v) => activeSeq && updateSequence({ ...activeSeq, stepDelayMs: Math.max(0, Number(v)) })}
+            disabled={!activeSeq}
+            size="sm"
+            style={{ width: 64, fontFamily: 'monospace' }}
+          />
+          <span className="text-[10px] shrink-0" style={{ color: 'var(--text-muted)' }}>ms</span>
+        </div>
 
         <div className="flex-1" />
 
         {/* Export / Import */}
-        <button
-          onClick={handleExport}
-          disabled={!sequences.length}
-          title="Export sequences to .seq file"
-          className={`h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors ${
-            sequences.length
-              ? 'text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer'
-              : 'text-gray-600 border-gray-800 bg-gray-900 cursor-not-allowed opacity-40'
-          }`}
-        >
+        <Button variant="ghost" className="!px-2 !py-0.5 !text-[10px] !gap-1" disabled={!sequences.length} onClick={handleExport}>
           <ArrowSquareOut size={13} />Export
-        </button>
-        <button
-          onClick={() => importRef.current?.click()}
-          title="Import sequences from .seq file"
-          className="h-6 px-2.5 rounded text-[10px] font-medium flex items-center gap-1.5 border transition-colors text-gray-400 border-gray-700 bg-gray-800 hover:bg-gray-700 cursor-pointer"
-        >
+        </Button>
+        <Button variant="ghost" className="!px-2 !py-0.5 !text-[10px] !gap-1" onClick={() => importRef.current?.click()}>
           <FolderOpen size={13} />Import
-        </button>
-      </div>
-
-      {/* Steps list header */}
-      <div className="flex items-center justify-between px-3 h-8 border-b border-gray-800 shrink-0">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-600 flex items-center gap-1.5">
-          <ListBullets size={14} />Steps
-        </span>
-        {activeSeq && (
-          <span className="text-[10px] text-gray-700 tabular-nums">
-            {activeSeq.steps.length} step{activeSeq.steps.length !== 1 ? 's' : ''}
-          </span>
-        )}
+        </Button>
       </div>
 
       {/* Steps list */}
-      <div className="flex-1 overflow-y-auto relative">
+      <div className="flex-1 overflow-y-auto relative" style={{ background: 'var(--surface-base)' }}>
         {!activeSeq ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-700 text-xs">
-            <ListBullets size={32} className="opacity-40" />
-            Press <span className="text-gray-500 font-semibold">+</span> to create a sequence
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <ListBullets size={32} style={{ opacity: 0.3 }} />
+            Press <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>+</span> to create a sequence
           </div>
         ) : activeSeq.steps.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-700 text-xs">
-            <ListBullets size={32} className="opacity-40" />
-            No steps — select a command and press <span className="text-gray-500 font-semibold mx-1">+ Add to Sequence</span>
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <ListBullets size={32} style={{ opacity: 0.3 }} />
+            No steps — select a command and press{' '}
+            <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>+ Add to Sequence</span>
           </div>
         ) : (<>
 
-          {/* ── Column header (sticky) ── */}
-          <div className="flex items-center h-8 border-b border-gray-800 bg-gray-900 sticky top-0 z-10 select-none">
-            <div className="w-14 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-600">Status</div>
-            <div className="flex-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-600">Command</div>
-            <div className="w-24 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-600">Runtime</div>
-            <div className="w-36 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-600">Expected</div>
+          {/* Column header */}
+          <div
+            className="flex items-center h-[26px] border-b sticky top-0 z-10 select-none shrink-0"
+            style={{ background: 'var(--surface-base)', borderColor: 'var(--border-strong)' }}
+          >
+            <div className="w-14 px-3 text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Status</div>
+            <div className="flex-1 px-3 text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Command</div>
+            <div className="w-24 px-3 text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Runtime</div>
+            <div className="w-36 px-3 text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Expected</div>
           </div>
 
           {activeSeq.steps.map((step, idx) => {
@@ -428,22 +372,17 @@ export function Sequence() {
             const txKey = `${step.id}:tx`;
             const rxKey = `${step.id}:rx`;
 
-            // TX sub-row: only visible once request has been sent
             const hasTx = !!(result?.txHex || isCurrentStep);
             const txHex = result?.txHex ?? bytePreview(step.bytes);
             const rxHex = result?.rxHex;
             const hasRx = !!(rxHex || (result?.errorMsg && result.outcome === 'error'));
             const isErrOutcome = result?.outcome === 'error' || result?.outcome === 'fail';
 
-            // Runtime display
-            const startTime = stepStartTimesRef.current.get(step.id);
-            const endTime   = stepEndTimesRef.current.get(step.id);
-            const runtimeMs = startTime ? (endTime ?? (isStepRunning ? tick : 0)) - startTime : 0;
-            const runtimeStr = startTime
-              ? `${(runtimeMs / 1000).toFixed(2)}s`
-              : result ? '—' : '';
+            const startTime  = stepStartTimesRef.current.get(step.id);
+            const endTime    = stepEndTimesRef.current.get(step.id);
+            const runtimeMs  = startTime ? (endTime ?? (isStepRunning ? tick : 0)) - startTime : 0;
+            const runtimeStr = startTime ? `${(runtimeMs / 1000).toFixed(2)}s` : result ? '—' : '';
 
-            // Packets for ExpandDetailFlat
             const txPacket = result?.txHex
               ? [...packets].reverse().find((p) => p.hex === result.txHex && p.direction === 'tx')
               : undefined;
@@ -457,14 +396,13 @@ export function Sequence() {
                 className={isExiting ? 'row-out' : isNew ? 'packet-new' : ''}
                 style={isNew ? { animationDelay: `${staggerDelay}ms` } : undefined}
               >
-                {/* ── Group header row ── */}
+                {/* Group header row */}
                 <div
-                  className={`seq-step-hdr group cursor-pointer select-none${isSelected ? ' active' : ''}`}
+                  className={`seq-step-hdr group${isSelected ? ' active' : ''}`}
                   onClick={() => onStepClick(step.id)}
                 >
-                  {/* Status col */}
                   <div className="w-14 flex items-center gap-1.5 shrink-0">
-                    <span className="text-gray-600 text-[10px]">{isCollapsed ? '▸' : '▾'}</span>
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{isCollapsed ? '▸' : '▾'}</span>
                     <div className={outcomeClass(result?.outcome, isStepRunning)}>
                       {result?.outcome === 'pass' && (
                         <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
@@ -477,35 +415,38 @@ export function Sequence() {
                         </svg>
                       )}
                     </div>
-                    <span className="text-[10px] text-gray-600 tabular-nums">{idx + 1}</span>
+                    <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-muted)' }}>{idx + 1}</span>
                   </div>
 
-                  {/* Command col */}
-                  <span className="flex-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 truncate min-w-0">
+                  <span className="flex-1 text-[10px] font-semibold uppercase tracking-wider truncate min-w-0" style={{ color: 'var(--text-secondary)' }}>
                     {cmdLabel(step.cmdKey)}
                   </span>
 
-                  {/* Runtime col */}
                   <div className="w-24 shrink-0 text-right pr-3">
-                    <span className={`tabular-nums font-mono text-[10px] ${isStepRunning ? 'text-blue-400' : runtimeStr ? 'text-gray-500' : 'text-gray-700'}`}>
+                    <span
+                      className="tabular-nums font-mono text-[10px]"
+                      style={{ color: isStepRunning ? 'var(--accent)' : runtimeStr ? 'var(--text-muted)' : 'var(--border-strong)' }}
+                    >
                       {runtimeStr || '—'}
                     </span>
                   </div>
 
-                  {/* Expected col: RespToggle + delete */}
                   <div className="w-36 shrink-0 flex items-center gap-2 pr-2">
                     <RespToggle value={step.resp} onChange={(v) => setStepResp(step.id, v)} />
                     <button
                       onClick={(e) => { e.stopPropagation(); deleteStep(step.id); }}
                       title="Remove step"
-                      className="w-5 h-5 flex items-center justify-center rounded text-gray-700 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
+                      className="w-5 h-5 flex items-center justify-center rounded transition-colors shrink-0 opacity-0 group-hover:opacity-100"
+                      style={{ color: 'var(--text-muted)' }}
+                      onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
+                      onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
                     >
                       <X size={11} />
                     </button>
                   </div>
                 </div>
 
-                {/* ── Sub-rows — grid animate identical to trace ── */}
+                {/* Sub-rows */}
                 <div style={{
                   display: 'grid',
                   gridTemplateRows: isCollapsed ? '0fr' : '1fr',
@@ -514,19 +455,24 @@ export function Sequence() {
                 }}>
                   <div style={{ minHeight: 0, overflow: 'hidden' }}>
 
-                    {/* TX / Request — only shown once sent */}
                     {hasTx && (<>
                       <div
-                        className={`flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors font-mono text-xs ${expandedSubRows.has(txKey) ? 'bg-gray-800/30' : ''}`}
+                        className="flex items-center font-mono text-xs cursor-pointer transition-colors"
+                        style={{
+                          borderBottom: '1px solid var(--border)',
+                          background: expandedSubRows.has(txKey) ? 'var(--surface-raised)' : undefined,
+                        }}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-raised)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = expandedSubRows.has(txKey) ? 'var(--surface-raised)' : '')}
                         onClick={() => toggleSubRow(txKey)}
                       >
                         <div className="pl-7 pr-2 py-1.5 w-28 shrink-0">
-                          <span className="text-blue-400 text-[10px] flex items-center gap-1">
+                          <span className="text-[10px] flex items-center gap-1" style={{ color: 'var(--tx)' }}>
                             <PaperPlaneTilt size={11} />Request
                           </span>
                         </div>
                         <div className="px-2 py-1.5 shrink-0">
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1e3a8a] text-[#93c5fd] border border-[#3b82f6]">TX</span>
+                          <span className="dir-badge tx">TX</span>
                         </div>
                         <div className="px-3 py-1.5 flex-1 min-w-0">
                           <HexCell hex={txHex} dir="tx" />
@@ -535,27 +481,32 @@ export function Sequence() {
                       {txPacket && <ExpandDetailFlat p={txPacket} open={expandedSubRows.has(txKey)} />}
                     </>)}
 
-                    {/* RX / Response — only when result has rx data */}
                     {hasRx && (<>
                       <div
-                        className={`flex items-center border-b border-gray-800/30 hover:bg-gray-700/20 cursor-pointer transition-colors font-mono text-xs ${expandedSubRows.has(rxKey) ? 'bg-gray-800/30' : ''}`}
+                        className="flex items-center font-mono text-xs cursor-pointer transition-colors"
+                        style={{
+                          borderBottom: '1px solid var(--border)',
+                          background: expandedSubRows.has(rxKey) ? 'var(--surface-raised)' : undefined,
+                        }}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-raised)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = expandedSubRows.has(rxKey) ? 'var(--surface-raised)' : '')}
                         onClick={() => toggleSubRow(rxKey)}
                       >
                         <div className="pl-7 pr-2 py-1.5 w-28 shrink-0">
-                          <span className={`text-[10px] flex items-center gap-1 ${isErrOutcome ? 'text-red-400' : 'text-green-400'}`}>
+                          <span className="text-[10px] flex items-center gap-1" style={{ color: isErrOutcome ? 'var(--status-err)' : 'var(--rx)' }}>
                             <DownloadSimple size={11} />Response
                           </span>
                         </div>
                         <div className="px-2 py-1.5 shrink-0">
                           {rxPacket
-                            ? <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${dirBadgeCls(rxPacket)}`}>RX</span>
-                            : <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-900/30 text-red-400 border border-red-500/50">ERR</span>
+                            ? <span className={dirBadgeCls(rxPacket)}>RX</span>
+                            : <span className="dir-badge err">ERR</span>
                           }
                         </div>
                         <div className="px-3 py-1.5 flex-1 min-w-0">
                           {rxHex
                             ? <HexCell hex={rxHex} dir={isErrOutcome ? 'tx' : 'rx'} />
-                            : <span className="text-red-400 text-[10px]">{result?.errorMsg}</span>
+                            : <span className="text-[10px]" style={{ color: 'var(--status-err)' }}>{result?.errorMsg}</span>
                           }
                         </div>
                       </div>
@@ -569,6 +520,7 @@ export function Sequence() {
           })}
         </>)}
       </div>
+
       {exportContent !== null && (
         <ExportDialog
           defaultFilename="sequences.seq"

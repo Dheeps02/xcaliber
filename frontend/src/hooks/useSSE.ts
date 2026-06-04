@@ -52,6 +52,7 @@ export function useSSE() {
 
         if (msg.event === 'packet_tx' || msg.event === 'packet_rx') {
           pendingPktsRef.current.push(msg.data as PacketEntry);
+          if (pendingPktsRef.current.length > 2000) pendingPktsRef.current = pendingPktsRef.current.slice(-2000);
           scheduleFlush();
 
         } else if (msg.event === 'state_changed') {
@@ -75,6 +76,7 @@ export function useSSE() {
 
         } else if (msg.event === 'daq_dto') {
           const d = msg.data as DaqDtoEvent;
+          const now = Date.now();
           const updates: Parameters<typeof batchUpdateDaqLiveValues>[0] = [];
           const daqLists = useAppStore.getState().daqLists;
           for (const list of daqLists) {
@@ -84,16 +86,16 @@ export function useSSE() {
               for (const entry of odt.entries) {
                 const val = d.values[entry.name];
                 if (val !== undefined) {
-                  updates.push({ listId: d.list_id, odtId: d.odt_id, name: entry.name, addr: entry.addr, type: entry.type_name, value: val });
+                  updates.push({ listId: d.list_id, odtId: d.odt_id, name: entry.name, addr: entry.addr, type: entry.type_name, value: val, ts: now });
                 }
               }
             }
           }
           if (updates.length > 0) {
             pendingDaqRef.current.push(...updates);
+            if (pendingDaqRef.current.length > 10_000) pendingDaqRef.current = pendingDaqRef.current.slice(-10_000);
             scheduleFlush();
           }
-          const now = Date.now();
           dtoCountRef.current.count += 1;
           if (now - dtoCountRef.current.windowStart >= 1000) {
             const rate = Math.round(dtoCountRef.current.count / ((now - dtoCountRef.current.windowStart) / 1000));

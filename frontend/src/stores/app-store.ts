@@ -4,6 +4,26 @@ import { CMD_DEFS } from '../lib/cmd-defs';
 
 const NUM_CELLS = 8;
 
+export const SPARK_ZOOM_MIN_MS     =  500;
+export const SPARK_ZOOM_MAX_MS     = 30_000;
+export const SPARK_ZOOM_DEFAULT_MS =  8_000;
+
+const HISTORY_WINDOW_MS  = SPARK_ZOOM_MAX_MS + 2_000; // always enough for max zoom
+const HISTORY_MAX_POINTS = 10_000; // safety cap for very fast event channels
+
+function trimHistory(
+  existing: { value: number; ts: number }[],
+  newEntry: { value: number; ts: number },
+): { value: number; ts: number }[] {
+  const cutoff = newEntry.ts - HISTORY_WINDOW_MS;
+  let start = 0;
+  // history is oldest-first, so walk from the front until we reach the cutoff
+  while (start < existing.length - 1 && existing[start].ts < cutoff) start++;
+  const base = start > 0 ? existing.slice(start) : existing;
+  const next = [...base, newEntry];
+  return next.length > HISTORY_MAX_POINTS ? next.slice(-HISTORY_MAX_POINTS) : next;
+}
+
 export interface Toast {
   id: number;
   message: string;
@@ -28,6 +48,7 @@ interface AppStore {
   byteValues: string[];
   theme: string;
   uiZoom: number;
+  sparkWindowMs: number;
   displayTimeoutMs: number;
   animationsEnabled: boolean;
   toasts: Toast[];
@@ -45,6 +66,7 @@ interface AppStore {
   setByteValue: (idx: number, val: string) => void;
   setTheme: (theme: string) => void;
   setUiZoom: (zoom: number) => void;
+  setSparkWindowMs: (ms: number) => void;
   setDisplayTimeoutMs: (ms: number) => void;
   setAnimationsEnabled: (v: boolean) => void;
   showToast: (message: string, type?: Toast['type'], detail?: string) => void;
@@ -62,8 +84,8 @@ interface AppStore {
   daqDtoRate: number;
   setDaqStatus: (s: DaqStatus) => void;
   setDaqLists: (lists: DaqList[]) => void;
-  updateDaqLiveValue: (listId: number, odtId: number, name: string, addr: number, type: DaqEntryType, value: number) => void;
-  batchUpdateDaqLiveValues: (updates: { listId: number; odtId: number; name: string; addr: number; type: DaqEntryType; value: number }[]) => void;
+  updateDaqLiveValue: (listId: number, odtId: number, name: string, addr: number, type: DaqEntryType, value: number, ts: number) => void;
+  batchUpdateDaqLiveValues: (updates: { listId: number; odtId: number; name: string; addr: number; type: DaqEntryType; value: number; ts: number }[]) => void;
   setDaqDtoRate: (n: number) => void;
   clearDaqLiveValues: () => void;
   a2lVariables: A2lVariable[];
@@ -167,6 +189,7 @@ export const useAppStore = create<AppStore>((set) => ({
   byteValues: Array<string>(NUM_CELLS).fill(''),
   theme: 'default',
   uiZoom: Number(localStorage.getItem('uiZoom') ?? 1.2),
+  sparkWindowMs: Math.min(Number(localStorage.getItem('sparkWindowMs') ?? SPARK_ZOOM_DEFAULT_MS), SPARK_ZOOM_MAX_MS),
   displayTimeoutMs: 2000,
   animationsEnabled: true,
   toasts: [],
@@ -261,6 +284,7 @@ export const useAppStore = create<AppStore>((set) => ({
 
   setTheme: (theme) => set({ theme }),
   setUiZoom: (uiZoom) => { localStorage.setItem('uiZoom', String(uiZoom)); set({ uiZoom }); },
+  setSparkWindowMs: (sparkWindowMs) => { localStorage.setItem('sparkWindowMs', String(sparkWindowMs)); set({ sparkWindowMs }); },
   setDisplayTimeoutMs: (displayTimeoutMs) => set({ displayTimeoutMs }),
   setAnimationsEnabled: (animationsEnabled) => set({ animationsEnabled }),
   showToast: (message, type = 'info', detail) =>
@@ -309,11 +333,12 @@ export const useAppStore = create<AppStore>((set) => ({
   settingsInitialTab: 'appearance',
   openSettings: (tab = 'appearance') => set({ settingsOpen: true, settingsInitialTab: tab }),
   closeSettings: () => set({ settingsOpen: false }),
-  updateDaqLiveValue: (listId, odtId, name, addr, type, value) =>
+  updateDaqLiveValue: (listId, odtId, name, addr, type, value, ts) =>
     set((s) => {
       const key = `${listId}:${odtId}:${name}`;
       const existing = s.daqLiveValues.get(key);
-      const history = existing ? [...existing.history.slice(-199), value] : [value];
+      const entry = { value, ts };
+      const history = existing ? trimHistory(existing.history, entry) : [entry];
       const next = new Map(s.daqLiveValues);
       next.set(key, { listId, odtId, entryName: name, addr, typeName: type, value, history });
       return { daqLiveValues: next };
@@ -322,10 +347,11 @@ export const useAppStore = create<AppStore>((set) => ({
   batchUpdateDaqLiveValues: (updates) =>
     set((s) => {
       const next = new Map(s.daqLiveValues);
-      for (const { listId, odtId, name, addr, type, value } of updates) {
+      for (const { listId, odtId, name, addr, type, value, ts } of updates) {
         const key = `${listId}:${odtId}:${name}`;
         const existing = next.get(key);
-        const history = existing ? [...existing.history.slice(-199), value] : [value];
+        const entry = { value, ts };
+        const history = existing ? trimHistory(existing.history, entry) : [entry];
         next.set(key, { listId, odtId, entryName: name, addr, typeName: type, value, history });
       }
       return { daqLiveValues: next };

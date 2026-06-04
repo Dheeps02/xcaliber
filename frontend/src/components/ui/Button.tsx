@@ -1,9 +1,11 @@
 import { forwardRef } from 'react';
 
 type Variant = 'default' | 'primary' | 'ghost' | 'upload' | 'download';
+type Intent  = 'success' | 'danger' | 'warning';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
+  intent?: Intent;
   on?: boolean;
 }
 
@@ -16,10 +18,11 @@ const variantClass: Record<Variant, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'default', on, className = '', children, ...props }, ref) => {
+  ({ variant = 'default', intent, on, className = '', children, ...props }, ref) => {
     const cls = [
       'xcb-btn',
       variantClass[variant],
+      intent ? `intent-${intent}` : '',
       on ? 'on' : '',
       className,
     ].filter(Boolean).join(' ');

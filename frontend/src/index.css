@@ -12,19 +12,27 @@
 
 /* ── Semantic tokens ──────────────────────────────────────────────── */
 :root {
-  --surface-base:    var(--color-gray-950);
-  --surface-raised:  var(--color-gray-900);
-  --surface-overlay: var(--color-gray-800);
-  --surface-hover:   var(--color-gray-700);
-  --border:          rgba(255,255,255,0.07);
-  --border-strong:   rgba(255,255,255,0.12);
-  --text-primary:    var(--color-gray-100);
-  --text-secondary:  var(--color-gray-300);
-  --text-muted:      var(--color-gray-500);
-  --accent:          #22d3ee;
+  /* Near-black blue-tinted surfaces — reads as hardware, not SaaS grey */
+  --surface-base:    #080c12;
+  --surface-raised:  #0d1520;
+  --surface-overlay: #14202f;
+  --surface-hover:   #1b2c3e;
+
+  --accent:          #00e5ff;  /* saturated cyan — oscilloscope / industrial */
+
+  /* Borders pick up a faint accent tint so panels feel illuminated */
+  --border:          color-mix(in srgb, var(--accent) 8%, rgba(255,255,255,0.06));
+  --border-strong:   color-mix(in srgb, var(--accent) 10%, rgba(255,255,255,0.13));
+
+  /* Text — very slightly blue-shifted whites */
+  --text-primary:    #e6f0ff;
+  --text-secondary:  #8fa8c4;
+  --text-muted:      #445870;
+
   --status-ok:       #4ade80;
   --status-err:      #f87171;
-  --tx:              #60a5fa;
+  --status-warn:     #fbbf24;
+  --tx:              #38bdf8;
   --rx:              #4ade80;
 }
 
@@ -63,8 +71,9 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 
 /* Button */
 .xcb-btn {
+  --btn-color: var(--accent);
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  padding: 5px 11px; border-radius: 8px;
+  padding: 5px 11px; border-radius: 5px;
   border: 1px solid var(--border-strong);
   background: var(--surface-overlay);
   background-image: linear-gradient(180deg, rgba(255,255,255,0.055) 0%, transparent 60%);
@@ -82,9 +91,9 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 .xcb-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .xcb-btn.primary {
-  background: var(--accent);
+  background: var(--btn-color);
   background-image: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 60%);
-  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  border-color: color-mix(in srgb, var(--btn-color) 50%, transparent);
   color: #03101a; font-weight: 600;
 }
 .xcb-btn.primary:hover:not(:disabled) {
@@ -103,6 +112,27 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 }
 .xcb-btn.ghost.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 28%, transparent); }
 
+/* Intent variants — set --btn-color, then ghost uses it */
+.xcb-btn.intent-success { --btn-color: var(--status-ok); }
+.xcb-btn.intent-danger  { --btn-color: var(--status-err); }
+.xcb-btn.intent-warning { --btn-color: var(--status-warn); }
+
+.xcb-btn.ghost.intent-success,
+.xcb-btn.ghost.intent-danger,
+.xcb-btn.ghost.intent-warning {
+  color: var(--btn-color);
+  border-color: color-mix(in srgb, var(--btn-color) 35%, transparent);
+  background: color-mix(in srgb, var(--btn-color) 12%, transparent);
+  background-image: none;
+}
+.xcb-btn.ghost.intent-success:hover:not(:disabled),
+.xcb-btn.ghost.intent-danger:hover:not(:disabled),
+.xcb-btn.ghost.intent-warning:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-color) 20%, transparent);
+  border-color: color-mix(in srgb, var(--btn-color) 50%, transparent);
+  filter: none;
+}
+
 .xcb-btn.upload-btn {
   color: var(--rx); border-color: color-mix(in srgb, var(--rx) 25%, transparent);
   background: color-mix(in srgb, var(--rx) 8%, transparent);
@@ -120,6 +150,7 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
   background: var(--surface-base);
   border: 1px solid var(--border); border-radius: 9px;
   padding: 3px; gap: 2px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.45);
 }
 .xcb-segment.sm { padding: 2px; border-radius: 7px; }
 .xcb-seg-btn {
@@ -535,6 +566,24 @@ select {
   transition: border-color 150ms ease, background-color 150ms ease;
 }
 
+/* ── Input / Select design system ──────────────────────────────── */
+.xcb-input:focus,
+.xcb-select:focus {
+  border-color: var(--accent) !important;
+  outline: none;
+}
+.xcb-select {
+  background-color: var(--surface-overlay);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 11px;
+  height: 24px;
+  padding: 0 18px 0 7px;
+  outline: none;
+  width: 100%;
+}
+
 /* ── DAQ LED states ─────────────────────────────────────────────── */
 @keyframes blink-pulse-yellow {
   0%, 100% { opacity: 1; box-shadow: 0 0 6px 2px rgba(251,191,36,.6); }
@@ -549,12 +598,12 @@ select {
   box-shadow: 0 0 4px 1px rgba(75,85,99,.4);
 }
 .blinker-green {
-  background: #22c55e;
-  box-shadow: 0 0 6px 2px rgba(34,197,94,.5);
+  background: var(--status-ok);
+  box-shadow: 0 0 6px 2px color-mix(in srgb, var(--status-ok) 50%, transparent);
 }
 .blinker-red {
-  background: #ef4444;
-  box-shadow: 0 0 6px 2px rgba(239,68,68,.5);
+  background: var(--status-err);
+  box-shadow: 0 0 6px 2px color-mix(in srgb, var(--status-err) 50%, transparent);
 }
 
 /* ── Sequence tab ───────────────────────────────────────────────── */
@@ -565,41 +614,41 @@ select {
   padding: 5px 12px 5px 16px;
   cursor: pointer;
   user-select: none;
-  border-bottom: 1px solid rgba(31,41,55,0.9);
+  border-bottom: 1px solid var(--border);
   transition: background 100ms;
 }
-.seq-step-hdr:hover { background: rgba(55,65,81,0.18); }
+.seq-step-hdr:hover { background: var(--surface-raised); }
 .seq-step-hdr.active {
-  background: rgba(59,130,246,0.07);
-  border-left: 2px solid #3b82f6;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-left: 2px solid var(--accent);
   padding-left: 14px;
 }
 .seq-step-status {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  border: 2px solid #4b5563;
+  border: 2px solid var(--border-strong);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 200ms;
 }
-.seq-step-status.pass    { border-color: #22c55e; background: #22c55e; }
-.seq-step-status.fail    { border-color: #ef4444; background: #ef4444; }
-.seq-step-status.skipped { border-color: #374151; background: #374151; }
+.seq-step-status.pass    { border-color: var(--status-ok);  background: var(--status-ok); }
+.seq-step-status.fail    { border-color: var(--status-err); background: var(--status-err); }
+.seq-step-status.skipped { border-color: var(--border-strong); background: var(--surface-overlay); }
 .seq-step-status.running {
-  border-color: #fbbf24;
+  border-color: var(--status-warn);
   animation: result-pulse 0.9s ease-in-out infinite;
 }
 @keyframes result-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 .seq-step-detail {
-  background: rgba(3,7,18,0.5);
-  border-bottom: 1px solid rgba(31,41,55,0.9);
+  background: var(--surface-base);
+  border-bottom: 1px solid var(--border);
 }
 .resp-toggle {
   display: inline-flex;
-  border: 1px solid #374151;
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
   overflow: hidden;
   flex-shrink: 0;
@@ -607,7 +656,7 @@ select {
 .resp-btn {
   padding: 2px 6px;
   font-size: 9px;
-  color: #6b7280;
+  color: var(--text-muted);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -615,82 +664,45 @@ select {
   font-weight: 600;
   letter-spacing: .02em;
 }
-.resp-btn:hover { color: #d1d5db; background: rgba(55,65,81,0.5); }
-.resp-btn.active { background: #374151; color: #d1d5db; }
-.resp-btn.active[data-val="neg"] { background: rgba(239,68,68,0.15); color: #f87171; }
-.resp-btn.active[data-val="pos"] { background: rgba(34,197,94,0.15); color: #4ade80; }
+.resp-btn:hover { color: var(--text-primary); background: var(--surface-raised); }
+.resp-btn.active { background: var(--surface-overlay); color: var(--text-primary); }
+.resp-btn.active[data-val="neg"] { background: color-mix(in srgb, var(--status-err) 15%, transparent); color: var(--status-err); }
+.resp-btn.active[data-val="pos"] { background: color-mix(in srgb, var(--status-ok)  15%, transparent); color: var(--status-ok); }
 
-/* ── DAQ tree components ────────────────────────────────────────── */
-.daq-list-card {
-  background: color-mix(in srgb, var(--color-gray-900) 60%, transparent);
-  border: 1px solid var(--color-gray-800);
-  border-radius: 6px;
-  overflow: hidden;
-  animation: daq-enter 180ms ease-out;
-}
-.daq-list-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  cursor: pointer;
-  user-select: none;
-  background: color-mix(in srgb, var(--color-gray-800) 40%, transparent);
-  transition: background 120ms ease;
-}
-.daq-list-header:hover { background: color-mix(in srgb, var(--color-gray-700) 40%, transparent); }
-.daq-list-body { padding: 4px 4px 4px 8px; }
-.daq-odt-card {
-  margin-bottom: 2px;
-  border-radius: 4px;
-  overflow: hidden;
-  animation: daq-enter 160ms ease-out;
-}
-.daq-odt-header {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 6px;
-  font-size: 10px;
-  color: var(--color-gray-500);
-  cursor: pointer;
-  user-select: none;
-  transition: background 120ms ease;
-  border-radius: 4px;
-}
-.daq-odt-header:hover { background: color-mix(in srgb, var(--color-gray-700) 30%, transparent); }
-.daq-odt-body { padding: 1px 2px 2px 12px; }
-.daq-entry-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 4px;
-  cursor: pointer;
+/* ── Direction badges (TX / RX / ERR inline labels) ────────────── */
+.dir-badge {
+  padding: 1px 6px;
   border-radius: 3px;
-  transition: background 100ms ease;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid transparent;
 }
-.daq-entry-row:hover { background: color-mix(in srgb, var(--color-gray-700) 40%, transparent); }
+.dir-badge.tx  { background: color-mix(in srgb, var(--tx) 12%, transparent); color: var(--tx);         border-color: color-mix(in srgb, var(--tx)         40%, transparent); }
+.dir-badge.rx  { background: color-mix(in srgb, var(--rx) 12%, transparent); color: var(--rx);         border-color: color-mix(in srgb, var(--rx)         40%, transparent); }
+.dir-badge.err { background: color-mix(in srgb, var(--status-err) 12%, transparent); color: var(--status-err); border-color: color-mix(in srgb, var(--status-err) 40%, transparent); }
 
-/* ── DAQ row enter animation ────────────────────────────────────── */
-@keyframes daq-row-enter-anim {
-  from { opacity: 0; transform: translateX(-6px); }
-  to   { opacity: 1; transform: translateX(0); }
+/* ── Pill toggle (boolean toolbar controls) ─────────────────────── */
+.xcb-pill {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 500;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 120ms, background 120ms, border-color 120ms;
+  white-space: nowrap;
 }
-.daq-row-enter {
-  animation: daq-row-enter-anim 280ms cubic-bezier(0.34,1.20,0.64,1) both;
+.xcb-pill:hover:not(:disabled) { color: var(--text-primary); background: var(--surface-overlay); }
+.xcb-pill.active {
+  background: color-mix(in srgb, var(--status-warn) 15%, transparent);
+  border-color: color-mix(in srgb, var(--status-warn) 40%, transparent);
+  color: var(--status-warn);
 }
+.xcb-pill:disabled { opacity: 0.4; cursor: not-allowed; }
 
-@keyframes daq-row-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes daq-plot-reveal {
-  from { clip-path: inset(0 100% 0 0); }
-  to   { clip-path: inset(0 0% 0 0); }
-}
-
-/* ── DAQ tree add/remove animations ─────────────────────────────── */
+/* ── DAQ animations ─────────────────────────────────────────────── */
 @keyframes daq-enter {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -704,19 +716,25 @@ select {
   pointer-events: none;
   overflow: hidden;
 }
+@keyframes daq-row-enter-anim {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.daq-row-enter {
+  animation: daq-row-enter-anim 280ms cubic-bezier(0.34,1.20,0.64,1) both;
+}
 @keyframes daq-moved-flash {
-  0%   { background-color: rgb(59 130 246 / 0.20); }
+  0%   { background-color: color-mix(in srgb, var(--accent) 20%, transparent); }
   100% { background-color: transparent; }
 }
-.daq-moved {
-  animation: daq-moved-flash 450ms ease-out;
+.daq-moved { animation: daq-moved-flash 450ms ease-out; }
+
+/* waveform icon — pulses to ODT color when signal is live */
+@keyframes waveform-live-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
 }
-.daq-drag-over-above {
-  box-shadow: 0 -2px 0 0 #3b82f6;
-}
-.daq-drag-over-below {
-  box-shadow: 0 2px 0 0 #3b82f6;
-}
+.waveform-live { animation: waveform-live-pulse 1.2s ease-in-out infinite; }
 
 /* ── Tab panel transitions ───────────────────────────────────────── */
 

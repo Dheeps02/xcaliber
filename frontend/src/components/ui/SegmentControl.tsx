@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, type ReactNode } from 'react';
+import { useRef, useLayoutEffect, type ReactNode } from 'react';
 
 type SegVariant = 'text' | 'icon' | 'icon-text';
 
@@ -17,6 +17,8 @@ interface SegmentControlProps<T extends string> {
   className?: string;
 }
 
+const SPRING = 'transform 320ms cubic-bezier(0.34, 1.25, 0.64, 1), width 240ms cubic-bezier(0.34, 1.25, 0.64, 1)';
+
 export function SegmentControl<T extends string>({
   items,
   value,
@@ -25,45 +27,59 @@ export function SegmentControl<T extends string>({
   variant = 'text',
   className = '',
 }: SegmentControlProps<T>) {
-  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const mounted = useRef(false);
-  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+  const btnRefs  = useRef<(HTMLButtonElement | null)[]>([]);
+  const thumbRef = useRef<HTMLDivElement>(null);
+  const ready    = useRef(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const idx = items.findIndex((i) => i.value === value);
     const btn = btnRefs.current[idx];
-    if (!btn) return;
-    setThumb({ left: btn.offsetLeft, width: btn.offsetWidth });
-    mounted.current = true;
+    const el  = thumbRef.current;
+    if (!btn || !el) return;
+
+    const x = btn.offsetLeft;
+    const w = btn.offsetWidth;
+
+    if (!ready.current) {
+      // Snap thumb to its initial position before the browser has painted.
+      // `void el.offsetWidth` flushes pending style recalcs so the browser
+      // treats the current position as the settled "from" state. Only after
+      // that flush do we enable the spring, preventing it from firing.
+      el.style.transform  = `translateX(${x}px)`;
+      el.style.width      = `${w}px`;
+      el.style.opacity    = '1';
+      void el.offsetWidth;
+      el.style.transition = SPRING;
+      ready.current = true;
+    } else {
+      el.style.transform = `translateX(${x}px)`;
+      el.style.width     = `${w}px`;
+    }
   }, [value, items]);
 
   const radius = size === 'sm' ? '5px' : '6px';
 
   return (
-    <div className={`xcb-segment${size === 'sm' ? ' sm' : ''} ${className}`} style={{ position: 'relative' }}>
+    <div className={`xcb-segment${size === 'sm' ? ' sm' : ''} ${className}`} style={{ position: 'relative', overflow: 'hidden' }}>
 
-      {/* Sliding thumb */}
-      {thumb && (
-        <div
-          aria-hidden
-          style={{
-            position: 'absolute',
-            top: size === 'sm' ? 2 : 3,
-            bottom: size === 'sm' ? 2 : 3,
-            left: 0,
-            width: thumb.width,
-            borderRadius: radius,
-            background: 'var(--surface-overlay)',
-            backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.055) 0%, transparent 60%)',
-            border: '1px solid var(--border-strong)',
-            transform: `translateX(${thumb.left}px)`,
-            transition: mounted.current
-              ? 'transform 220ms cubic-bezier(0.34, 1.1, 0.64, 1), width 150ms cubic-bezier(0.34, 1.1, 0.64, 1)'
-              : 'none',
-            pointerEvents: 'none',
-          }}
-        />
-      )}
+      {/* Thumb — positioned and revealed imperatively in useLayoutEffect */}
+      <div
+        ref={thumbRef}
+        aria-hidden
+        style={{
+          position: 'absolute',
+          top: size === 'sm' ? 2 : 3,
+          bottom: size === 'sm' ? 2 : 3,
+          left: 0,
+          width: 0,
+          opacity: 0,
+          borderRadius: radius,
+          background: 'var(--surface-overlay)',
+          backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.055) 0%, transparent 60%)',
+          border: '1px solid var(--border-strong)',
+          pointerEvents: 'none',
+        }}
+      />
 
       {items.map((item, i) => (
         <button

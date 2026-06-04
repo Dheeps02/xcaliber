@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>xcaliber — UI Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+
+    /* ── Tokens ───────────────────────────────────────────────────── */
+    :root {
+      --surface-base:    #0a0a0a;
+      --surface-raised:  #141414;
+      --surface-overlay: #1e1e1e;
+      --surface-hover:   #282828;
+      --border:          rgba(255,255,255,0.07);
+      --border-strong:   rgba(255,255,255,0.13);
+      --text-primary:    #f5f5f5;
+      --text-secondary:  #a1a1aa;
+      --text-muted:      #52525b;
+      --accent:          #22d3ee;
+      --status-ok:       #4ade80;
+      --status-err:      #f87171;
+      --tx:              #60a5fa;
+      --rx:              #4ade80;
+    }
+
+    /* ── Reset ────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--surface-base);
+      color: var(--text-primary);
+      font-size: 13px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    summary { list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+
+    /* ── Button ───────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+      padding: 5px 11px; border-radius: 8px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-overlay);
+      background-image: linear-gradient(180deg, rgba(255,255,255,0.055) 0%, transparent 60%);
+      color: var(--text-secondary); font-size: 12px;
+      font-family: inherit; font-weight: 500;
+      cursor: pointer; white-space: nowrap; flex-shrink: 0;
+      transition: background 80ms, color 80ms;
+    }
+    .btn:hover {
+      background: var(--surface-hover);
+      background-image: linear-gradient(180deg, rgba(255,255,255,0.07) 0%, transparent 60%);
+      color: var(--text-primary);
+    }
+    .btn.primary {
+      background: var(--accent);
+      background-image: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 60%);
+      border-color: rgba(34,211,238,0.35);
+      color: #071a1e; font-weight: 600;
+    }
+    .btn.primary:hover { filter: brightness(1.08); }
+    .btn.ghost {
+      background: transparent; background-image: none;
+      border-color: transparent; color: var(--text-muted);
+    }
+    .btn.ghost:hover {
+      background: var(--surface-overlay);
+      background-image: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+      border-color: var(--border); color: var(--text-secondary);
+    }
+    .btn.ghost.on { color: var(--accent); border-color: rgba(34,211,238,0.28); }
+    .btn.upload-btn {
+      color: var(--rx); border-color: rgba(74,222,128,0.22);
+      background: rgba(74,222,128,0.055);
+      background-image: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+    }
+    .btn.download-btn {
+      color: var(--tx); border-color: rgba(96,165,250,0.22);
+      background: rgba(96,165,250,0.055);
+      background-image: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+    }
+
+    /* ── Segment control ──────────────────────────────────────────── */
+    .segment {
+      display: inline-flex; align-items: center;
+      background: var(--surface-base);
+      border: 1px solid var(--border); border-radius: 9px;
+      padding: 3px; gap: 2px;
+    }
+    .segment.sm { padding: 2px; border-radius: 7px; }
+    .seg-btn {
+      padding: 4px 14px; border-radius: 6px;
+      font-size: 12px; font-weight: 500;
+      color: var(--text-muted); cursor: pointer;
+      border: 1px solid transparent; background: none;
+      font-family: inherit; transition: all 100ms;
+    }
+    .segment.sm .seg-btn { padding: 3px 9px; font-size: 11px; border-radius: 5px; }
+    .seg-btn:hover { color: var(--text-secondary); }
+    .seg-btn.active {
+      background: var(--surface-overlay);
+      background-image: linear-gradient(180deg, rgba(255,255,255,0.055) 0%, transparent 60%);
+      border-color: var(--border-strong); color: var(--text-primary);
+    }
+
+    /* ── LED + misc ───────────────────────────────────────────────── */
+    .led { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .led.on  { background: var(--status-ok);  box-shadow: 0 0 6px 2px rgba(74,222,128,0.45); }
+    .led.off { background: var(--status-err); box-shadow: 0 0 6px 2px rgba(248,113,113,0.45); }
+    .vdiv    { width: 1px; height: 18px; background: var(--border); flex-shrink: 0; }
+    .spacer  { flex: 1; }
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    .header {
+      height: 44px; display: flex; align-items: center;
+      padding: 0 14px; gap: 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-raised);
+      background-image: linear-gradient(180deg, rgba(255,255,255,0.018) 0%, transparent 100%);
+      flex-shrink: 0;
+    }
+    .hdr-l { display: flex; align-items: center; gap: 10px; min-width: 160px; }
+    .hdr-c { flex: 1; display: flex; justify-content: center; }
+    .hdr-r { display: flex; align-items: center; gap: 10px; min-width: 160px; justify-content: flex-end; }
+    .app-name { font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+    .conn-status { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+    .counters { display: flex; align-items: center; gap: 6px; }
+    .cpair { display: flex; align-items: center; gap: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    .c-lbl { color: var(--text-muted); font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 500; }
+    .c-tx  { color: var(--tx); }
+    .c-rx  { color: var(--rx); }
+    .c-sep { color: var(--text-muted); font-size: 10px; }
+
+    /* ── Command bar ──────────────────────────────────────────────── */
+    details.cmd-bar {
+      background: var(--surface-raised);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    /* Summary row — the title bar with the slider */
+    details.cmd-bar > summary {
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 14px; height: 34px;
+      cursor: pointer; user-select: none;
+      border-bottom: 1px solid var(--border);
+      list-style: none;
+    }
+    details.cmd-bar > summary:hover { background: rgba(255,255,255,0.016); }
+    details.cmd-bar:not([open]) > summary { border-bottom: none; }
+
+    .cmd-name-trigger {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.07em; text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .cmd-icon { font-size: 12px; color: var(--text-muted); }
+
+    /* Section nav — only visible in build mode */
+    .sec-nav { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+    .sec-nav-btn {
+      width: 18px; height: 20px; display: flex; align-items: center; justify-content: center;
+      border-radius: 4px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted);
+      font-size: 12px; cursor: pointer; font-family: inherit; transition: all 100ms;
+    }
+    .sec-nav-btn:hover    { color: var(--text-primary); border-color: var(--border-strong); }
+    .sec-nav-btn:disabled { opacity: 0.22; cursor: not-allowed; }
+    .sec-nav-lbl {
+      font-size: 10px; color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      min-width: 56px; text-align: center;
+    }
+
+    .chevron { color: var(--text-muted); flex-shrink: 0; transition: transform 150ms ease; }
+    details.cmd-bar:not([open]) .chevron { transform: rotate(180deg); }
+
+    /* Build mode content */
+    .cmd-cells {
+      display: flex; gap: 6px; padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .cell { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .cell-lbl {
+      font-size: 9px; color: var(--text-muted); text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .cell-val {
+      border: 1px solid var(--border); background: var(--surface-base);
+      border-radius: 5px; padding: 6px 2px;
+      font-size: 11px; font-family: 'JetBrains Mono', monospace;
+      color: var(--text-secondary); text-align: center; transition: border-color 100ms;
+    }
+    .cell-val:hover  { border-color: var(--border-strong); }
+    .cell-val.locked { color: var(--text-muted); background: var(--surface-overlay); }
+    .cell-val.hi     { border-color: var(--accent); color: var(--accent); }
+    .cmd-action { display: flex; gap: 6px; padding: 7px 14px; }
+
+    /* Memory mode content */
+    .mem-content {
+      display: flex; align-items: flex-end; gap: 8px;
+      padding: 8px 14px;
+    }
+    .mf { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+    .mf.grow { flex: 1; min-width: 0; }
+    .mf-lbl {
+      font-size: 9px; color: var(--text-muted);
+      font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
+    }
+    .mf-input {
+      border: 1px solid var(--border); background: var(--surface-base);
+      border-radius: 5px; padding: 6px 10px;
+      font-size: 11px; font-family: 'JetBrains Mono', monospace;
+      color: var(--text-secondary);
+    }
+
+    /* ── Trace toolbar ────────────────────────────────────────────── */
+    .trace-bar {
+      height: 36px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 14px; border-bottom: 1px solid var(--border);
+      background: var(--surface-raised); flex-shrink: 0;
+    }
+    .tbar-l { display: flex; align-items: center; gap: 6px; }
+    .tbar-r { display: flex; align-items: center; gap: 6px; }
+
+    /* ── Trace table ──────────────────────────────────────────────── */
+    .trace-wrap { flex: 1; overflow-y: auto; }
+    .trace-head {
+      display: grid; grid-template-columns: minmax(160px,1.2fr) 110px 1fr;
+      padding: 5px 16px 5px 20px;
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em;
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
+      background: var(--surface-raised); position: sticky; top: 0; z-index: 2;
+    }
+    .trace-row {
+      display: grid; grid-template-columns: minmax(160px,1.2fr) 110px 1fr;
+      padding: 8px 16px 8px 0; border-bottom: 1px solid var(--border);
+      cursor: pointer; position: relative; transition: background 70ms;
+    }
+    .trace-row::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+      width: 3px; border-radius: 0 2px 2px 0;
+    }
+    .trace-row.tx  { background: rgba(96,165,250,0.022); }
+    .trace-row.rx  { background: rgba(74,222,128,0.016); }
+    .trace-row.err { background: rgba(248,113,113,0.028); }
+    .trace-row.tx::before  { background: var(--tx); }
+    .trace-row.rx::before  { background: var(--rx); }
+    .trace-row.err::before { background: var(--status-err); }
+    .trace-row:hover.tx  { background: rgba(96,165,250,0.055); }
+    .trace-row:hover.rx  { background: rgba(74,222,128,0.044); }
+    .trace-row:hover.err { background: rgba(248,113,113,0.065); }
+    .trace-row.open { background: var(--surface-overlay) !important; border-bottom: none; }
+    .col-cmd { padding-left: 20px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .r-name  { font-weight: 500; font-size: 12px; }
+    .r-ctr   { font-size: 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+    .col-time { display: flex; align-items: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); }
+    .col-hex  { display: flex; align-items: center; gap: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; flex-wrap: wrap; }
+    .hb.tx  { color: var(--tx); }
+    .hb.rx  { color: var(--rx); }
+    .hb.err { color: var(--status-err); }
+    .expand-panel {
+      padding: 10px 16px 13px 20px; border-left: 3px solid transparent;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-overlay); display: none;
+    }
+    .expand-panel.visible { display: block; }
+    .expand-panel.tx  { border-left-color: var(--tx); }
+    .expand-panel.rx  { border-left-color: var(--rx); }
+    .expand-panel.err { border-left-color: var(--status-err); }
+    .exp-hdr { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 9px; }
+    .exp-hdr.tx  { color: var(--tx); }
+    .exp-hdr.rx  { color: var(--rx); }
+    .exp-hdr.err { color: var(--status-err); }
+    .exp-grid { display: grid; grid-template-columns: 150px 1fr; row-gap: 4px; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+    .fk { color: var(--text-muted); }
+    .fv.tx  { color: var(--tx); }
+    .fv.rx  { color: var(--rx); }
+    .fv.err { color: var(--status-err); }
+
+    /* ── Scrollbar ────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+  </style>
+</head>
+<body>
+
+  <!-- ── HEADER ───────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="hdr-l">
+      <span class="app-name">xcaliber</span>
+      <div class="conn-status">
+        <div class="led on"></div>
+        <span>Connected</span>
+      </div>
+    </div>
+    <div class="hdr-c">
+      <div class="segment">
+        <button class="seg-btn active" onclick="seg(this)">Trace</button>
+        <button class="seg-btn" onclick="seg(this)">DAQ</button>
+        <button class="seg-btn" onclick="seg(this)">Sequence</button>
+      </div>
+    </div>
+    <div class="hdr-r">
+      <div class="counters">
+        <div class="cpair"><span class="c-lbl">TX</span><span class="c-tx">42</span></div>
+        <span class="c-sep">·</span>
+        <div class="cpair"><span class="c-lbl">RX</span><span class="c-rx">41</span></div>
+      </div>
+      <div class="vdiv"></div>
+      <button class="btn ghost" style="padding:5px;width:28px;height:28px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── COMMAND BAR ──────────────────────────────────────────────── -->
+  <details class="cmd-bar" open>
+    <summary onclick="event.preventDefault()">
+
+      <!-- Left: context-sensitive label -->
+      <div id="build-label" style="display:flex;align-items:center;gap:8px;">
+        <span class="cmd-name-trigger"><span class="cmd-icon">⌘</span> CONNECT</span>
+        <div class="sec-nav" onclick="event.stopPropagation()">
+          <button class="sec-nav-btn" disabled>‹</button>
+          <span class="sec-nav-lbl">Bytes 0–7</span>
+          <button class="sec-nav-btn">›</button>
+        </div>
+      </div>
+      <div id="mem-label" style="display:none;align-items:center;">
+        <span class="cmd-name-trigger" style="color:var(--text-muted);">Memory</span>
+      </div>
+
+      <div class="spacer"></div>
+
+      <!-- Right: mode toggle + collapse -->
+      <div class="segment sm" onclick="event.stopPropagation()">
+        <button class="seg-btn active" onclick="switchMode('build')">Build</button>
+        <button class="seg-btn" onclick="switchMode('memory')">Memory</button>
+      </div>
+      <div style="width:8px;flex-shrink:0;"></div>
+      <svg class="chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" onclick="toggleBar(event)"><polyline points="18 15 12 9 6 15"/></svg>
+
+    </summary>
+
+    <!-- BUILD mode -->
+    <div id="build-body">
+      <div class="cmd-cells">
+        <div class="cell"><span class="cell-lbl">0</span><div class="cell-val locked">F2</div></div>
+        <div class="cell"><span class="cell-lbl">1 · Mode</span><div class="cell-val hi">00</div></div>
+        <div class="cell"><span class="cell-lbl">2</span><div class="cell-val">00</div></div>
+        <div class="cell"><span class="cell-lbl">3</span><div class="cell-val">00</div></div>
+        <div class="cell"><span class="cell-lbl">4</span><div class="cell-val">00</div></div>
+        <div class="cell"><span class="cell-lbl">5</span><div class="cell-val">00</div></div>
+        <div class="cell"><span class="cell-lbl">6</span><div class="cell-val">00</div></div>
+        <div class="cell"><span class="cell-lbl">7</span><div class="cell-val">00</div></div>
+      </div>
+      <div class="cmd-action">
+        <button class="btn primary" style="flex:1;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send
+        </button>
+      </div>
+    </div>
+
+    <!-- MEMORY mode -->
+    <div id="mem-body" style="display:none;">
+      <div class="mem-content">
+        <div class="mf">
+          <span class="mf-lbl">MTA Address</span>
+          <input class="mf-input" style="width:148px;" value="0x20000000" />
+        </div>
+        <button class="btn">Set MTA</button>
+        <div class="vdiv" style="height:28px;"></div>
+        <div class="mf">
+          <span class="mf-lbl">Size</span>
+          <input class="mf-input" style="width:48px;text-align:center;" value="8" />
+        </div>
+        <button class="btn upload-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+          Upload
+        </button>
+        <div class="vdiv" style="height:28px;"></div>
+        <div class="mf grow">
+          <span class="mf-lbl">Data</span>
+          <input class="mf-input" style="width:100%;" placeholder="FF 01 A3 00 …" />
+        </div>
+        <button class="btn download-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+          Download
+        </button>
+        <div class="vdiv" style="height:28px;"></div>
+        <button class="btn ghost" onclick="this.classList.toggle('on')">Auto SET_MTA</button>
+      </div>
+    </div>
+
+  </details>
+
+  <!-- ── TRACE TOOLBAR ─────────────────────────────────────────────── -->
+  <div class="trace-bar">
+    <div class="tbar-l">
+      <div class="segment sm">
+        <button class="seg-btn active" onclick="seg(this)">All</button>
+        <button class="seg-btn" onclick="seg(this)">TX</button>
+        <button class="seg-btn" onclick="seg(this)">RX</button>
+      </div>
+      <button class="btn ghost" style="font-size:11px;padding:4px 8px;gap:4px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        PID
+      </button>
+    </div>
+    <div class="tbar-r">
+      <button class="btn ghost" style="font-size:11px;padding:4px 8px;" onclick="this.classList.toggle('on')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
+        Auto-scroll
+      </button>
+      <button class="btn ghost" style="padding:4px;width:28px;height:28px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H7L3 4h18"/><path d="M6.6 8h13.4"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── TRACE TABLE ───────────────────────────────────────────────── -->
+  <div class="trace-wrap">
+    <div class="trace-head">
+      <span>Command</span><span>Time</span><span>Hex</span>
+    </div>
+
+    <div class="trace-row tx" onclick="expand(this,'tx','0xF2',[['Mode','0x00 (0)'],['Reserved','0x00 (0)']])">
+      <div class="col-cmd"><span class="r-name">Connect</span><span class="r-ctr">#42</span></div>
+      <div class="col-time">12:34:56.789</div>
+      <div class="col-hex"><span class="hb tx">F2</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">00</span></div>
+    </div>
+
+    <div class="trace-row rx" onclick="expand(this,'rx','0xFF',[['Max CTO','0x08 (8)'],['Max DTO','0x08 (8)'],['Proto Layer','0x01 (1)'],['Transport Layer','0x01 (1)']])">
+      <div class="col-cmd"><span class="r-name">Positive Response</span><span class="r-ctr">#43</span></div>
+      <div class="col-time">12:34:56.791</div>
+      <div class="col-hex"><span class="hb rx">FF</span><span class="hb rx">00</span><span class="hb rx">08</span><span class="hb rx">08</span><span class="hb rx">01</span><span class="hb rx">01</span><span class="hb rx">64</span><span class="hb rx">01</span></div>
+    </div>
+
+    <div class="trace-row tx" onclick="expand(this,'tx','0xF4',[['Length','0x04 (4)'],['Addr Extension','0x00 (0)'],['Addr','0x20000000']])">
+      <div class="col-cmd"><span class="r-name">Short Upload</span><span class="r-ctr">#44</span></div>
+      <div class="col-time">12:34:57.001</div>
+      <div class="col-hex"><span class="hb tx">F4</span><span class="hb tx">04</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">A0</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">20</span></div>
+    </div>
+
+    <div class="trace-row rx" onclick="expand(this,'rx','0xFF',[['Data','0A 1C 00 00']])">
+      <div class="col-cmd"><span class="r-name">Positive Response</span><span class="r-ctr">#45</span></div>
+      <div class="col-time">12:34:57.003</div>
+      <div class="col-hex"><span class="hb rx">FF</span><span class="hb rx">0A</span><span class="hb rx">1C</span><span class="hb rx">00</span><span class="hb rx">00</span></div>
+    </div>
+
+    <div class="trace-row tx" onclick="expand(this,'tx','0xF6',[['Addr Extension','0x00 (0)'],['Addr','0x20000000']])">
+      <div class="col-cmd"><span class="r-name">Set MTA</span><span class="r-ctr">#46</span></div>
+      <div class="col-time">12:34:57.210</div>
+      <div class="col-hex"><span class="hb tx">F6</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">20</span></div>
+    </div>
+
+    <div class="trace-row rx" onclick="expand(this,'rx','0xFF',[])">
+      <div class="col-cmd"><span class="r-name">Positive Response</span><span class="r-ctr">#47</span></div>
+      <div class="col-time">12:34:57.212</div>
+      <div class="col-hex"><span class="hb rx">FF</span><span class="hb rx">00</span></div>
+    </div>
+
+    <div class="trace-row err" onclick="expand(this,'err','0xFE',[['Error Code','0x00 — CMD_ERR']])">
+      <div class="col-cmd"><span class="r-name" style="color:var(--status-err)">Error Response</span><span class="r-ctr">#48</span></div>
+      <div class="col-time">12:34:57.500</div>
+      <div class="col-hex"><span class="hb err">FE</span><span class="hb err">00</span></div>
+    </div>
+
+    <div class="trace-row tx" onclick="expand(this,'tx','0xFC',[])">
+      <div class="col-cmd"><span class="r-name">Disconnect</span><span class="r-ctr">#49</span></div>
+      <div class="col-time">12:34:58.000</div>
+      <div class="col-hex"><span class="hb tx">FC</span><span class="hb tx">00</span><span class="hb tx">00</span><span class="hb tx">00</span></div>
+    </div>
+
+    <div class="trace-row rx" onclick="expand(this,'rx','0xFF',[])">
+      <div class="col-cmd"><span class="r-name">Positive Response</span><span class="r-ctr">#50</span></div>
+      <div class="col-time">12:34:58.002</div>
+      <div class="col-hex"><span class="hb rx">FF</span><span class="hb rx">00</span></div>
+    </div>
+  </div>
+
+  <script>
+    function seg(btn) {
+      btn.closest('.segment').querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function switchMode(mode) {
+      const build = mode === 'build';
+      document.getElementById('build-body').style.display = build ? '' : 'none';
+      document.getElementById('mem-body').style.display   = build ? 'none' : '';
+      document.getElementById('build-label').style.display = build ? 'flex' : 'none';
+      document.getElementById('mem-label').style.display   = build ? 'none' : 'flex';
+    }
+
+    function toggleBar(e) {
+      e.stopPropagation();
+      const d = document.querySelector('details.cmd-bar');
+      d.open = !d.open;
+    }
+
+    let openRow = null, openPanel = null;
+    function expand(row, dir, pid, fields) {
+      if (openPanel) { openPanel.remove(); openPanel = null; }
+      if (openRow)   { openRow.classList.remove('open'); }
+      if (openRow === row) { openRow = null; return; }
+      openRow = row;
+      row.classList.add('open');
+      const lbl  = dir === 'tx' ? '↑ TX' : dir === 'err' ? '✕ ERR' : '↓ RX';
+      const rows = fields.length
+        ? fields.map(([k,v]) => `<span class="fk">${k}</span><span class="fv ${dir}">${v}</span>`).join('')
+        : `<span class="fk" style="grid-column:span 2;font-style:italic;">no field data</span>`;
+      const p = document.createElement('div');
+      p.className = `expand-panel ${dir} visible`;
+      p.innerHTML = `<div class="exp-hdr ${dir}">${lbl} · PID ${pid}</div><div class="exp-grid">${rows}</div>`;
+      row.insertAdjacentElement('afterend', p);
+      openPanel = p;
+    }
+  </script>
+
+</body>
+</html>
