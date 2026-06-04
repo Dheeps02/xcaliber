@@ -52,10 +52,7 @@ html { overscroll-behavior: none; }
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background:
-    radial-gradient(ellipse 90% 45% at 25% 0%, rgba(16,185,129,0.06) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 85% 110%, rgba(16,185,129,0.03) 0%, transparent 45%),
-    var(--surface-base);
+  background: var(--surface-base);
   color: var(--text-primary);
   user-select: none;
   -webkit-user-drag: none;
@@ -64,6 +61,52 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 input, textarea, [contenteditable] { user-select: text; cursor: text; }
+
+/* ── Animated ambient gradient ────────────────────────────────────────── */
+.gradient-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.gradient-bg::before,
+.gradient-bg::after {
+  content: '';
+  position: absolute;
+}
+.gradient-bg::before {
+  width: 80%;
+  height: 55%;
+  top: -20%;
+  left: -15%;
+  background: radial-gradient(ellipse at center, rgba(16,185,129,0.09) 0%, transparent 70%);
+  animation: blob-drift-1 30s ease-in-out infinite;
+}
+.gradient-bg::after {
+  width: 55%;
+  height: 50%;
+  bottom: -15%;
+  right: -10%;
+  background: radial-gradient(ellipse at center, rgba(16,185,129,0.05) 0%, transparent 70%);
+  animation: blob-drift-2 38s ease-in-out infinite;
+}
+@keyframes blob-drift-1 {
+  0%   { transform: translate(0%,   0%); }
+  25%  { transform: translate(10%,  14%); }
+  50%  { transform: translate(18%,  6%); }
+  75%  { transform: translate(6%,   20%); }
+  100% { transform: translate(0%,   0%); }
+}
+@keyframes blob-drift-2 {
+  0%   { transform: translate(0%,   0%); }
+  25%  { transform: translate(-12%, -10%); }
+  50%  { transform: translate(-6%,  -18%); }
+  75%  { transform: translate(-14%, -6%); }
+  100% { transform: translate(0%,   0%); }
+}
+.no-animations .gradient-bg::before,
+.no-animations .gradient-bg::after { animation: none; }
 
 /* Thin scrollbar */
 ::-webkit-scrollbar { width: 4px; height: 4px; }

@@ -39,14 +39,15 @@ function AppInner() {
   return (
     <div
       className="h-screen flex flex-col overflow-hidden"
-      style={{ background: 'var(--surface-base)', color: 'var(--text-primary)' }}
+      style={{ position: 'relative', color: 'var(--text-primary)' }}
     >
+      <div className="gradient-bg" aria-hidden="true" />
       <Header />
       <CommandBar />
       <MemoryBar />
 
       {/* Tab content — all mounted, CSS controls visibility */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 relative overflow-hidden" style={{ background: 'var(--surface-base)' }}>
         <div className={`tab-panel ${activeMainTab === 'trace'    ? 'tab-panel-active' : 'tab-panel-inactive'}`}>
           <PacketTrace />
         </div>
