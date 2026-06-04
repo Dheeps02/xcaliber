@@ -362,7 +362,7 @@ export function PacketTrace() {
         {filtered.map((p) => {
           const isNew = animationWatermark !== null && p.id > animationWatermark && !cleanedUpIds.current.has(p.id);
           if (isNew && !staggerDelays.current.has(p.id)) {
-            staggerDelays.current.set(p.id, Math.min(staggerCounter.current, 3) * 60);
+            staggerDelays.current.set(p.id, Math.min(staggerCounter.current, 12) * 60);
             staggerCounter.current++;
           }
           const delay = staggerDelays.current.get(p.id) ?? 0;
