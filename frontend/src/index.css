@@ -19,7 +19,7 @@
   --surface-hover:   #252019;
   --surface-glass:   rgba(20,17,13,0.78);
 
-  --accent:          #f59e0b;   /* amber */
+  --accent:          #10b981;   /* emerald */
 
   --border:          rgba(255,255,255,0.07);
   --border-strong:   rgba(255,255,255,0.11);
@@ -53,8 +53,8 @@ body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background:
-    radial-gradient(ellipse 90% 45% at 25% 0%, rgba(245,158,11,0.07) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 85% 110%, rgba(245,158,11,0.04) 0%, transparent 45%),
+    radial-gradient(ellipse 90% 45% at 25% 0%, rgba(16,185,129,0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 85% 110%, rgba(16,185,129,0.03) 0%, transparent 45%),
     var(--surface-base);
   color: var(--text-primary);
   user-select: none;
