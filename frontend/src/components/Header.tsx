@@ -89,9 +89,9 @@ export function Header() {
   const seqRunning = seqRunResult?.status === 'running';
 
   const TAB_ITEMS = [
-    { value: 'trace'    as MainTab, label: 'Trace',    icon: <TraceIcon    size={20} animKey={traceAnimKey} /> },
-    { value: 'daq'      as MainTab, label: 'DAQ',      icon: <DaqIcon      size={20} animKey={daqAnimKey}   live={daqRunning} /> },
-    { value: 'sequence' as MainTab, label: 'Sequence', icon: <SequenceIcon size={20} animKey={seqAnimKey}   live={seqRunning} /> },
+    { value: 'trace'    as MainTab, label: 'Trace',    icon: <TraceIcon    size={18} animKey={traceAnimKey} /> },
+    { value: 'daq'      as MainTab, label: 'DAQ',      icon: <DaqIcon      size={18} animKey={daqAnimKey}   live={daqRunning} /> },
+    { value: 'sequence' as MainTab, label: 'Sequence', icon: <SequenceIcon size={18} animKey={seqAnimKey}   live={seqRunning} /> },
   ];
 
   async function handleToggle() {
