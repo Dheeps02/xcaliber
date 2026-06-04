@@ -14,20 +14,20 @@
 :root {
   /* Dark neutral with a faint green cast — pairs with emerald */
   --surface-base:    #090d0b;
-  --surface-raised:  #111714;
-  --surface-overlay: #192019;
-  --surface-hover:   #1f2820;
+  --surface-raised:  #141c18;
+  --surface-overlay: #1c2620;
+  --surface-hover:   #232f29;
   --surface-glass:   rgba(13,18,15,0.30);
 
   --accent:          #10b981;   /* emerald */
 
-  --border:          rgba(255,255,255,0.07);
-  --border-strong:   rgba(255,255,255,0.11);
+  --border:          rgba(255,255,255,0.10);
+  --border-strong:   rgba(255,255,255,0.16);
 
   /* Text — neutral whites with a faint cool cast */
-  --text-primary:    #e8f0ec;
-  --text-secondary:  #7a9188;
-  --text-muted:      #3d5248;
+  --text-primary:    #eef5f1;
+  --text-secondary:  #96b0a8;
+  --text-muted:      #5a7a6e;
 
   --status-ok:       #4ade80;
   --status-err:      #f87171;
