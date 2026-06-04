@@ -1,9 +1,10 @@
 import { useId } from 'react';
 
 // ── TraceIcon (Phosphor Rows + scroll) ───────────────────────────────────────
-// Two stacked copies of the Rows path inside overflow:hidden SVG.
-// Animation slides the group up by 256px so copy2 (offset 256) scrolls into view.
-// n packets → n iterations at 1500ms total, creating the whrrrr effect.
+// Three copies: above (exits), center (visible), below (enters).
+// Animating translateY(-176) brings the below copy into position. On snap-back
+// the above copy reoccupies the same slot as the departed center — invisible
+// because the top/bottom mask gradient fades both boundary regions.
 
 const ROWS_PATH = "M208,136H48a16,16,0,0,0-16,16v40a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V152A16,16,0,0,0,208,136Zm0,56H48V152H208v40Zm0-144H48A16,16,0,0,0,32,64v40a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V64A16,16,0,0,0,208,48Zm0,56H48V64H208v40Z";
 
@@ -14,16 +15,15 @@ export function TraceIcon({ size, animKey, repeatCount = 1 }: {
 }) {
   const dur = Math.round(1500 / Math.max(1, repeatCount));
   return (
-    <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" overflow="hidden" aria-hidden>
+    <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" overflow="hidden" aria-hidden className="trace-icon-svg">
       <g
         key={animKey}
         className="trace-rows-scroll"
         style={{ '--tick-dur': `${dur}ms`, '--tick-count': repeatCount } as React.CSSProperties}
       >
+        <g transform="translate(0,-176)"><path d={ROWS_PATH} /></g>
         <path d={ROWS_PATH} />
-        <g transform="translate(0,176)">
-          <path d={ROWS_PATH} />
-        </g>
+        <g transform="translate(0,176)"><path d={ROWS_PATH} /></g>
       </g>
     </svg>
   );

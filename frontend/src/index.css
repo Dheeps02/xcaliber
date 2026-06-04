@@ -582,7 +582,11 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 
 /* ── Tab icon animations ─────────────────────────────────────────── */
 
-/* Trace: Rows icon scrolls up; copy2 (offset 256) enters from below */
+/* Trace: 3-copy Rows scroll — above exits, center visible, below enters */
+.trace-icon-svg {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
+}
 @keyframes trace-rows-tick {
   from { transform: translateY(0); }
   to   { transform: translateY(-176px); }
