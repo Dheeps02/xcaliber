@@ -456,6 +456,7 @@ function TraceRow({ p, isNew, delay, isExpanded, effectiveDir, cmdName, onClick 
           width: 3,
           borderRadius: '0 2px 2px 0',
           background: dirColor(effectiveDir),
+          boxShadow: `3px 0 10px color-mix(in srgb, ${dirColor(effectiveDir)} 45%, transparent)`,
         }}
       />
 
