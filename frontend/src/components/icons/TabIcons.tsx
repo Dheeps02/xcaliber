@@ -15,7 +15,7 @@ export function TraceIcon({ size, animKey, repeatCount = 1 }: {
 }) {
   const dur = Math.round(1500 / Math.max(1, repeatCount));
   return (
-    <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" overflow="hidden" aria-hidden className="trace-icon-svg">
+    <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" overflow="hidden" aria-hidden className="tab-icon-fade-y">
       <g
         key={animKey}
         className="trace-rows-scroll"
@@ -24,6 +24,7 @@ export function TraceIcon({ size, animKey, repeatCount = 1 }: {
         <g transform="translate(0,-176)"><path d={ROWS_PATH} /></g>
         <path d={ROWS_PATH} />
         <g transform="translate(0,176)"><path d={ROWS_PATH} /></g>
+        <g transform="translate(0,352)"><path d={ROWS_PATH} /></g>
       </g>
     </svg>
   );
@@ -41,7 +42,7 @@ export function DaqIcon({ size, animKey, live }: { size: number; animKey: number
   const uid  = useId();
   const clip = `daq-${uid.replace(/:/g, '')}`;
   return (
-    <svg viewBox="0 0 256 256" width={size} height={size} aria-hidden>
+    <svg viewBox="0 0 256 256" width={size} height={size} aria-hidden className="tab-icon-fade-x">
       <defs>
         <clipPath id={clip}>
           <rect x="16" y="44" width="224" height="168" />
@@ -87,7 +88,7 @@ const QUEUE_PLAY  = "M248,160a8,8,0,0,1-3.76,6.78l-64,40A8,8,0,0,1,168,200V120a8
 
 export function SequenceIcon({ size, live }: { size: number; animKey: number; live?: boolean }) {
   return (
-    <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" aria-hidden>
+    <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" aria-hidden className="tab-icon-fade-y">
       <path d={QUEUE_LINES} />
       {live ? (
         <circle
