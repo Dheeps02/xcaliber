@@ -1,10 +1,11 @@
 import { useId } from 'react';
 
-// ── TraceIcon (2-box conveyor) ────────────────────────────────────────────────
-// A 3-element stack (exit / stay / enter) where the group translates up by one
-// step per tick. The top box collapses scaleY→0 as it exits; the bottom box
-// expands scaleY 0→1 as it enters. animKey re-mounts on every packet/tab-switch;
-// repeatCount drives CSS --tick-count so n packets = n rapid ticks in ~1.5 s.
+// ── TraceIcon (Phosphor Rows + scroll) ───────────────────────────────────────
+// Two stacked copies of the Rows path inside overflow:hidden SVG.
+// Animation slides the group up by 256px so copy2 (offset 256) scrolls into view.
+// n packets → n iterations at 1500ms total, creating the whrrrr effect.
+
+const ROWS_PATH = "M208,136H48a16,16,0,0,0-16,16v40a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V152A16,16,0,0,0,208,136Zm0,56H48V152H208v40Zm0-144H48A16,16,0,0,0,32,64v40a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V64A16,16,0,0,0,208,48Zm0,56H48V64H208v40Z";
 
 export function TraceIcon({ size, animKey, repeatCount = 1 }: {
   size: number;
@@ -16,83 +17,91 @@ export function TraceIcon({ size, animKey, repeatCount = 1 }: {
     <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" overflow="hidden" aria-hidden>
       <g
         key={animKey}
-        className="trace-tab-conveyor"
+        className="trace-rows-scroll"
         style={{ '--tick-dur': `${dur}ms`, '--tick-count': repeatCount } as React.CSSProperties}
       >
-        {/* Exiting box — collapses toward its center */}
-        <rect x="28" y="16"  width="200" height="104" rx="16" className="trace-tab-exit"  />
-        {/* Staying box — just translates */}
-        <rect x="28" y="140" width="200" height="104" rx="16" />
-        {/* Entering box — expands from its center; starts off-screen below */}
-        <rect x="28" y="264" width="200" height="104" rx="16" className="trace-tab-enter" />
-      </g>
-    </svg>
-  );
-}
-
-// ── DaqIcon (sine wave oscilloscope) ─────────────────────────────────────────
-// Center X-axis + Y-axis frame the oscilloscope. 1.5-period sine wave draws in
-// via stroke-dashoffset on animKey re-mount. live=true: infinite redraw loop.
-
-export function DaqIcon({ size, animKey, live }: { size: number; animKey: number; live?: boolean }) {
-  return (
-    <svg viewBox="0 0 256 256" width={size} height={size} aria-hidden>
-      {/* Center (X) axis */}
-      <path d="M 20 128 L 244 128" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" opacity="0.3" />
-      {/* Y-axis */}
-      <path d="M 24 44 L 24 212" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" opacity="0.3" />
-      {/* 1.5-period sine wave — bezier approximation, starts at axis origin */}
-      <path
-        key={animKey}
-        d="M 24 128 C 37 128, 47 58, 60 58 C 73 58, 83 128, 96 128 C 109 128, 119 198, 132 198 C 145 198, 155 128, 168 128 C 181 128, 191 58, 204 58 C 217 58, 227 128, 240 128"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="16"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={`daq-tab-line${live ? ' daq-tab-line-live' : ''}`}
-      />
-    </svg>
-  );
-}
-
-// ── SequenceIcon (FilmStrip) ──────────────────────────────────────────────────
-// Taller strip (h=130) with 2 visible frames (w=80) and 3 perforations per rail.
-// 3rd frame parks at x=256 so the loop is seamless: translateX(-112) shows
-// exactly the same 2 frames as translateX(0), making infinite scroll invisible.
-
-export function SequenceIcon({ size, animKey, live }: { size: number; animKey: number; live?: boolean }) {
-  const uid  = useId();
-  const clip = `seq-${uid.replace(/:/g, '')}`;
-
-  return (
-    <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" aria-hidden>
-      <defs>
-        <clipPath id={clip}>
-          <rect x="16" y="63" width="224" height="130" rx="8" />
-        </clipPath>
-      </defs>
-
-      {/* Strip background */}
-      <rect x="16" y="63" width="224" height="130" rx="8" opacity="0.22" />
-
-      {/* Perforations — top rail (static, outside scroll group) */}
-      {[19, 123, 228].map((x) => (
-        <rect key={`pt-${x}`} x={x} y="67" width="10" height="10" rx="2" opacity="0.55" />
-      ))}
-      {/* Perforations — bottom rail */}
-      {[19, 123, 228].map((x) => (
-        <rect key={`pb-${x}`} x={x} y="180" width="10" height="10" rx="2" opacity="0.55" />
-      ))}
-
-      {/* Scrolling frames — 3rd frame at x=256 keeps the loop seamless */}
-      <g clipPath={`url(#${clip})`}>
-        <g key={animKey} className={live ? 'seq-tab-scroll' : 'seq-tab-advance'}>
-          {[32, 144, 256].map((x) => (
-            <rect key={x} x={x} y="80" width="80" height="96" rx="4" />
-          ))}
+        <path d={ROWS_PATH} />
+        <g transform="translate(0,256)">
+          <path d={ROWS_PATH} />
         </g>
       </g>
+    </svg>
+  );
+}
+
+// ── DaqIcon (oscilloscope sine wave) ─────────────────────────────────────────
+// Single cubic bezier per half-period (kappa ≈ 0.3642) gives a smooth sine.
+// Static: 2-period wave from x=16, clipped to viewport.
+// Live: 4-period wave path that scrolls translateX(-128px) seamlessly.
+
+const DAQ_WAVE_STATIC = "M16,128 C39,73 57,73 80,128 C103,183 121,183 144,128 C167,73 185,73 208,128 C231,183 249,183 272,128";
+const DAQ_WAVE_SCROLL = "M-128,128 C-105,73 -87,73 -64,128 C-41,183 -23,183 0,128 C23,73 41,73 64,128 C87,183 105,183 128,128 C151,73 169,73 192,128 C215,183 233,183 256,128 C279,73 297,73 320,128 C343,183 361,183 384,128";
+
+export function DaqIcon({ size, animKey, live }: { size: number; animKey: number; live?: boolean }) {
+  const uid  = useId();
+  const clip = `daq-${uid.replace(/:/g, '')}`;
+  return (
+    <svg viewBox="0 0 256 256" width={size} height={size} aria-hidden>
+      <defs>
+        <clipPath id={clip}>
+          <rect x="16" y="44" width="224" height="168" />
+        </clipPath>
+      </defs>
+      {/* X-axis */}
+      <path d="M16,128 L240,128" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" opacity="0.3" />
+      {/* Y-axis */}
+      <path d="M24,44 L24,212" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" opacity="0.3" />
+      <g clipPath={`url(#${clip})`}>
+        {live ? (
+          <path
+            d={DAQ_WAVE_SCROLL}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="16"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="daq-wave-scroll"
+          />
+        ) : (
+          <path
+            key={animKey}
+            d={DAQ_WAVE_STATIC}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="16"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+      </g>
+    </svg>
+  );
+}
+
+// ── SequenceIcon (Phosphor Queue + spinner) ───────────────────────────────────
+// 3 queue lines always shown. Right side: play triangle at rest, spinning arc
+// when live. Spinner centered at (208,160) — the play triangle centroid.
+
+const QUEUE_LINES = "M32,64a8,8,0,0,1,8-8H216a8,8,0,0,1,0,16H40A8,8,0,0,1,32,64Zm104,56H40a8,8,0,0,0,0,16h96a8,8,0,0,0,0-16Zm0,64H40a8,8,0,0,0,0,16h96a8,8,0,0,0,0-16";
+const QUEUE_PLAY  = "M248,160a8,8,0,0,1-3.76,6.78l-64,40A8,8,0,0,1,168,200V120a8,8,0,0,1,12.24-6.78l64,40A8,8,0,0,1,248,160ZM224.91,160L184,134.43v51.14Z";
+
+export function SequenceIcon({ size, live }: { size: number; animKey: number; live?: boolean }) {
+  return (
+    <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d={QUEUE_LINES} />
+      {live ? (
+        <circle
+          cx="208" cy="160" r="30"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="16"
+          strokeLinecap="round"
+          strokeDasharray="63 126"
+          className="seq-icon-spinner"
+        />
+      ) : (
+        <path d={QUEUE_PLAY} />
+      )}
     </svg>
   );
 }

@@ -582,57 +582,37 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 
 /* ── Tab icon animations ─────────────────────────────────────────── */
 
-/* Trace conveyor: tick group up, exit box collapses, enter box expands */
-@keyframes trace-tab-tick   { from { transform: translateY(0);      } to { transform: translateY(-124px); } }
-@keyframes trace-tab-exit   { from { transform: scaleX(1);           } to { transform: scaleX(0);          } }
-@keyframes trace-tab-enter  { from { transform: scaleX(0);           } to { transform: scaleX(1);          } }
-
-.trace-tab-conveyor {
-  animation: trace-tab-tick var(--tick-dur, 1500ms) linear;
+/* Trace: Rows icon scrolls up; copy2 (offset 256) enters from below */
+@keyframes trace-rows-tick {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-256px); }
+}
+.trace-rows-scroll {
+  animation: trace-rows-tick var(--tick-dur, 500ms) cubic-bezier(0.22, 0.61, 0.36, 1);
   animation-iteration-count: var(--tick-count, 1);
 }
-.trace-tab-exit {
-  animation: trace-tab-exit var(--tick-dur, 1500ms) linear;
-  animation-iteration-count: var(--tick-count, 1);
-  transform-box: fill-box; transform-origin: center;
+.xcb-seg-btn:hover .trace-rows-scroll {
+  animation: trace-rows-tick 400ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
-.trace-tab-enter {
-  animation: trace-tab-enter var(--tick-dur, 1500ms) linear;
-  animation-iteration-count: var(--tick-count, 1);
-  transform-box: fill-box; transform-origin: center;
-}
-.xcb-seg-btn:hover .trace-tab-conveyor { animation: trace-tab-tick  500ms cubic-bezier(0.22, 0.61, 0.36, 1); }
-.xcb-seg-btn:hover .trace-tab-exit     { animation: trace-tab-exit  500ms cubic-bezier(0.22, 0.61, 0.36, 1); transform-box: fill-box; transform-origin: center; }
-.xcb-seg-btn:hover .trace-tab-enter    { animation: trace-tab-enter 500ms cubic-bezier(0.22, 0.61, 0.36, 1); transform-box: fill-box; transform-origin: center; }
 
-/* DAQ sine wave: draw-in once; live = infinite redraw loop */
-@keyframes daq-tab-draw {
-  from { stroke-dashoffset: 520; }
-  to   { stroke-dashoffset: 0; }
-}
-.daq-tab-line {
-  stroke-dasharray: 520;
-  animation: daq-tab-draw 500ms ease both;
-}
-.daq-tab-line.daq-tab-line-live {
-  animation: daq-tab-draw 1.3s linear infinite;
-}
-.xcb-seg-btn:hover .daq-tab-line      { animation: daq-tab-draw 500ms ease both; }
-.xcb-seg-btn:hover .daq-tab-line.daq-tab-line-live { animation: daq-tab-draw 1.3s linear infinite; }
-
-/* Sequence filmstrip: advance one frame on switch, continuous scroll when running */
-@keyframes seq-tab-move {
+/* DAQ: wave scrolls right-to-left when live; static otherwise */
+@keyframes daq-wave-move {
   from { transform: translateX(0); }
-  to   { transform: translateX(-112px); }
+  to   { transform: translateX(-128px); }
 }
-.seq-tab-advance {
-  animation: seq-tab-move 360ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+.daq-wave-scroll {
+  animation: daq-wave-move 1.4s linear infinite;
 }
-.seq-tab-scroll {
-  animation: seq-tab-move 1.4s linear infinite;
+
+/* Sequence: spinner replaces play button when running */
+@keyframes seq-icon-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
-.xcb-seg-btn:hover .seq-tab-advance {
-  animation: seq-tab-move 360ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+.seq-icon-spinner {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: seq-icon-spin 0.8s linear infinite;
 }
 
 /* Disable all animations */
