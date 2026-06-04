@@ -593,14 +593,14 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 }
 @keyframes trace-rows-tick {
   from { transform: translateY(0); }
-  to   { transform: translateY(-176px); }
+  to   { transform: translateY(calc(-1 * var(--trace-pitch, 12.375px))); }
 }
 .trace-rows-scroll {
-  animation: trace-rows-tick var(--tick-dur, 500ms) cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: trace-rows-tick var(--tick-dur, 500ms) cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
   animation-iteration-count: var(--tick-count, 1);
 }
 .xcb-seg-btn:hover .trace-rows-scroll {
-  animation: trace-rows-tick 400ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: trace-rows-tick 400ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
 }
 
 /* DAQ: wave scrolls right-to-left when live; static otherwise */

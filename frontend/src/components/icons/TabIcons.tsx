@@ -1,10 +1,10 @@
 import { useId } from 'react';
 
 // ── TraceIcon (Phosphor Rows + scroll) ───────────────────────────────────────
-// Three copies: above (exits), center (visible), below (enters).
-// Animating translateY(-176) brings the below copy into position. On snap-back
-// the above copy reoccupies the same slot as the departed center — invisible
-// because the top/bottom mask gradient fades both boundary regions.
+// HTML wrapper keeps everything in CSS pixel space — no SVG/CSS coordinate
+// mismatch. pitch = rendered_size × (176/256): the inter-icon gap that
+// preserves the same 16px spacing as the gap between rows inside the icon.
+// 4 copies at -1×, 0, 1×, 2× pitch so the snap-back is always invisible.
 
 const ROWS_PATH = "M208,136H48a16,16,0,0,0-16,16v40a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V152A16,16,0,0,0,208,136Zm0,56H48V152H208v40Zm0-144H48A16,16,0,0,0,32,64v40a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V64A16,16,0,0,0,208,48Zm0,56H48V64H208v40Z";
 
@@ -13,20 +13,38 @@ export function TraceIcon({ size, animKey, repeatCount = 1 }: {
   animKey: number;
   repeatCount?: number;
 }) {
-  const dur = Math.round(1500 / Math.max(1, repeatCount));
+  const dur   = Math.round(1500 / Math.max(1, repeatCount));
+  const pitch = (size * 176) / 256;
   return (
-    <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" overflow="hidden" aria-hidden className="tab-icon-fade-y">
-      <g
+    <div
+      className="tab-icon-fade-y"
+      style={{ width: size, height: size, overflow: 'hidden', position: 'relative', flexShrink: 0 }}
+    >
+      <div
         key={animKey}
         className="trace-rows-scroll"
-        style={{ '--tick-dur': `${dur}ms`, '--tick-count': repeatCount } as React.CSSProperties}
+        style={{
+          position: 'absolute', inset: 0,
+          '--tick-dur'    : `${dur}ms`,
+          '--tick-count'  : repeatCount,
+          '--trace-pitch' : `${pitch}px`,
+        } as React.CSSProperties}
       >
-        <g transform="translate(0,-176)"><path d={ROWS_PATH} /></g>
-        <path d={ROWS_PATH} />
-        <g transform="translate(0,176)"><path d={ROWS_PATH} /></g>
-        <g transform="translate(0,352)"><path d={ROWS_PATH} /></g>
-      </g>
-    </svg>
+        {[-1, 0, 1, 2].map(i => (
+          <svg
+            key={i}
+            viewBox="0 0 256 256"
+            width={size}
+            height={size}
+            fill="currentColor"
+            aria-hidden
+            style={{ position: 'absolute', top: i * pitch, left: 0 }}
+          >
+            <path d={ROWS_PATH} />
+          </svg>
+        ))}
+      </div>
+    </div>
   );
 }
 

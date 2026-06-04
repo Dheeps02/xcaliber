@@ -68,9 +68,9 @@ export function Header() {
   const [traceAnimKey, setTraceAnimKey] = useState(0);
   const [daqAnimKey,   setDaqAnimKey]   = useState(0);
   const [seqAnimKey,   setSeqAnimKey]   = useState(0);
-  const prevTabRef  = useRef(activeMainTab);
-  const prevRxRef   = useRef(rxCount);
-  const mountedRef  = useRef(false);
+  const prevTabRef        = useRef(activeMainTab);
+  const mountedRef        = useRef(false);
+  const traceThrottleRef  = useRef(false);
 
   useEffect(() => {
     const prev = prevTabRef.current;
@@ -80,11 +80,13 @@ export function Header() {
     if (activeMainTab === 'sequence' && prev !== 'sequence') setSeqAnimKey((k) => k + 1);
   }, [activeMainTab]);
 
-  // Animate trace once per received packet (rxCount only — one per exchange)
+  // Animate trace on new packets — throttled so bursts don't restart mid-animation
   useEffect(() => {
     if (!mountedRef.current) { mountedRef.current = true; return; }
-    prevRxRef.current = rxCount;
+    if (traceThrottleRef.current) return;
     setTraceAnimKey((k) => k + 1);
+    traceThrottleRef.current = true;
+    setTimeout(() => { traceThrottleRef.current = false; }, 600);
   }, [rxCount]);
 
   const daqRunning = daqStatus === 'running';
