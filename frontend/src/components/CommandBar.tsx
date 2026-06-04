@@ -275,7 +275,7 @@ export function CommandBar() {
         <div style={{ overflow: 'hidden' }}>
 
           {/* Cells */}
-          <div className="flex gap-1.5 px-3.5 pt-2">
+          <div className="flex items-end gap-1.5 px-3.5 pt-2 pb-2">
             {Array.from({ length: BASE_CELLS }, (_, i) => {
               const absIdx    = startByte + i;
               const fieldDef  = section === 0 ? def?.fields[i] : undefined;
@@ -379,27 +379,11 @@ export function CommandBar() {
                 </div>
               );
             })}
-          </div>
 
-          {/* Action row */}
-          <div className="px-3.5 py-2">
-            {activeMainTab === 'sequence' ? (
-              <div className="flex gap-2">
-                <Button
-                  variant="primary"
-                  className="flex-1 justify-center"
-                  disabled={!activeSequenceId}
-                  onClick={handleAddToSequence}
-                >+ Add to Sequence</Button>
-                <Button
-                  disabled={!seqSelectedStepId}
-                  onClick={handleRemoveFromSequence}
-                >Remove</Button>
-              </div>
-            ) : (
+            {activeMainTab !== 'sequence' && (
               <Button
                 variant="primary"
-                className="w-full justify-center"
+                className="!text-[11px] !py-1 !px-2.5 shrink-0"
                 onClick={() => {
                   setSendFlying(true);
                   setTimeout(() => setSendFlying(false), 550);
@@ -413,6 +397,24 @@ export function CommandBar() {
               </Button>
             )}
           </div>
+
+          {/* Action row — sequence mode only */}
+          {activeMainTab === 'sequence' && (
+            <div className="px-3.5 pb-2">
+              <div className="flex gap-2">
+                <Button
+                  variant="primary"
+                  className="flex-1 justify-center"
+                  disabled={!activeSequenceId}
+                  onClick={handleAddToSequence}
+                >+ Add to Sequence</Button>
+                <Button
+                  disabled={!seqSelectedStepId}
+                  onClick={handleRemoveFromSequence}
+                >Remove</Button>
+              </div>
+            </div>
+          )}
 
         </div>
       </div>
