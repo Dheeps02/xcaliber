@@ -5,6 +5,7 @@ import { TooltipProvider } from './context/TooltipContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Header } from './components/Header';
 import { CommandBar } from './components/CommandBar';
+import { MemoryBar } from './components/MemoryBar';
 import { PacketTrace } from './components/PacketTrace';
 import { Daq } from './components/Daq';
 import { Sequence } from './components/Sequence';
@@ -42,6 +43,7 @@ function AppInner() {
     >
       <Header />
       <CommandBar />
+      <MemoryBar />
 
       {/* Tab content — all mounted, CSS controls visibility */}
       <div className="flex-1 relative overflow-hidden">

@@ -76,6 +76,8 @@ interface AppStore {
   setActiveMainTab: (tab: 'trace' | 'daq' | 'sequence') => void;
   byteBarCollapsed: boolean;
   setByteBarCollapsed: (v: boolean) => void;
+  memBarCollapsed: boolean;
+  setMemBarCollapsed: (v: boolean) => void;
 
   // ── DAQ ──────────────────────────────────────────────────────────
   daqStatus: DaqStatus;
@@ -196,6 +198,7 @@ export const useAppStore = create<AppStore>((set) => ({
   animationWatermark: null,
   activeMainTab: 'trace',
   byteBarCollapsed: false,
+  memBarCollapsed: false,
   daqStatus: 'idle',
   daqLists: [],
   daqLiveValues: new Map(),
@@ -292,8 +295,13 @@ export const useAppStore = create<AppStore>((set) => ({
   dismissToast: (id) =>
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setAnimationWatermark: (v) => set({ animationWatermark: v }),
-  setActiveMainTab: (tab) => set({ activeMainTab: tab, ...(tab === 'daq' ? { byteBarCollapsed: true } : tab === 'sequence' ? { byteBarCollapsed: false } : {}) }),
+  setActiveMainTab: (tab) => set({
+    activeMainTab: tab,
+    ...(tab === 'daq' ? { byteBarCollapsed: true } : tab === 'sequence' ? { byteBarCollapsed: false } : {}),
+    ...(tab !== 'trace' ? { memBarCollapsed: true } : {}),
+  }),
   setByteBarCollapsed: (byteBarCollapsed) => set({ byteBarCollapsed }),
+  setMemBarCollapsed: (memBarCollapsed) => set({ memBarCollapsed }),
 
   setDaqStatus: (daqStatus) => set({ daqStatus }),
   setDaqLists: (daqLists) => set({ daqLists }),
