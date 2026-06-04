@@ -359,10 +359,16 @@ export function PacketTrace() {
         </div>
 
         {/* Rows */}
-        {filtered.map((p) => {
+        {(() => {
+          let batchStarted = false;
+          return filtered.map((p) => {
           const isNew = animationWatermark !== null && p.id > animationWatermark && !cleanedUpIds.current.has(p.id);
+          if (isNew && !batchStarted) {
+            staggerCounter.current = 0;
+            batchStarted = true;
+          }
           if (isNew && !staggerDelays.current.has(p.id)) {
-            staggerDelays.current.set(p.id, Math.min(staggerCounter.current, 12) * 60);
+            staggerDelays.current.set(p.id, staggerCounter.current * 60);
             staggerCounter.current++;
           }
           const delay = staggerDelays.current.get(p.id) ?? 0;
@@ -387,7 +393,8 @@ export function PacketTrace() {
               <ExpandPanel p={p} open={isExpanded} />
             </div>
           );
-        })}
+        });
+        })()}
 
         <div ref={bottomRef} />
       </div>
