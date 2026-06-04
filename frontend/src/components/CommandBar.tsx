@@ -125,11 +125,11 @@ export function CommandBar() {
 
   // ── animate data preview rotation ────────────────────────────────────────
   useEffect(() => {
-    if (hasData || dataPreview === prevDataPreview.current) return;
+    if (downloadData.trim().length > 0 || dataPreview === prevDataPreview.current) return;
     prevDataPreview.current = dataPreview;
     setDataAnimCls('count-tick');
     setDataAnimKey((k) => k + 1);
-  }, [dataPreview, hasData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dataPreview, downloadData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── dropdown dismiss ──────────────────────────────────────────────────────
   useEffect(() => {
