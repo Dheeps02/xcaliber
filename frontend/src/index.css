@@ -12,22 +12,22 @@
 
 /* ── Semantic tokens ──────────────────────────────────────────────── */
 :root {
-  /* Warm dark — anodised aluminium / instrument panel */
-  --surface-base:    #0d0b08;
-  --surface-raised:  #151210;
-  --surface-overlay: #1e1a15;
-  --surface-hover:   #252019;
-  --surface-glass:   rgba(20,17,13,0.78);
+  /* Dark neutral with a faint green cast — pairs with emerald */
+  --surface-base:    #090d0b;
+  --surface-raised:  #111714;
+  --surface-overlay: #192019;
+  --surface-hover:   #1f2820;
+  --surface-glass:   rgba(13,18,15,0.78);
 
   --accent:          #10b981;   /* emerald */
 
   --border:          rgba(255,255,255,0.07);
   --border-strong:   rgba(255,255,255,0.11);
 
-  /* Text — warm-shifted whites */
-  --text-primary:    #f0e6d3;
-  --text-secondary:  #9e8e74;
-  --text-muted:      #544535;
+  /* Text — neutral whites with a faint cool cast */
+  --text-primary:    #e8f0ec;
+  --text-secondary:  #7a9188;
+  --text-muted:      #3d5248;
 
   --status-ok:       #4ade80;
   --status-err:      #f87171;
