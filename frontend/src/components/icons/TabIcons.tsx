@@ -30,34 +30,27 @@ export function TraceIcon({ size, animKey, repeatCount = 1 }: {
   );
 }
 
-// ── DaqIcon (ChartLine with axes) ─────────────────────────────────────────────
-// Static X/Y axes frame the plot. Data line draws via stroke-dashoffset on
-// animKey re-mount. live=true: line pulses opacity, end-dot pulses scale.
+// ── DaqIcon (sine wave oscilloscope) ─────────────────────────────────────────
+// Center X-axis + Y-axis frame the oscilloscope. 1.5-period sine wave draws in
+// via stroke-dashoffset on animKey re-mount. live=true: infinite redraw loop.
 
 export function DaqIcon({ size, animKey, live }: { size: number; animKey: number; live?: boolean }) {
   return (
     <svg viewBox="0 0 256 256" width={size} height={size} aria-hidden>
+      {/* Center (X) axis */}
+      <path d="M 20 128 L 244 128" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" opacity="0.3" />
       {/* Y-axis */}
-      <path d="M 24 56 L 24 200" fill="none" stroke="currentColor" strokeWidth="10" strokeLinecap="round" opacity="0.4" />
-      {/* X-axis */}
-      <path d="M 20 200 L 240 200" fill="none" stroke="currentColor" strokeWidth="10" strokeLinecap="round" opacity="0.4" />
-      {/* Data line — starts at axis origin */}
+      <path d="M 24 44 L 24 212" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" opacity="0.3" />
+      {/* 1.5-period sine wave — bezier approximation, starts at axis origin */}
       <path
         key={animKey}
-        d="M 24 200 L 64 152 L 100 168 L 148 108 L 188 128 L 228 76"
+        d="M 24 128 C 37 128, 47 58, 60 58 C 73 58, 83 128, 96 128 C 109 128, 119 198, 132 198 C 145 198, 155 128, 168 128 C 181 128, 191 58, 204 58 C 217 58, 227 128, 240 128"
         fill="none"
         stroke="currentColor"
-        strokeWidth="18"
+        strokeWidth="16"
         strokeLinecap="round"
         strokeLinejoin="round"
         className={`daq-tab-line${live ? ' daq-tab-line-live' : ''}`}
-      />
-      {/* End dot */}
-      <circle
-        key={`dot-${animKey}`}
-        cx="228" cy="76" r="14"
-        fill="currentColor"
-        className={`daq-tab-dot${live ? ' daq-tab-dot-live' : ''}`}
       />
     </svg>
   );
