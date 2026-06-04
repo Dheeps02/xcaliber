@@ -225,7 +225,7 @@ export function MemoryBar() {
                   onChange={(e) => setMta(e.target.value)}
                   onFocus={() => suggestions.length > 0 && setSuggOpen(true)}
                   onBlur={() => setTimeout(() => setSuggOpen(false), 120)}
-                  className="xcb-input px-2 py-1 font-mono text-xs focus:outline-none"
+                  className="xcb-input px-2 py-[3px] font-mono text-xs focus:outline-none"
                   style={{
                     width: 148,
                     color: 'transparent',
@@ -291,7 +291,7 @@ export function MemoryBar() {
                 min={1}
                 value={size}
                 onChange={(e) => setSize(Math.max(1, Number(e.target.value)))}
-                className="xcb-input no-spinner px-2 py-1 font-mono text-xs text-center focus:outline-none"
+                className="xcb-input no-spinner px-2 py-[3px] font-mono text-xs text-center focus:outline-none"
                 style={{ width: 48 }}
                 onFocusCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)')}
                 onBlurCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = '')}
@@ -322,7 +322,7 @@ export function MemoryBar() {
                     setDataAnimCls('type-fade');
                     setDataAnimKey((k) => k + 1);
                   }}
-                  className="xcb-input w-full px-2 py-1 font-mono text-xs focus:outline-none"
+                  className="xcb-input w-full px-2 py-[3px] font-mono text-xs focus:outline-none"
                   style={{
                     border: dataError ? '1px solid var(--status-err)' : undefined,
                     color: 'transparent',
