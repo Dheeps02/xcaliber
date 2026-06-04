@@ -53,6 +53,13 @@ function ExpandPanel({ p, open }: { p: PacketEntry; open: boolean }) {
     ? allFields.filter(([k]) => k !== 'command')
     : allFields;
 
+  const [openKey, setOpenKey] = useState(0);
+  const prevOpenRef = useRef(false);
+  useEffect(() => {
+    if (open && !prevOpenRef.current) setOpenKey((k) => k + 1);
+    prevOpenRef.current = open;
+  }, [open]);
+
   return (
     <div
       style={{
@@ -76,10 +83,10 @@ function ExpandPanel({ p, open }: { p: PacketEntry; open: boolean }) {
             className="grid gap-y-1 text-[11px] font-mono"
             style={{ gridTemplateColumns: '150px 1fr' }}
           >
-            {rows.length > 0 ? rows.map(([k, v]) => (
-              <Fragment key={k}>
-                <span style={{ color: 'var(--text-muted)' }}>{k}</span>
-                <span style={{ color }}>{formatValue(v)}</span>
+            {rows.length > 0 ? rows.map(([k, v], idx) => (
+              <Fragment key={`${k}-${openKey}`}>
+                <span className="field-fade" style={{ color: 'var(--text-muted)', animationDelay: `${idx * 45}ms` }}>{k}</span>
+                <span className="field-fade" style={{ color, animationDelay: `${idx * 45 + 22}ms` }}>{formatValue(v)}</span>
               </Fragment>
             )) : (
               <span className="col-span-2 italic" style={{ color: 'var(--text-muted)' }}>
