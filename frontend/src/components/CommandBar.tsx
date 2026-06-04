@@ -12,6 +12,7 @@ import type { FieldOption, SeqStep, A2lVariable } from '../lib/types';
 import { toTitleCase } from '../lib/utils';
 import { Button } from './ui/Button';
 import { SegmentControl } from './ui/SegmentControl';
+import { useRotatingPreview } from '../hooks/useRotatingPreview';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -110,12 +111,25 @@ export function CommandBar() {
   const [dataAnimCls, setDataAnimCls]   = useState('');
   const [dataError, setDataError]       = useState(false);
 
+  const mtaPreview  = useRotatingPreview(['0x20003A40', 'VarName', '0x00000000'], { interval: 3200 });
+  const sizePreview = useRotatingPreview(['8', '16', '32', '64'],                 { interval: 3800 });
+  const dataPreview = useRotatingPreview(['FF 01 A3', '0xFF', '255', '01 02 03'], { interval: 3000 });
+
   const [mtaPinning, setMtaPinning]           = useState(false);
   const [mtaJiggling, setMtaJiggling]         = useState(false);
   const [uploadFlying, setUploadFlying]       = useState(false);
   const [uploadJiggling, setUploadJiggling]   = useState(false);
   const [downloadFlying, setDownloadFlying]   = useState(false);
   const [downloadJiggling, setDownloadJiggling] = useState(false);
+  const prevDataPreview = useRef(dataPreview);
+
+  // ── animate data preview rotation ────────────────────────────────────────
+  useEffect(() => {
+    if (hasData || dataPreview === prevDataPreview.current) return;
+    prevDataPreview.current = dataPreview;
+    setDataAnimCls('count-tick');
+    setDataAnimKey((k) => k + 1);
+  }, [dataPreview, hasData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── dropdown dismiss ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -608,7 +622,7 @@ export function CommandBar() {
                     onChange={(e) => setMta(e.target.value)}
                     onFocus={() => suggestions.length > 0 && setSuggOpen(true)}
                     onBlur={() => setTimeout(() => setSuggOpen(false), 120)}
-                    placeholder="0x… or VarName"
+                    placeholder={mta ? undefined : mtaPreview}
                     className="px-2 py-1 rounded text-xs font-mono focus:outline-none"
                     style={{
                       width: 148,
@@ -670,6 +684,7 @@ export function CommandBar() {
                   type="number"
                   min={1}
                   value={size}
+                  placeholder={sizePreview}
                   onChange={(e) => setSize(Math.max(1, Number(e.target.value)))}
                   className="no-spinner px-2 py-1 rounded text-xs font-mono text-center focus:outline-none"
                   style={{
@@ -725,7 +740,7 @@ export function CommandBar() {
                     key={dataAnimKey}
                     className={`absolute inset-0 flex items-center px-2 text-xs font-mono pointer-events-none select-none ${dataAnimCls}`}
                     style={{ color: hasData ? 'var(--text-primary)' : 'var(--text-muted)' }}
-                  >{downloadData || 'FF 01 A3 …'}</span>
+                  >{downloadData || dataPreview}</span>
                 </div>
               </div>
 
