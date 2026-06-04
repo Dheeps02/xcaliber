@@ -65,38 +65,33 @@ export function Header() {
   const [gearReverse, setGearReverse] = useState(false);
 
   // ── Tab icon animKeys ─────────────────────────────────────────────
-  const [traceAnimKey,     setTraceAnimKey]     = useState(0);
-  const [traceRepeatCount, setTraceRepeatCount] = useState(1);
-  const [daqAnimKey,       setDaqAnimKey]       = useState(0);
-  const [seqAnimKey,       setSeqAnimKey]       = useState(0);
+  const [traceAnimKey, setTraceAnimKey] = useState(0);
+  const [daqAnimKey,   setDaqAnimKey]   = useState(0);
+  const [seqAnimKey,   setSeqAnimKey]   = useState(0);
   const prevTabRef  = useRef(activeMainTab);
-  const prevTxRef   = useRef(txCount);
   const prevRxRef   = useRef(rxCount);
   const mountedRef  = useRef(false);
 
   useEffect(() => {
     const prev = prevTabRef.current;
     prevTabRef.current = activeMainTab;
-    if (activeMainTab === 'trace'    && prev !== 'trace')    { setTraceRepeatCount(1); setTraceAnimKey((k) => k + 1); }
+    if (activeMainTab === 'trace'    && prev !== 'trace')    setTraceAnimKey((k) => k + 1);
     if (activeMainTab === 'daq'      && prev !== 'daq')      setDaqAnimKey((k) => k + 1);
     if (activeMainTab === 'sequence' && prev !== 'sequence') setSeqAnimKey((k) => k + 1);
   }, [activeMainTab]);
 
-  // n new packets → n rapid ticks over 1.5 s total
+  // Animate trace once per received packet (rxCount only — one per exchange)
   useEffect(() => {
     if (!mountedRef.current) { mountedRef.current = true; return; }
-    const delta = (txCount - prevTxRef.current) + (rxCount - prevRxRef.current);
-    prevTxRef.current = txCount;
     prevRxRef.current = rxCount;
-    setTraceRepeatCount(Math.max(1, delta));
     setTraceAnimKey((k) => k + 1);
-  }, [txCount, rxCount]);
+  }, [rxCount]);
 
   const daqRunning = daqStatus === 'running';
   const seqRunning = seqRunResult?.status === 'running';
 
   const TAB_ITEMS = [
-    { value: 'trace'    as MainTab, label: 'Trace',    icon: <TraceIcon    size={18} animKey={traceAnimKey} repeatCount={traceRepeatCount} /> },
+    { value: 'trace'    as MainTab, label: 'Trace',    icon: <TraceIcon    size={18} animKey={traceAnimKey} /> },
     { value: 'daq'      as MainTab, label: 'DAQ',      icon: <DaqIcon      size={18} animKey={daqAnimKey}   live={daqRunning} /> },
     { value: 'sequence' as MainTab, label: 'Sequence', icon: <SequenceIcon size={18} animKey={seqAnimKey}   live={seqRunning} /> },
   ];

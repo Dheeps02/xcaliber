@@ -585,7 +585,7 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 /* Trace: Rows icon scrolls up; copy2 (offset 256) enters from below */
 @keyframes trace-rows-tick {
   from { transform: translateY(0); }
-  to   { transform: translateY(-256px); }
+  to   { transform: translateY(-176px); }
 }
 .trace-rows-scroll {
   animation: trace-rows-tick var(--tick-dur, 500ms) cubic-bezier(0.22, 0.61, 0.36, 1);

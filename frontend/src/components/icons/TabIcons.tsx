@@ -21,7 +21,7 @@ export function TraceIcon({ size, animKey, repeatCount = 1 }: {
         style={{ '--tick-dur': `${dur}ms`, '--tick-count': repeatCount } as React.CSSProperties}
       >
         <path d={ROWS_PATH} />
-        <g transform="translate(0,256)">
+        <g transform="translate(0,176)">
           <path d={ROWS_PATH} />
         </g>
       </g>
