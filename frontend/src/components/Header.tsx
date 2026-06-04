@@ -80,9 +80,10 @@ export function Header() {
     if (activeMainTab === 'sequence' && prev !== 'sequence') setSeqAnimKey((k) => k + 1);
   }, [activeMainTab]);
 
-  // Animate trace on new packets — throttled so bursts don't restart mid-animation
+  // Animate trace on new packets — only when on the trace tab, throttled to one play per animation
   useEffect(() => {
     if (!mountedRef.current) { mountedRef.current = true; return; }
+    if (prevTabRef.current !== 'trace') return;
     if (traceThrottleRef.current) return;
     setTraceAnimKey((k) => k + 1);
     traceThrottleRef.current = true;
