@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import {
-  FileCode, ArrowsClockwise, GearSix, X, FolderOpen, Link, LinkBreak,
+  FileCode, ArrowsClockwise, GearSix, X, FolderOpen,
 } from '@phosphor-icons/react';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { useAppStore } from '../stores/app-store';
@@ -9,6 +9,7 @@ import { Settings } from './Settings';
 import { ToastContainer } from './Toast';
 import { SegmentControl } from './ui/SegmentControl';
 import { Button } from './ui/Button';
+import { ConnectToggle } from './ui/ConnectToggle';
 import type { DaqEntryType } from '../lib/types';
 
 type MainTab = 'trace' | 'daq' | 'sequence';
@@ -63,12 +64,10 @@ export function Header() {
   const [broadcastPulsing, setBroadcastPulsing] = useState(false);
   const [broadcastPulseKey, setBroadcastPulseKey] = useState(0);
   const [syncSpinning, setSyncSpinning] = useState(false);
-  const [connectAnimKey, setConnectAnimKey] = useState(0);
   const [gearKey, setGearKey] = useState(0);
   const [gearReverse, setGearReverse] = useState(false);
 
   async function handleToggle() {
-    setConnectAnimKey((k) => k + 1);
     if (connected) {
       setSlaveDropped(false);
       setConnected(false);
@@ -145,22 +144,7 @@ export function Header() {
             xcaliber
           </span>
 
-          <div className="flex items-center gap-1.5">
-            <span className={`xcb-led ${connected ? 'on' : 'off'}`} />
-            <Button
-              variant="ghost"
-              className="!px-1.5 !py-0.5 !text-[11px] !gap-1"
-              onClick={handleToggle}
-              title={connected ? 'Disconnect' : 'Connect'}
-            >
-              <span key={connectAnimKey} className="icon-rotate-in flex items-center">
-                {connected ? <LinkBreak size={11} /> : <Link size={11} />}
-              </span>
-              <span key={`lbl-${connectAnimKey}`} className="text-blur-in">
-                {connected ? 'Connected' : 'Connect'}
-              </span>
-            </Button>
-          </div>
+          <ConnectToggle checked={connected} onChange={handleToggle} />
 
           <div className="xcb-vdiv" />
 
