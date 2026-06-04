@@ -133,8 +133,8 @@ export function Header() {
 
       <header
         data-tauri-drag-region
-        className="flex items-center h-11 px-3.5 gap-3 shrink-0"
-        style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border)' }}
+        className="xcb-glass flex items-center h-11 px-3.5 gap-3 shrink-0"
+        style={{ borderBottom: '1px solid var(--border)' }}
       >
         {/* ── Left: branding + connection ──────────────────────────── */}
         <div className="flex items-center gap-2.5 min-w-0" style={{ minWidth: 200 }}>

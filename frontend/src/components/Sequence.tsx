@@ -257,8 +257,8 @@ export function Sequence() {
 
       {/* Toolbar */}
       <div
-        className="flex items-center gap-2 px-3 h-9 shrink-0"
-        style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border)' }}
+        className="xcb-glass flex items-center gap-2 px-3 h-9 shrink-0"
+        style={{ borderBottom: '1px solid var(--border)' }}
       >
         <input ref={importRef} type="file" accept=".seq,.json" className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }} />

@@ -12,22 +12,22 @@
 
 /* ── Semantic tokens ──────────────────────────────────────────────── */
 :root {
-  /* Near-black blue-tinted surfaces — reads as hardware, not SaaS grey */
-  --surface-base:    #080c12;
-  --surface-raised:  #0d1520;
-  --surface-overlay: #14202f;
-  --surface-hover:   #1b2c3e;
+  /* Warm dark — anodised aluminium / instrument panel */
+  --surface-base:    #0d0b08;
+  --surface-raised:  #151210;
+  --surface-overlay: #1e1a15;
+  --surface-hover:   #252019;
+  --surface-glass:   rgba(20,17,13,0.78);
 
-  --accent:          #00e5ff;  /* saturated cyan — oscilloscope / industrial */
+  --accent:          #f59e0b;   /* amber */
 
-  /* Borders pick up a faint accent tint so panels feel illuminated */
-  --border:          color-mix(in srgb, var(--accent) 8%, rgba(255,255,255,0.06));
-  --border-strong:   color-mix(in srgb, var(--accent) 10%, rgba(255,255,255,0.13));
+  --border:          rgba(255,255,255,0.07);
+  --border-strong:   rgba(255,255,255,0.11);
 
-  /* Text — very slightly blue-shifted whites */
-  --text-primary:    #e6f0ff;
-  --text-secondary:  #8fa8c4;
-  --text-muted:      #445870;
+  /* Text — warm-shifted whites */
+  --text-primary:    #f0e6d3;
+  --text-secondary:  #9e8e74;
+  --text-muted:      #544535;
 
   --status-ok:       #4ade80;
   --status-err:      #f87171;
@@ -52,7 +52,10 @@ html { overscroll-behavior: none; }
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: var(--surface-base);
+  background:
+    radial-gradient(ellipse 90% 45% at 25% 0%, rgba(245,158,11,0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 40% at 85% 110%, rgba(245,158,11,0.04) 0%, transparent 45%),
+    var(--surface-base);
   color: var(--text-primary);
   user-select: none;
   -webkit-user-drag: none;
@@ -74,45 +77,82 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
   --btn-color: var(--accent);
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   padding: 5px 11px; border-radius: 5px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid rgba(0,0,0,0.55);
   background: var(--surface-overlay);
-  background-image: linear-gradient(180deg, rgba(255,255,255,0.055) 0%, transparent 60%);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.02) 40%, rgba(0,0,0,0.05) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.09),
+    inset 0 -1px 0 rgba(0,0,0,0.3),
+    0 2px 6px rgba(0,0,0,0.5),
+    0 1px 2px rgba(0,0,0,0.4);
   color: var(--text-secondary); font-size: 12px;
   font-family: inherit; font-weight: 500;
   cursor: pointer; white-space: nowrap; flex-shrink: 0;
-  transition: background 80ms, background-image 80ms, color 80ms, border-color 80ms;
+  transition: box-shadow 80ms, color 80ms, border-color 80ms, filter 80ms, transform 80ms;
 }
 .xcb-btn:hover:not(:disabled) {
-  background: var(--surface-hover);
-  background-image: linear-gradient(180deg, rgba(255,255,255,0.07) 0%, transparent 60%);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.04) 40%, rgba(0,0,0,0.02) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.13),
+    inset 0 -1px 0 rgba(0,0,0,0.3),
+    0 3px 8px rgba(0,0,0,0.55),
+    0 1px 3px rgba(0,0,0,0.4);
   color: var(--text-primary);
 }
-.xcb-btn:active:not(:disabled) { transform: scale(0.95); }
+.xcb-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 3px rgba(0,0,0,0.4),
+    inset 0 2px 4px rgba(0,0,0,0.25),
+    0 1px 2px rgba(0,0,0,0.3);
+  background-image: linear-gradient(180deg, rgba(0,0,0,0.04) 0%, rgba(255,255,255,0.02) 100%);
+}
 .xcb-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .xcb-btn.primary {
   background: var(--btn-color);
-  background-image: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 60%);
-  border-color: color-mix(in srgb, var(--btn-color) 50%, transparent);
-  color: #03101a; font-weight: 600;
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.06) 45%, rgba(0,0,0,0.1) 100%);
+  border-color: color-mix(in srgb, var(--btn-color) 70%, #000);
+  color: #1a0f00; font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.38),
+    inset 0 -1px 0 rgba(0,0,0,0.2),
+    0 2px 8px color-mix(in srgb, var(--btn-color) 45%, transparent),
+    0 1px 3px rgba(0,0,0,0.45);
 }
 .xcb-btn.primary:hover:not(:disabled) {
-  filter: brightness(1.08);
-  background-image: linear-gradient(180deg, rgba(255,255,255,0.22) 0%, transparent 60%);
+  filter: brightness(1.07);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.42),
+    inset 0 -1px 0 rgba(0,0,0,0.2),
+    0 3px 12px color-mix(in srgb, var(--btn-color) 55%, transparent),
+    0 1px 4px rgba(0,0,0,0.45);
+}
+.xcb-btn.primary:active:not(:disabled) {
+  filter: brightness(0.96);
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.2),
+    0 1px 4px color-mix(in srgb, var(--btn-color) 30%, transparent);
 }
 
 .xcb-btn.ghost {
   background: transparent; background-image: none;
   border-color: transparent; color: var(--text-muted);
+  box-shadow: none;
 }
 .xcb-btn.ghost:hover:not(:disabled) {
-  background: var(--surface-overlay);
-  background-image: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+  background: rgba(255,255,255,0.04);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%);
   border-color: var(--border); color: var(--text-secondary);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 3px rgba(0,0,0,0.3);
 }
-.xcb-btn.ghost.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 28%, transparent); }
+.xcb-btn.ghost:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.25);
+}
+.xcb-btn.ghost.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 
-/* Intent variants — set --btn-color, then ghost uses it */
+/* Intent variants */
 .xcb-btn.intent-success { --btn-color: var(--status-ok); }
 .xcb-btn.intent-danger  { --btn-color: var(--status-err); }
 .xcb-btn.intent-warning { --btn-color: var(--status-warn); }
@@ -122,35 +162,49 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 .xcb-btn.ghost.intent-warning {
   color: var(--btn-color);
   border-color: color-mix(in srgb, var(--btn-color) 35%, transparent);
-  background: color-mix(in srgb, var(--btn-color) 12%, transparent);
+  background: color-mix(in srgb, var(--btn-color) 10%, transparent);
   background-image: none;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--btn-color) 15%, transparent),
+    0 1px 3px rgba(0,0,0,0.3);
 }
 .xcb-btn.ghost.intent-success:hover:not(:disabled),
 .xcb-btn.ghost.intent-danger:hover:not(:disabled),
 .xcb-btn.ghost.intent-warning:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--btn-color) 20%, transparent);
+  background: color-mix(in srgb, var(--btn-color) 18%, transparent);
   border-color: color-mix(in srgb, var(--btn-color) 50%, transparent);
   filter: none;
 }
 
 .xcb-btn.upload-btn {
-  color: var(--rx); border-color: color-mix(in srgb, var(--rx) 25%, transparent);
-  background: color-mix(in srgb, var(--rx) 8%, transparent);
-  background-image: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+  color: var(--rx); border-color: color-mix(in srgb, var(--rx) 30%, rgba(0,0,0,0.4));
+  background: color-mix(in srgb, var(--rx) 8%, var(--surface-overlay));
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 60%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--rx) 20%, rgba(255,255,255,0.06)),
+    inset 0 -1px 0 rgba(0,0,0,0.25),
+    0 2px 5px rgba(0,0,0,0.45);
 }
 .xcb-btn.download-btn {
-  color: var(--tx); border-color: color-mix(in srgb, var(--tx) 25%, transparent);
-  background: color-mix(in srgb, var(--tx) 8%, transparent);
-  background-image: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+  color: var(--tx); border-color: color-mix(in srgb, var(--tx) 30%, rgba(0,0,0,0.4));
+  background: color-mix(in srgb, var(--tx) 8%, var(--surface-overlay));
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 60%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--tx) 20%, rgba(255,255,255,0.06)),
+    inset 0 -1px 0 rgba(0,0,0,0.25),
+    0 2px 5px rgba(0,0,0,0.45);
 }
 
-/* Segment control */
+/* Segment control — carved track */
 .xcb-segment {
   display: inline-flex; align-items: center;
-  background: var(--surface-base);
-  border: 1px solid var(--border); border-radius: 9px;
+  background: rgba(0,0,0,0.32);
+  border: 1px solid rgba(0,0,0,0.6); border-radius: 9px;
   padding: 3px; gap: 2px;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.45);
+  box-shadow:
+    inset 0 2px 5px rgba(0,0,0,0.55),
+    inset 0 1px 2px rgba(0,0,0,0.4),
+    0 1px 0 rgba(255,255,255,0.05);
 }
 .xcb-segment.sm { padding: 2px; border-radius: 7px; }
 .xcb-seg-btn {
@@ -162,8 +216,13 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 }
 .xcb-segment.sm .xcb-seg-btn { padding: 3px 9px; font-size: 11px; border-radius: 5px; }
 .xcb-seg-btn:hover { color: var(--text-secondary); }
-.xcb-seg-btn.active {
-  color: var(--text-primary);
+.xcb-seg-btn.active { color: var(--text-primary); }
+
+/* Frosted glass panel */
+.xcb-glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
 }
 
 /* Status LED */
@@ -567,21 +626,40 @@ select {
 }
 
 /* ── Input / Select design system ──────────────────────────────── */
+.xcb-input {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(0,0,0,0.5);
+  border-top-color: rgba(0,0,0,0.65);
+  border-radius: 4px;
+  color: var(--text-primary);
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.45),
+    inset 0 1px 2px rgba(0,0,0,0.3),
+    0 1px 0 rgba(255,255,255,0.04);
+}
 .xcb-input:focus,
 .xcb-select:focus {
-  border-color: var(--accent) !important;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent) !important;
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.35),
+    0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent) !important;
   outline: none;
 }
 .xcb-select {
-  background-color: var(--surface-overlay);
-  border: 1px solid var(--border-strong);
+  background-color: rgba(0,0,0,0.25);
+  border: 1px solid rgba(0,0,0,0.5);
+  border-top-color: rgba(0,0,0,0.65);
   border-radius: 4px;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   font-size: 11px;
   height: 24px;
   padding: 0 18px 0 7px;
   outline: none;
   width: 100%;
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.4),
+    inset 0 1px 1px rgba(0,0,0,0.25),
+    0 1px 0 rgba(255,255,255,0.04);
 }
 
 /* ── DAQ LED states ─────────────────────────────────────────────── */

@@ -351,8 +351,8 @@ export function CommandBar() {
 
   return (
     <div
-      className="shrink-0"
-      style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border)' }}
+      className="xcb-glass shrink-0"
+      style={{ borderBottom: '1px solid var(--border)' }}
     >
       {/* ── Summary / title row ─────────────────────────────────────── */}
       <div

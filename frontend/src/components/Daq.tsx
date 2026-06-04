@@ -296,8 +296,8 @@ function DaqToolbar({
 
   return (
     <div
-      className="flex items-center gap-2 px-3 h-9 shrink-0"
-      style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border)' }}
+      className="xcb-glass flex items-center gap-2 px-3 h-9 shrink-0"
+      style={{ borderBottom: '1px solid var(--border)' }}
     >
       <input ref={fileInputRef} type="file" accept=".daq,.json" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) { onLoad(f); e.target.value = ''; } }}
