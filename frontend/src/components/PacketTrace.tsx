@@ -209,15 +209,12 @@ export function PacketTrace() {
   const cleanedUpIds = useRef<Set<number>>(new Set());
   const staggerDelays = useRef<Map<number, number>>(new Map());
   const staggerCounter = useRef(0);
-  const staggerResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastWatermarkRef = useRef<number | null>(null);
 
   // Auto-scroll
   useEffect(() => {
     if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [packets, autoScroll]);
-
-  // Reset stagger on new command
-  useEffect(() => { staggerCounter.current = 0; }, [animationWatermark]);
 
   // Remove animation class after it completes
   useEffect(() => {
@@ -233,9 +230,6 @@ export function PacketTrace() {
         maxDelay = Math.max(maxDelay, staggerDelays.current.get(p.id) ?? 0);
       }
     }
-    if (staggerResetRef.current) clearTimeout(staggerResetRef.current);
-    staggerResetRef.current = setTimeout(() => { staggerCounter.current = 0; }, 1500);
-
     const t = setTimeout(() => {
       liveIds.forEach((id) => cleanedUpIds.current.add(id));
       setVersion((v) => v + 1);
@@ -280,8 +274,13 @@ export function PacketTrace() {
       cleanedUpIds.current.clear();
       staggerDelays.current.clear();
       staggerCounter.current = 0;
-      if (staggerResetRef.current) { clearTimeout(staggerResetRef.current); staggerResetRef.current = null; }
+      lastWatermarkRef.current = null;
     }, 220);
+  }
+
+  if (animationWatermark !== lastWatermarkRef.current) {
+    staggerCounter.current = 0;
+    lastWatermarkRef.current = animationWatermark;
   }
 
   return (
