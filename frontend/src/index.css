@@ -308,6 +308,12 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 }
 .type-fade { animation: type-fade 100ms ease; }
 
+@keyframes preview-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.preview-fade { animation: preview-fade 280ms ease; }
+
 /* Sidebar category animations */
 @keyframes sidebar-header-in {
   from { opacity: 0; transform: translateX(-8px); }

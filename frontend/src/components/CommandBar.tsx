@@ -112,8 +112,8 @@ export function CommandBar() {
   const [dataError, setDataError]       = useState(false);
 
   const mtaPreview  = useRotatingPreview(['0x20003A40', 'VarName', '0x00000000'], { interval: 3200 });
-  const sizePreview = useRotatingPreview(['8', '16', '32', '64'],                 { interval: 3800 });
   const dataPreview = useRotatingPreview(['FF 01 A3', '0xFF', '255', '01 02 03'], { interval: 3000 });
+  const [mtaAnimKey, setMtaAnimKey] = useState(0);
 
   const [mtaPinning, setMtaPinning]           = useState(false);
   const [mtaJiggling, setMtaJiggling]         = useState(false);
@@ -122,14 +122,21 @@ export function CommandBar() {
   const [downloadFlying, setDownloadFlying]   = useState(false);
   const [downloadJiggling, setDownloadJiggling] = useState(false);
   const prevDataPreview = useRef(dataPreview);
+  const prevMtaPreview  = useRef(mtaPreview);
 
-  // ── animate data preview rotation ────────────────────────────────────────
+  // ── animate preview rotation ──────────────────────────────────────────────
   useEffect(() => {
     if (downloadData.trim().length > 0 || dataPreview === prevDataPreview.current) return;
     prevDataPreview.current = dataPreview;
-    setDataAnimCls('count-tick');
+    setDataAnimCls('preview-fade');
     setDataAnimKey((k) => k + 1);
   }, [dataPreview, downloadData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (mta || mtaPreview === prevMtaPreview.current) return;
+    prevMtaPreview.current = mtaPreview;
+    setMtaAnimKey((k) => k + 1);
+  }, [mtaPreview, mta]);
 
   // ── dropdown dismiss ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -622,17 +629,22 @@ export function CommandBar() {
                     onChange={(e) => setMta(e.target.value)}
                     onFocus={() => suggestions.length > 0 && setSuggOpen(true)}
                     onBlur={() => setTimeout(() => setSuggOpen(false), 120)}
-                    placeholder={mta ? undefined : mtaPreview}
                     className="px-2 py-1 rounded text-xs font-mono focus:outline-none"
                     style={{
                       width: 148,
                       background: 'var(--surface-base)',
                       border: '1px solid var(--border)',
-                      color: 'var(--text-primary)',
+                      color: 'transparent',
+                      caretColor: 'var(--text-secondary)',
                     }}
                     onFocusCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)')}
                     onBlurCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--border)')}
                   />
+                  <span
+                    key={mta ? 'val' : mtaAnimKey}
+                    className={`absolute inset-0 flex items-center px-2 text-xs font-mono pointer-events-none select-none ${!mta ? 'preview-fade' : ''}`}
+                    style={{ color: mta ? 'var(--text-primary)' : 'var(--text-muted)' }}
+                  >{mta || mtaPreview}</span>
                   {suggOpen && suggestions.length > 0 && (
                     <div
                       className="absolute z-[9998] left-0 top-full mt-0.5 w-60 rounded shadow-xl max-h-40 overflow-y-auto"
@@ -684,7 +696,6 @@ export function CommandBar() {
                   type="number"
                   min={1}
                   value={size}
-                  placeholder={sizePreview}
                   onChange={(e) => setSize(Math.max(1, Number(e.target.value)))}
                   className="no-spinner px-2 py-1 rounded text-xs font-mono text-center focus:outline-none"
                   style={{
