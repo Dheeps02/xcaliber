@@ -349,13 +349,14 @@ export function PacketTrace() {
 
         {/* Sticky column headers */}
         <div
-          className="xcb-glass sticky top-0 z-10 grid text-[10px] font-semibold uppercase tracking-[0.09em]"
+          className="sticky top-0 z-10 grid text-[10px] font-semibold uppercase tracking-[0.09em]"
           style={{
             gridTemplateColumns: 'minmax(160px,1.2fr) 110px 1fr',
             paddingLeft: 20,
             paddingTop: 5,
             paddingBottom: 5,
             paddingRight: 16,
+            background: 'var(--surface-base)',
             borderBottom: '1px solid var(--border)',
             color: 'var(--text-muted)',
           }}

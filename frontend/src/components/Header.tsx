@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import {
   FileCode, ArrowsClockwise, GearSix, X, FolderOpen,
 } from '@phosphor-icons/react';
@@ -11,14 +11,9 @@ import { SegmentControl } from './ui/SegmentControl';
 import { Button } from './ui/Button';
 import { ConnectToggle } from './ui/ConnectToggle';
 import type { DaqEntryType } from '../lib/types';
+import { TraceIcon, DaqIcon, SequenceIcon } from './icons/TabIcons';
 
 type MainTab = 'trace' | 'daq' | 'sequence';
-
-const TAB_ITEMS: { value: MainTab; label: string }[] = [
-  { value: 'trace',    label: 'Trace' },
-  { value: 'daq',      label: 'DAQ' },
-  { value: 'sequence', label: 'Sequence' },
-];
 
 function BroadcastCustom({ size, pulsing, pulseKey }: { size: number; pulsing: boolean; pulseKey: number }) {
   return (
@@ -57,6 +52,8 @@ export function Header() {
   const closeSettings      = useAppStore((s) => s.closeSettings);
   const activeMainTab      = useAppStore((s) => s.activeMainTab);
   const setActiveMainTab   = useAppStore((s) => s.setActiveMainTab);
+  const daqStatus          = useAppStore((s) => s.daqStatus);
+  const seqRunResult       = useAppStore((s) => s.seqRunResult);
 
   const a2lInputRef = useRef<HTMLInputElement>(null);
   const [a2lFileName, setA2lFileName] = useState<string | null>(null);
@@ -66,6 +63,36 @@ export function Header() {
   const [syncSpinning, setSyncSpinning] = useState(false);
   const [gearKey, setGearKey] = useState(0);
   const [gearReverse, setGearReverse] = useState(false);
+
+  // ── Tab icon animKeys ─────────────────────────────────────────────
+  const [traceAnimKey, setTraceAnimKey] = useState(0);
+  const [daqAnimKey,   setDaqAnimKey]   = useState(0);
+  const [seqAnimKey,   setSeqAnimKey]   = useState(0);
+  const prevTabRef = useRef(activeMainTab);
+
+  useEffect(() => {
+    const prev = prevTabRef.current;
+    prevTabRef.current = activeMainTab;
+    if (activeMainTab === 'trace'    && prev !== 'trace')    setTraceAnimKey((k) => k + 1);
+    if (activeMainTab === 'daq'      && prev !== 'daq')      setDaqAnimKey((k) => k + 1);
+    if (activeMainTab === 'sequence' && prev !== 'sequence') setSeqAnimKey((k) => k + 1);
+  }, [activeMainTab]);
+
+  // Pulse trace icon on new packet
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (!mountedRef.current) { mountedRef.current = true; return; }
+    setTraceAnimKey((k) => k + 1);
+  }, [txCount, rxCount]);
+
+  const daqRunning = daqStatus === 'running';
+  const seqRunning = seqRunResult?.status === 'running';
+
+  const TAB_ITEMS = [
+    { value: 'trace'    as MainTab, label: 'Trace',    icon: <TraceIcon    size={20} animKey={traceAnimKey} /> },
+    { value: 'daq'      as MainTab, label: 'DAQ',      icon: <DaqIcon      size={20} animKey={daqAnimKey}   live={daqRunning} /> },
+    { value: 'sequence' as MainTab, label: 'Sequence', icon: <SequenceIcon size={20} animKey={seqAnimKey}   live={seqRunning} /> },
+  ];
 
   async function handleToggle() {
     if (connected) {
@@ -156,7 +183,7 @@ export function Header() {
               onClick={() => a2lInputRef.current?.click()}
               title={a2lFileName ? `${a2lFileName} · ${a2lVariables.length} variables` : 'Load A2L JSON'}
             >
-              <FileCode size={12} />
+              <FileCode size={18} />
               {a2lFileName ? 'A2L' : 'A2L'}
             </Button>
             {a2lFileName && (
@@ -170,7 +197,7 @@ export function Header() {
                     onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)')}
                     onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
                   >
-                    <FolderOpen size={10} />
+                    <FolderOpen size={15} />
                     {a2lFileName}
                   </button>
                 ) : (
@@ -186,7 +213,7 @@ export function Header() {
                   onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
                   onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
                 >
-                  <X size={11} />
+                  <X size={16} />
                 </button>
               </>
             )}
@@ -199,6 +226,7 @@ export function Header() {
             items={TAB_ITEMS}
             value={activeMainTab}
             onChange={setActiveMainTab}
+            variant="icon"
           />
         </div>
 
@@ -227,7 +255,7 @@ export function Header() {
             title="Get Status"
             onClick={handleGetStatus}
           >
-            <BroadcastCustom size={14} pulsing={broadcastPulsing} pulseKey={broadcastPulseKey} />
+            <BroadcastCustom size={21} pulsing={broadcastPulsing} pulseKey={broadcastPulseKey} />
           </Button>
 
           {/* Sync */}
@@ -239,7 +267,7 @@ export function Header() {
             onClick={handleSync}
           >
             <span className={syncSpinning ? 'icon-spin-once' : ''}>
-              <ArrowsClockwise size={14} />
+              <ArrowsClockwise size={21} />
             </span>
           </Button>
 
@@ -254,7 +282,7 @@ export function Header() {
           >
             <GearSix
               key={gearKey}
-              size={15}
+              size={22}
               className={gearKey > 0 ? (gearReverse ? 'icon-spin-90-reverse' : 'icon-spin-90') : ''}
             />
           </Button>

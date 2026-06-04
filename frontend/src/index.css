@@ -260,6 +260,7 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 .xcb-segment.sm .xcb-seg-btn { padding: 3px 9px; font-size: 11px; border-radius: 5px; }
 .xcb-seg-btn:hover { color: var(--text-secondary); }
 .xcb-seg-btn.active { color: var(--text-primary); }
+.xcb-segment.icon-only .xcb-seg-btn { padding: 5px 10px; }
 
 /* Frosted glass panel */
 .xcb-glass {
@@ -578,6 +579,87 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
   100% { transform: rotate(0deg); }
 }
 .icon-wrench-crank { animation: icon-wrench-crank 960ms cubic-bezier(0.4,0,0.2,1) both; }
+
+/* ── Tab icon animations ─────────────────────────────────────────── */
+
+/* Trace rows: stagger slide-in from left */
+@keyframes trace-tab-row-in {
+  from { opacity: 0; transform: translateX(-14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.trace-tab-row {
+  animation: trace-tab-row-in 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: var(--stagger, 0ms);
+}
+.xcb-seg-btn:hover .trace-tab-row {
+  animation: trace-tab-row-in 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: var(--stagger, 0ms);
+}
+
+/* DAQ line: stroke-dashoffset draw, optional opacity pulse when running */
+@keyframes daq-tab-draw {
+  from { stroke-dashoffset: 300; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes daq-tab-line-live {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+@keyframes daq-tab-dot-in {
+  from { opacity: 0; transform: scale(0.3); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes daq-tab-dot-pulse {
+  0%, 100% { opacity: 1;    transform: scale(1);   }
+  50%      { opacity: 0.25; transform: scale(0.45); }
+}
+.daq-tab-line {
+  stroke-dasharray: 300;
+  animation: daq-tab-draw 420ms ease both;
+}
+.daq-tab-line.daq-tab-line-live {
+  animation: daq-tab-draw 420ms ease both,
+             daq-tab-line-live 2s ease-in-out 420ms infinite;
+}
+.daq-tab-dot {
+  animation: daq-tab-dot-in 220ms cubic-bezier(0.34, 1.3, 0.64, 1) 360ms both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.daq-tab-dot-live {
+  animation: daq-tab-dot-in 220ms cubic-bezier(0.34, 1.3, 0.64, 1) 360ms both,
+             daq-tab-dot-pulse 1.1s ease-in-out 580ms infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.xcb-seg-btn:hover .daq-tab-line {
+  animation: daq-tab-draw 420ms ease both;
+}
+.xcb-seg-btn:hover .daq-tab-line.daq-tab-line-live {
+  animation: daq-tab-draw 420ms ease both,
+             daq-tab-line-live 2s ease-in-out 420ms infinite;
+}
+.xcb-seg-btn:hover .daq-tab-dot,
+.xcb-seg-btn:hover .daq-tab-dot-live {
+  animation: daq-tab-dot-in 220ms cubic-bezier(0.34, 1.3, 0.64, 1) 360ms both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Sequence filmstrip: advance one frame on switch, continuous scroll when running */
+@keyframes seq-tab-move {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-68px); }
+}
+.seq-tab-advance {
+  animation: seq-tab-move 360ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.seq-tab-scroll {
+  animation: seq-tab-move 1.4s linear infinite;
+}
+.xcb-seg-btn:hover .seq-tab-advance {
+  animation: seq-tab-move 360ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
 
 /* Disable all animations */
 .no-animations *,

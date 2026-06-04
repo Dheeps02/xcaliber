@@ -60,7 +60,7 @@ export function SegmentControl<T extends string>({
   const radius = size === 'sm' ? '5px' : '6px';
 
   return (
-    <div className={`xcb-segment${size === 'sm' ? ' sm' : ''} ${className}`} style={{ position: 'relative', overflow: 'hidden' }}>
+    <div className={`xcb-segment${size === 'sm' ? ' sm' : ''}${variant === 'icon' ? ' icon-only' : ''} ${className}`} style={{ position: 'relative', overflow: 'hidden' }}>
 
       {/* Thumb — positioned and revealed imperatively in useLayoutEffect */}
       <div
