@@ -135,8 +135,8 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
             backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent ${TICK_SPACING - 1}px, rgba(255,255,255,0.2) ${TICK_SPACING - 1}px, rgba(255,255,255,0.2) ${TICK_SPACING}px)`,
             backgroundPositionY: `${bgPos}px`,
             transition: isDragging ? 'none' : 'background-position-y 80ms ease-out',
-            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
-            maskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.25) 18%, rgba(0,0,0,0.8) 32%, black 42%, black 58%, rgba(0,0,0,0.8) 68%, rgba(0,0,0,0.25) 82%, transparent 100%)',
+            maskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.25) 18%, rgba(0,0,0,0.8) 32%, black 42%, black 58%, rgba(0,0,0,0.8) 68%, rgba(0,0,0,0.25) 82%, transparent 100%)',
             pointerEvents: 'none',
           }}
         />
