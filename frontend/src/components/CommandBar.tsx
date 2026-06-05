@@ -63,8 +63,10 @@ export function CommandBar() {
   const [typeKeys, setTypeKeys]   = useState<number[]>(Array(BASE_CELLS).fill(0));
   const [sendFlying, setSendFlying] = useState(false);
   const [dropdown, setDropdown]   = useState<DropdownState | null>(null);
+  const [expandKey, setExpandKey] = useState(0);
 
-  const inputRefs      = useRef<(HTMLInputElement | null)[]>([]);
+  const inputRefs        = useRef<(HTMLInputElement | null)[]>([]);
+  const prevCollapsedRef = useRef(collapsed);
   const shownValuesRef = useRef(shownValues);
   shownValuesRef.current = shownValues;
   const sectionRef     = useRef(section);
@@ -73,6 +75,11 @@ export function CommandBar() {
   allBytesRef.current  = allBytes;
   const holdTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevLabelTextsRef = useRef<string[]>(Array(BASE_CELLS).fill(''));
+
+  useEffect(() => {
+    if (prevCollapsedRef.current && !collapsed) setExpandKey((k) => k + 1);
+    prevCollapsedRef.current = collapsed;
+  }, [collapsed]);
 
   useEffect(() => {
     if (!dropdown) return;
@@ -298,7 +305,7 @@ export function CommandBar() {
         style={{
           display: 'grid',
           gridTemplateRows: collapsed ? '0fr' : '1fr',
-          transition: collapsed ? 'none' : 'grid-template-rows 180ms ease',
+          transition: 'grid-template-rows 180ms ease',
         }}
       >
         <div style={{ overflow: 'hidden' }}>
@@ -322,7 +329,11 @@ export function CommandBar() {
                 spanPhase !== 'idle' ? { animationDelay: `${i * STAGGER_MS}ms` } : undefined;
 
               return (
-                <div key={i} className="flex-1 flex flex-col min-w-0">
+                <div
+                  key={`${i}-${expandKey}`}
+                  className="flex-1 flex flex-col min-w-0"
+                  style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${i * 28}ms both` } : undefined}
+                >
                   <div className="flex items-baseline justify-between mb-1 h-4 overflow-hidden pr-0.5">
                     <span
                       key={`lbl-${labelKey}-${i}`}
@@ -403,8 +414,10 @@ export function CommandBar() {
 
             {activeMainTab !== 'sequence' && (
               <Button
+                key={`send-${expandKey}`}
                 variant="primary"
                 className="!text-[11px] !py-1.5 leading-4 !px-2.5 shrink-0 self-end"
+                style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${BASE_CELLS * 28}ms both` } : undefined}
                 onClick={() => {
                   setSendFlying(true);
                   setTimeout(() => setSendFlying(false), 550);
