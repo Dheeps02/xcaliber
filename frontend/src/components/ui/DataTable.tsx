@@ -419,7 +419,7 @@ function FilterPopover({ rect, value, onChange, onClose }: FilterPopoverProps) {
       style={{
         top: rect.bottom + 4, left: x, width: 168,
         border: '1px solid var(--border-strong)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        boxShadow: '0 8px 32px var(--shadow-9)',
         padding: 8,
       }}
     >

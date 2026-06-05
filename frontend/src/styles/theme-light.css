@@ -1,0 +1,52 @@
+[data-theme="light"] {
+  --surface-base:    #f2f7f5;
+  --surface-raised:  #e8f0ed;
+  --surface-overlay: #dde9e5;
+  --surface-hover:   #d3e2dd;
+  --surface-glass:   rgba(242,247,245,0.75);
+
+  --accent:          #059669;
+
+  --border:          rgba(0,0,0,0.10);
+  --border-strong:   rgba(0,0,0,0.18);
+
+  --text-primary:    #0d1f18;
+  --text-secondary:  #2a5a45;
+  --text-muted:      #5a7a6e;
+
+  --status-ok:       #16a34a;
+  --status-err:      #dc2626;
+  --status-warn:     #d97706;
+  --tx:              #0284c7;
+  --rx:              #16a34a;
+
+  --shadow-1:  rgba(0,0,0,0.01);
+  --shadow-2:  rgba(0,0,0,0.02);
+  --shadow-3:  rgba(0,0,0,0.04);
+  --shadow-4:  rgba(0,0,0,0.08);
+  --shadow-5:  rgba(0,0,0,0.10);
+  --shadow-6:  rgba(0,0,0,0.12);
+  --shadow-7:  rgba(0,0,0,0.16);
+  --shadow-8:  rgba(0,0,0,0.20);
+  --shadow-9:  rgba(0,0,0,0.24);
+  --shadow-10: rgba(0,0,0,0.28);
+  --shadow-11: rgba(0,0,0,0.35);
+  --shadow-12: rgba(0,0,0,0.50);
+
+  --shine-1: rgba(255,255,255,0.20);
+  --shine-2: rgba(255,255,255,0.30);
+  --shine-3: rgba(255,255,255,0.40);
+  --shine-4: rgba(255,255,255,0.50);
+  --shine-5: rgba(255,255,255,0.60);
+  --shine-6: rgba(255,255,255,0.70);
+  --shine-7: rgba(255,255,255,0.80);
+  --shine-8: rgba(255,255,255,0.90);
+
+  --input-bg:         rgba(255,255,255,0.70);
+  --input-border:     rgba(0,0,0,0.18);
+  --input-border-top: rgba(0,0,0,0.22);
+
+  --btn-primary-text: #ffffff;
+
+  --reel-tick: rgba(0,0,0,0.40);
+}

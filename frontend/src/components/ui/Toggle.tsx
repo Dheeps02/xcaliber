@@ -12,8 +12,8 @@ const THUMB_W      = 16;
 const THUMB_H      = 16;
 const THUMB_TRAVEL = TRACK_W - THUMB_W - 4;
 
-const SHADOW_RAISED  = '0 2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.25)';
-const SHADOW_PRESSED = 'inset 0 2px 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(0,0,0,0.2)';
+const SHADOW_RAISED  = '0 2px 0 var(--shadow-9), inset 0 1px 0 var(--shine-5), 0 1px 2px var(--shadow-5)';
+const SHADOW_PRESSED = 'inset 0 2px 3px var(--shadow-9), inset 0 1px 0 var(--shadow-4)';
 
 const THUMB_TRANSITION = 'transform 130ms ease-in, box-shadow 230ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 180ms ease';
 const TRACK_TRANSITION = 'background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease';
@@ -34,16 +34,16 @@ export function Toggle({ checked, onChange, disabled = false }: ToggleProps) {
 
   const trackBg     = checked
     ? 'color-mix(in srgb, var(--status-ok) 18%, var(--surface-overlay))'
-    : 'rgba(0,0,0,0.35)';
+    : 'var(--input-bg)';
   const trackBorder = checked
-    ? 'color-mix(in srgb, var(--status-ok) 30%, rgba(0,0,0,0.5))'
-    : 'rgba(0,0,0,0.55)';
+    ? 'color-mix(in srgb, var(--status-ok) 30%, var(--input-border))'
+    : 'var(--input-border)';
   const trackShadow = checked
-    ? 'inset 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 1px color-mix(in srgb, var(--status-ok) 15%, transparent)'
-    : 'inset 0 2px 4px rgba(0,0,0,0.45), inset 0 1px 2px rgba(0,0,0,0.3)';
+    ? 'inset 0 2px 4px var(--shadow-7), inset 0 1px 2px var(--shadow-6), 0 0 0 1px color-mix(in srgb, var(--status-ok) 15%, transparent)'
+    : 'inset 0 2px 4px var(--shadow-8), inset 0 1px 2px var(--shadow-6)';
   const thumbBorder = checked && !pressing
-    ? 'color-mix(in srgb, var(--status-ok) 35%, rgba(0,0,0,0.4))'
-    : 'rgba(0,0,0,0.45)';
+    ? 'color-mix(in srgb, var(--status-ok) 35%, var(--input-border))'
+    : 'var(--input-border)';
 
   return (
     <button
@@ -82,7 +82,7 @@ export function Toggle({ checked, onChange, disabled = false }: ToggleProps) {
             background: 'var(--surface-overlay)',
             backgroundImage: pressing
               ? 'none'
-              : 'linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.04) 50%, rgba(0,0,0,0.06) 100%)',
+              : 'linear-gradient(180deg, var(--shine-4) 0%, var(--shine-1) 50%, var(--shadow-2) 100%)',
             boxShadow: pressing ? SHADOW_PRESSED : SHADOW_RAISED,
             transform: `translateX(${checked ? THUMB_TRAVEL : 0}px)`,
             transition: ready ? THUMB_TRANSITION : 'none',

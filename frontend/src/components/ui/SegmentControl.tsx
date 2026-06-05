@@ -75,9 +75,9 @@ export function SegmentControl<T extends string>({
           opacity: 0,
           borderRadius: radius,
           background: 'var(--surface-overlay)',
-          backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.03) 50%, rgba(0,0,0,0.06) 100%)',
-          border: '1px solid rgba(0,0,0,0.5)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 5px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.35)',
+          backgroundImage: 'linear-gradient(180deg, var(--shine-3) 0%, var(--shine-1) 50%, var(--shadow-2) 100%)',
+          border: '1px solid var(--input-border)',
+          boxShadow: 'inset 0 1px 0 var(--shine-3), 0 2px 5px var(--shadow-8), 0 1px 2px var(--shadow-7)',
           pointerEvents: 'none',
         }}
       />

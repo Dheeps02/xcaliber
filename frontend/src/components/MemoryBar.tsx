@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { MapPin, ArrowLineUp, ArrowLineDown, Info, CornersIn, CornersOut, Crosshair } from '@phosphor-icons/react';
+import { TOOLBAR_ICON_SIZE, INFO_ICON_SIZE } from '../lib/constants';
 import { Toggle } from './ui/Toggle';
 import { DialInput } from './ui/DialInput';
 import { useAppStore } from '../stores/app-store';
@@ -200,7 +201,7 @@ export function MemoryBar() {
           style={{ color: 'var(--text-secondary)' }}
           onClick={(e) => e.stopPropagation()}
         >
-          <Crosshair size={12} style={{ color: 'var(--text-muted)' }} />
+          <Crosshair size={TOOLBAR_ICON_SIZE} style={{ color: 'var(--text-muted)' }} />
           Probe
         </span>
 
@@ -216,7 +217,7 @@ export function MemoryBar() {
             style={{ color: autoMta ? 'var(--text-secondary)' : 'var(--text-muted)' }}
           >Auto SET_MTA</span>
           <Info
-            size={12}
+            size={INFO_ICON_SIZE}
             className="shrink-0 cursor-default transition-colors"
             style={{ color: 'var(--text-muted)' }}
             onMouseEnter={(e) => {
@@ -236,8 +237,8 @@ export function MemoryBar() {
         <div className="xcb-vdiv" />
 
         {collapsed
-          ? <CornersOut key={toggleKey} size={12} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-          : <CornersIn  key={toggleKey} size={12} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          ? <CornersOut key={toggleKey} size={TOOLBAR_ICON_SIZE} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          : <CornersIn  key={toggleKey} size={TOOLBAR_ICON_SIZE} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
         }
       </div>
 

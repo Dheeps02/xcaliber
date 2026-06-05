@@ -29,16 +29,8 @@ interface ThemeDef {
 }
 
 const THEMES: ThemeDef[] = [
-  { id: 'default',          label: 'Default Dark',     preview: { bg: '#030712', sidebar: '#111827', accent: '#3b82f6', text: '#e5e7eb' } },
-  { id: 'oled',             label: 'OLED',             preview: { bg: '#000000', sidebar: '#090909', accent: '#3b82f6', text: '#f0f0f0' } },
-  { id: 'nord-dark',        label: 'Nord Dark',        preview: { bg: '#1a1f2e', sidebar: '#2e3440', accent: '#5e81ac', text: '#eceff4' } },
-  { id: 'nord-light',       label: 'Nord Light',       preview: { bg: '#eceff4', sidebar: '#e5e9f0', accent: '#5e81ac', text: '#2e3440' } },
-  { id: 'catppuccin-mocha', label: 'Catppuccin Mocha', preview: { bg: '#11111b', sidebar: '#1e1e2e', accent: '#89b4fa', text: '#cdd6f4' } },
-  { id: 'catppuccin-latte', label: 'Catppuccin Latte', preview: { bg: '#eff1f5', sidebar: '#e6e9ef', accent: '#1e66f5', text: '#4c4f69' } },
-  { id: 'gruvbox-dark',      label: 'Gruvbox Dark',      preview: { bg: '#1d2021', sidebar: '#282828', accent: '#458588', text: '#ebdbb2' } },
-  { id: 'gruvbox-light',     label: 'Gruvbox Light',     preview: { bg: '#f9f5d7', sidebar: '#fbf1c7', accent: '#458588', text: '#3c3836' } },
-  { id: 'everforest-dark',   label: 'Everforest Dark',   preview: { bg: '#272e33', sidebar: '#1e2326', accent: '#83c092', text: '#d3c6aa' } },
-  { id: 'everforest-light',  label: 'Everforest Light',  preview: { bg: '#fdf6e3', sidebar: '#f8f0d4', accent: '#3a94c5', text: '#5c6a72' } },
+  { id: 'default', label: 'Dark',  preview: { bg: '#090d0b', sidebar: '#141c18', accent: '#10b981', text: '#eef5f1' } },
+  { id: 'light',   label: 'Light', preview: { bg: '#f2f7f5', sidebar: '#e8f0ed', accent: '#059669', text: '#0d1f18' } },
 ];
 
 function applyTheme(theme: string) {
@@ -96,7 +88,7 @@ function AppearanceTab() {
     <div className="space-y-6">
       <div>
         <p className="text-[11px] text-gray-500 mb-4">Choose a colour theme. Changes apply instantly.</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
         {THEMES.map((t) => {
           const active = theme === t.id;
           const { bg, sidebar, accent, text } = t.preview;
@@ -105,7 +97,7 @@ function AppearanceTab() {
               key={t.id}
               onClick={() => handleSelect(t.id)}
               className={`rounded-lg overflow-hidden border-2 transition-all text-left active:scale-95 ${
-                active ? 'border-blue-500' : 'border-gray-700 hover:border-gray-500'
+                active ? 'border-[var(--accent)]' : 'border-[var(--border-strong)] hover:border-[var(--text-muted)]'
               }`}
             >
               {/* Mini app preview */}

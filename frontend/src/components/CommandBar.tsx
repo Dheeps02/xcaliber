@@ -2,10 +2,11 @@ import {
   useRef, useState, useEffect,
   type ChangeEvent, type MouseEvent,
 } from 'react';
+import { TOOLBAR_ICON_SIZE, INFO_ICON_SIZE } from '../lib/constants';
 import { createPortal } from 'react-dom';
 import {
   PaperPlaneTilt, CaretLeft, CaretRight,
-  CornersIn, CornersOut, CaretDown, Info, X, Command,
+  CornersIn, CornersOut, CaretDown, Info, X, Command, MagnifyingGlass,
 } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { useTooltip } from '../context/TooltipContext';
@@ -65,8 +66,10 @@ export function CommandBar() {
   const [dropdown, setDropdown]   = useState<DropdownState | null>(null);
   const [expandKey, setExpandKey]   = useState(0);
   const [toggleKey, setToggleKey]   = useState(0);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const inputRefs        = useRef<(HTMLInputElement | null)[]>([]);
+  const inputRefs    = useRef<(HTMLInputElement | null)[]>([]);
+  const pickerRef    = useRef<HTMLDivElement>(null);
   const prevCollapsedRef = useRef(collapsed);
   const shownValuesRef = useRef(shownValues);
   shownValuesRef.current = shownValues;
@@ -90,6 +93,17 @@ export function CommandBar() {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [dropdown]);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onDown = (e: globalThis.MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [pickerOpen]);
 
   useEffect(() => {
     prevLabelTextsRef.current = Array.from({ length: BASE_CELLS }, (_, i) => {
@@ -239,16 +253,82 @@ export function CommandBar() {
     >
       {/* ── Title row ───────────────────────────────────────────────── */}
       <div
-        className="flex items-center gap-2 px-3.5 cursor-pointer"
+        className="flex items-center gap-2 px-3.5 cursor-pointer relative"
         style={{ height: 34, borderBottom: collapsed ? 'none' : '1px solid var(--border)' }}
         onClick={() => { setCollapsed(!collapsed); setToggleKey((k) => k + 1); }}
       >
+        {/* Centered search bar — grows upward into picker panel */}
+        <div
+          ref={pickerRef}
+          className={pickerOpen ? 'xcb-glass' : ''}
+          style={{
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 280,
+            bottom: 0,
+            overflow: 'hidden',
+            borderRadius: pickerOpen ? '8px 8px 4px 4px' : 4,
+            border: `1px solid ${pickerOpen ? 'var(--border-strong)' : 'transparent'}`,
+            boxShadow: pickerOpen ? '0 -16px 48px rgba(0,0,0,0.5)' : undefined,
+            transition: 'border-radius 200ms ease, box-shadow 200ms ease, border-color 150ms',
+            zIndex: 20,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Panel — collapses to 0 when closed */}
+          <div style={{
+            display: 'grid',
+            gridTemplateRows: pickerOpen ? '1fr' : '0fr',
+            transition: 'grid-template-rows 220ms ease',
+          }}>
+            <div style={{ minHeight: 0, overflow: 'hidden' }}>
+              <div style={{ height: 374 }} />
+            </div>
+          </div>
+
+          {/* Separator */}
+          <div style={{ height: 1, background: pickerOpen ? 'var(--border)' : 'transparent' }} />
+
+          {/* Search input */}
+          <div
+            className="xcb-input relative flex items-center"
+            style={{
+              height: 26,
+              borderRadius: pickerOpen ? '0 0 4px 4px' : 4,
+              border: pickerOpen ? 'none' : undefined,
+              borderTop: pickerOpen ? '1px solid var(--border)' : undefined,
+            }}
+          >
+            <MagnifyingGlass
+              size={12}
+              className="absolute left-2 pointer-events-none"
+              style={{ color: 'var(--text-muted)' }}
+            />
+            <input
+              type="text"
+              placeholder="Search for a command…"
+              className="w-full text-[11px] bg-transparent focus:outline-none"
+              style={{
+                height: 26,
+                paddingLeft: 26,
+                paddingRight: 8,
+                color: 'var(--text-primary)',
+                caretColor: 'var(--accent)',
+                border: 'none',
+                outline: 'none',
+              }}
+              onFocus={() => setPickerOpen(true)}
+            />
+          </div>
+        </div>
+
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <span
             className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.07em] uppercase"
             style={{ color: 'var(--text-secondary)' }}
           >
-            <Command size={12} style={{ color: 'var(--text-muted)' }} />
+            <Command size={TOOLBAR_ICON_SIZE} style={{ color: 'var(--text-muted)' }} />
             {cmdLabel}
           </span>
           <div className="flex items-center gap-1">
@@ -296,8 +376,8 @@ export function CommandBar() {
         <div className="flex-1" />
 
         {collapsed
-          ? <CornersOut key={toggleKey} size={12} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-          : <CornersIn  key={toggleKey} size={12} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          ? <CornersOut key={toggleKey} size={TOOLBAR_ICON_SIZE} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          : <CornersIn  key={toggleKey} size={TOOLBAR_ICON_SIZE} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
         }
       </div>
 
@@ -357,7 +437,7 @@ export function CommandBar() {
                           style={{ color: 'var(--text-muted)' }}
                           onMouseEnter={(e) => showTip(e.currentTarget, fieldDef.tip)}
                           onMouseLeave={hideTip}
-                        ><Info size={13} /></button>
+                        ><Info size={INFO_ICON_SIZE} /></button>
                       </div>
                     )}
                   </div>

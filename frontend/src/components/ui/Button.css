@@ -1,0 +1,125 @@
+/* ── .xcb-btn and all variants ───────────────────────────────────── */
+.xcb-btn {
+  --btn-color: var(--accent);
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 5px 11px; border-radius: 5px;
+  border: 1px solid var(--shadow-10);
+  background: var(--surface-overlay);
+  background-image: linear-gradient(180deg, var(--shine-4) 0%, var(--shine-1) 40%, var(--shadow-2) 100%);
+  box-shadow:
+    inset 0 1px 0 var(--shine-4),
+    inset 0 -1px 0 var(--shadow-6),
+    0 2px 6px var(--shadow-9),
+    0 1px 2px var(--shadow-7);
+  color: var(--text-secondary); font-size: 12px;
+  font-family: inherit; font-weight: 500;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  transition: box-shadow var(--duration-instant) var(--ease-out), color var(--duration-instant) var(--ease-out), border-color var(--duration-instant) var(--ease-out), filter var(--duration-instant) var(--ease-out), transform var(--duration-instant) var(--ease-out);
+}
+.xcb-btn:hover:not(:disabled) {
+  background-image: linear-gradient(180deg, var(--shine-5) 0%, var(--shine-2) 40%, var(--shadow-1) 100%);
+  box-shadow:
+    inset 0 1px 0 var(--shine-5),
+    inset 0 -1px 0 var(--shadow-6),
+    0 3px 8px var(--shadow-10),
+    0 1px 3px var(--shadow-7);
+  color: var(--text-primary);
+}
+.xcb-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 3px var(--shadow-7),
+    inset 0 2px 4px var(--shadow-5),
+    0 1px 2px var(--shadow-6);
+  background-image: linear-gradient(180deg, var(--shadow-1) 0%, var(--shine-1) 100%);
+}
+.xcb-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Primary */
+.xcb-btn.primary {
+  background: var(--btn-color);
+  background-image: linear-gradient(180deg, var(--shine-7) 0%, var(--shine-3) 45%, var(--shadow-3) 100%);
+  border-color: color-mix(in srgb, var(--btn-color) 70%, #000);
+  color: var(--btn-primary-text); font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 var(--shine-8),
+    inset 0 -1px 0 var(--shadow-4),
+    0 2px 8px color-mix(in srgb, var(--btn-color) 45%, transparent),
+    0 1px 3px var(--shadow-8);
+}
+.xcb-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.07);
+  box-shadow:
+    inset 0 1px 0 var(--shine-8),
+    inset 0 -1px 0 var(--shadow-4),
+    0 3px 12px color-mix(in srgb, var(--btn-color) 55%, transparent),
+    0 1px 4px var(--shadow-8);
+}
+.xcb-btn.primary:active:not(:disabled) {
+  filter: brightness(0.96);
+  box-shadow:
+    inset 0 2px 4px var(--shadow-4),
+    0 1px 4px color-mix(in srgb, var(--btn-color) 30%, transparent);
+}
+
+/* Ghost */
+.xcb-btn.ghost {
+  background: transparent; background-image: none;
+  border-color: transparent; color: var(--text-muted);
+  box-shadow: none;
+}
+.xcb-btn.ghost:hover:not(:disabled) {
+  background: var(--shine-2);
+  background-image: linear-gradient(180deg, var(--shine-3) 0%, transparent 100%);
+  border-color: var(--border); color: var(--text-secondary);
+  box-shadow: inset 0 1px 0 var(--shine-3), 0 1px 3px var(--shadow-6);
+}
+.xcb-btn.ghost:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px var(--shadow-5);
+}
+.xcb-btn.ghost.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* Intent variants */
+.xcb-btn.intent-success { --btn-color: var(--status-ok); }
+.xcb-btn.intent-danger  { --btn-color: var(--status-err); }
+.xcb-btn.intent-warning { --btn-color: var(--status-warn); }
+
+.xcb-btn.ghost.intent-success,
+.xcb-btn.ghost.intent-danger,
+.xcb-btn.ghost.intent-warning {
+  color: var(--btn-color);
+  border-color: color-mix(in srgb, var(--btn-color) 35%, transparent);
+  background: color-mix(in srgb, var(--btn-color) 10%, transparent);
+  background-image: none;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--btn-color) 15%, transparent),
+    0 1px 3px var(--shadow-6);
+}
+.xcb-btn.ghost.intent-success:hover:not(:disabled),
+.xcb-btn.ghost.intent-danger:hover:not(:disabled),
+.xcb-btn.ghost.intent-warning:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--btn-color) 18%, transparent);
+  border-color: color-mix(in srgb, var(--btn-color) 50%, transparent);
+  filter: none;
+}
+
+/* Upload / Download */
+.xcb-btn.upload-btn {
+  color: var(--rx); border-color: color-mix(in srgb, var(--rx) 30%, var(--shadow-7));
+  background: color-mix(in srgb, var(--rx) 8%, var(--surface-overlay));
+  background-image: linear-gradient(180deg, var(--shine-3) 0%, transparent 60%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--rx) 20%, var(--shine-3)),
+    inset 0 -1px 0 var(--shadow-5),
+    0 2px 5px var(--shadow-8);
+}
+.xcb-btn.download-btn {
+  color: var(--tx); border-color: color-mix(in srgb, var(--tx) 30%, var(--shadow-7));
+  background: color-mix(in srgb, var(--tx) 8%, var(--surface-overlay));
+  background-image: linear-gradient(180deg, var(--shine-3) 0%, transparent 60%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--tx) 20%, var(--shine-3)),
+    inset 0 -1px 0 var(--shadow-5),
+    0 2px 5px var(--shadow-8);
+}

@@ -1,8 +1,9 @@
 import {
   useState, useRef, useEffect, useMemo, Fragment,
 } from 'react';
-import { Eraser } from '@phosphor-icons/react';
+import { Broom, PaperPlaneTilt, CheckCircle, XCircle } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
+import { TOOLBAR_ICON_SIZE, TRACE_DIR_ICON_SIZE } from '../lib/constants';
 import { formatLabel, formatTime } from '../lib/utils';
 import type { PacketEntry } from '../lib/types';
 import { flattenDecoded, formatValue } from './PacketDetail';
@@ -21,7 +22,17 @@ type DirFilter = 'all' | 'tx' | 'rx';
 function getCommandName(p: PacketEntry): string {
   const d = p.decoded as Record<string, unknown>;
   if (typeof d.command === 'string') return formatLabel(d.command);
+  if (p.direction === 'rx') {
+    if (p.pid === 'FF') return 'Positive Response';
+    if (p.pid === 'FE') return 'Negative Response';
+  }
   return `0x${p.pid}`;
+}
+
+function CommandIcon({ p }: { p: PacketEntry }) {
+  if (p.direction === 'tx') return <PaperPlaneTilt size={TRACE_DIR_ICON_SIZE} style={{ color: 'var(--tx)', flexShrink: 0 }} />;
+  if (p.pid === 'FE') return <XCircle size={TRACE_DIR_ICON_SIZE} style={{ color: 'var(--status-err)', flexShrink: 0 }} />;
+  return <CheckCircle size={TRACE_DIR_ICON_SIZE} style={{ color: 'var(--rx)', flexShrink: 0 }} />;
 }
 
 function dirColor(dir: string): string {
@@ -135,10 +146,11 @@ function makeColumns(): ColDef<PacketEntry>[] {
       },
       renderCell: (p) => (
         <div
-          className="flex items-center gap-2 py-2 min-w-0 overflow-hidden"
-          style={{ paddingLeft: 20 }}
+          className="flex items-center gap-1.5 py-2 min-w-0 overflow-hidden"
+          style={{ paddingLeft: 12 }}
         >
-          <span className="font-medium text-[12px] truncate" style={{ color: 'var(--text-primary)' }}>
+          <CommandIcon p={p} />
+          <span className="trace-mono font-medium text-[12px] truncate" style={{ color: 'var(--text-primary)' }}>
             {getCommandName(p)}
           </span>
           <span className="text-[10px] font-mono shrink-0" style={{ color: 'var(--text-muted)' }}>
@@ -199,8 +211,8 @@ export function PacketTrace() {
   const [dirFilter, setDirFilter]   = useState<DirFilter>('all');
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [isClearing, setIsClearing]   = useState(false);
-  const [eraserHovered, setEraserHovered]   = useState(false);
-  const [eraserWiggling, setEraserWiggling] = useState(false);
+  const [broomHovered, setBroomHovered]   = useState(false);
+  const [broomSweeping, setBroomSweeping] = useState(false);
   const [, setVersion] = useState(0);
 
   const cleanedUpIds    = useRef<Set<number>>(new Set());
@@ -337,15 +349,15 @@ export function PacketTrace() {
             className="!px-2 !py-1 !w-7 !h-7 !p-0"
             title="Clear"
             onClick={() => {
-              setEraserWiggling(true);
-              setTimeout(() => setEraserWiggling(false), 400);
+              setBroomSweeping(true);
+              setTimeout(() => setBroomSweeping(false), 450);
               handleClear();
             }}
-            onMouseEnter={() => setEraserHovered(true)}
-            onMouseLeave={() => setEraserHovered(false)}
+            onMouseEnter={() => setBroomHovered(true)}
+            onMouseLeave={() => setBroomHovered(false)}
           >
-            <span className={eraserWiggling ? 'icon-wiggle' : ''}>
-              <Eraser size={14} weight={eraserHovered || eraserWiggling ? 'fill' : 'regular'} />
+            <span className={broomSweeping ? 'icon-broom-sweep' : ''}>
+              <Broom size={TOOLBAR_ICON_SIZE} weight={broomHovered || broomSweeping ? 'fill' : 'regular'} />
             </span>
           </Button>
         </div>

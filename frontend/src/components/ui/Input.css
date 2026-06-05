@@ -1,0 +1,43 @@
+/* ── Input / Select design system ────────────────────────────────── */
+
+/* Hide number input spinners */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.no-spinner { -moz-appearance: textfield; }
+
+.xcb-input {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-top-color: var(--input-border-top);
+  border-radius: 4px;
+  color: var(--text-primary);
+  box-shadow:
+    inset 0 2px 4px var(--shadow-8),
+    inset 0 1px 2px var(--shadow-6),
+    0 1px 0 var(--shine-2);
+}
+.xcb-input:focus,
+.xcb-input:focus-within,
+.xcb-select:focus {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent) !important;
+  box-shadow:
+    inset 0 2px 4px var(--shadow-6),
+    0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent) !important;
+  outline: none;
+}
+.xcb-select {
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-top-color: var(--input-border-top);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  height: 24px;
+  padding: 0 18px 0 7px;
+  outline: none;
+  width: 100%;
+  box-shadow:
+    inset 0 2px 4px var(--shadow-7),
+    inset 0 1px 1px var(--shadow-5),
+    0 1px 0 var(--shine-2);
+}

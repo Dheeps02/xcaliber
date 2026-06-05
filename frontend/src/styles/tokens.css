@@ -1,0 +1,59 @@
+:root {
+  /* Dark neutral with a faint green cast — pairs with emerald */
+  --surface-base:    #090d0b;
+  --surface-raised:  #141c18;
+  --surface-overlay: #1c2620;
+  --surface-hover:   #232f29;
+  --surface-glass:   rgba(13,18,15,0.30);
+
+  --accent:          #10b981;   /* emerald */
+
+  --border:          rgba(255,255,255,0.10);
+  --border-strong:   rgba(255,255,255,0.16);
+
+  /* Text — neutral whites with a faint cool cast */
+  --text-primary:    #eef5f1;
+  --text-secondary:  #96b0a8;
+  --text-muted:      #5a7a6e;
+
+  --status-ok:       #4ade80;
+  --status-err:      #ef4444;
+  --status-warn:     #fbbf24;
+  --tx:              #38bdf8;
+  --rx:              #4ade80;
+
+  /* Shadow scale — dark overlays */
+  --shadow-1:  rgba(0,0,0,0.02);
+  --shadow-2:  rgba(0,0,0,0.05);
+  --shadow-3:  rgba(0,0,0,0.10);
+  --shadow-4:  rgba(0,0,0,0.20);
+  --shadow-5:  rgba(0,0,0,0.25);
+  --shadow-6:  rgba(0,0,0,0.30);
+  --shadow-7:  rgba(0,0,0,0.40);
+  --shadow-8:  rgba(0,0,0,0.45);
+  --shadow-9:  rgba(0,0,0,0.50);
+  --shadow-10: rgba(0,0,0,0.55);
+  --shadow-11: rgba(0,0,0,0.65);
+  --shadow-12: rgba(0,0,0,0.80);
+
+  /* Shine scale — light overlays */
+  --shine-1: rgba(255,255,255,0.02);
+  --shine-2: rgba(255,255,255,0.04);
+  --shine-3: rgba(255,255,255,0.06);
+  --shine-4: rgba(255,255,255,0.09);
+  --shine-5: rgba(255,255,255,0.13);
+  --shine-6: rgba(255,255,255,0.20);
+  --shine-7: rgba(255,255,255,0.28);
+  --shine-8: rgba(255,255,255,0.38);
+
+  /* Input */
+  --input-bg:         rgba(0,0,0,0.25);
+  --input-border:     rgba(0,0,0,0.50);
+  --input-border-top: rgba(0,0,0,0.65);
+
+  /* Button */
+  --btn-primary-text: #1a0f00;
+
+  /* Reel tick — contrasts against input background */
+  --reel-tick: rgba(255,255,255,0.20);
+}

@@ -91,9 +91,10 @@ export function DialInput({ value, onChange, min, max, step = 1, digits = 3, sty
       style={{
         display: 'inline-flex', alignItems: 'stretch',
         width: digits * 8 + 10 + REEL_W,
-        background: 'rgba(0,0,0,0.25)',
-        border: '1px solid rgba(0,0,0,0.5)',
-        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.3)',
+        background: 'var(--input-bg)',
+        border: '1px solid var(--input-border)',
+        borderTopColor: 'var(--input-border-top)',
+        boxShadow: 'inset 0 1px 3px var(--shadow-6)',
         borderRadius: 4,
         overflow: 'hidden',
         ...style,
@@ -132,7 +133,7 @@ export function DialInput({ value, onChange, min, max, step = 1, digits = 3, sty
         <div
           style={{
             position: 'absolute', inset: 0,
-            backgroundImage: `linear-gradient(to bottom, transparent 0%, transparent ${(TICK_SPACING - 2) / TICK_SPACING * 100}%, rgba(255,255,255,0.2) ${(TICK_SPACING - 2) / TICK_SPACING * 100}%, rgba(255,255,255,0.2) ${(TICK_SPACING - 1) / TICK_SPACING * 100}%, transparent ${(TICK_SPACING - 1) / TICK_SPACING * 100}%)`,
+            backgroundImage: `linear-gradient(to bottom, transparent 0%, transparent ${(TICK_SPACING - 2) / TICK_SPACING * 100}%, var(--reel-tick) ${(TICK_SPACING - 2) / TICK_SPACING * 100}%, var(--reel-tick) ${(TICK_SPACING - 1) / TICK_SPACING * 100}%, transparent ${(TICK_SPACING - 1) / TICK_SPACING * 100}%)`,
             backgroundSize: `100% ${TICK_SPACING}px`,
             backgroundRepeat: 'repeat-y',
             backgroundPositionY: `${bgPos}px`,

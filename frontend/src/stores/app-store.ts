@@ -46,7 +46,7 @@ interface AppStore {
   autoScroll: boolean;
   activeCmd: string | null;
   byteValues: string[];
-  theme: string;
+  theme: 'default' | 'light';
   uiZoom: number;
   sparkWindowMs: number;
   displayTimeoutMs: number;
@@ -64,7 +64,7 @@ interface AppStore {
   clearPackets: () => void;
   setActiveCmd: (cmd: string | null) => void;
   setByteValue: (idx: number, val: string) => void;
-  setTheme: (theme: string) => void;
+  setTheme: (theme: 'default' | 'light') => void;
   setUiZoom: (zoom: number) => void;
   setSparkWindowMs: (ms: number) => void;
   setDisplayTimeoutMs: (ms: number) => void;
@@ -189,7 +189,7 @@ export const useAppStore = create<AppStore>((set) => ({
   autoScroll: true,
   activeCmd: null,
   byteValues: Array<string>(NUM_CELLS).fill(''),
-  theme: 'default',
+  theme: 'default' as const,
   uiZoom: Number(localStorage.getItem('uiZoom') ?? 1.2),
   sparkWindowMs: Math.min(Number(localStorage.getItem('sparkWindowMs') ?? SPARK_ZOOM_DEFAULT_MS), SPARK_ZOOM_MAX_MS),
   displayTimeoutMs: 2000,

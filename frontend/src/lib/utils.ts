@@ -16,11 +16,16 @@ export function toTitleCase(str: string): string {
 }
 
 export function formatLabel(s: string): string {
-  const titled = s
-    .replace(/_/g, ' ')
+  const words = s
+    .replace(/[-_]/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-  return fixAbbrevs(titled);
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean);
+  const sentence = words
+    .map((w, i) => i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w)
+    .join(' ');
+  return fixAbbrevs(sentence);
 }
 
 export function formatTime(ms: number): string {
