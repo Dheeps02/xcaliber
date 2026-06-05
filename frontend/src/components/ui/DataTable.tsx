@@ -20,6 +20,57 @@ function FadeIn({ children, style }: { children: React.ReactNode; style?: React.
   );
 }
 
+// ── SortIcon ──────────────────────────────────────────────────────────────────
+
+function SortIcon({ isSorted, dir }: { isSorted: boolean; dir: 'asc' | 'desc' }) {
+  const upRef   = useRef<HTMLSpanElement>(null);
+  const downRef = useRef<HTMLSpanElement>(null);
+  const initRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const up   = upRef.current;
+    const down = downRef.current;
+    if (!up || !down) return;
+
+    const showDown = isSorted && dir === 'desc';
+
+    if (!initRef.current) {
+      initRef.current = true;
+      up.style.opacity   = showDown ? '0' : '1';
+      down.style.opacity = showDown ? '1' : '0';
+      up.style.color     = isSorted ? 'var(--accent)' : 'var(--text-muted)';
+      return;
+    }
+
+    const curUpOp   = up.style.opacity;
+    const curDownOp = down.style.opacity;
+    up.style.transition   = 'none';
+    down.style.transition = 'none';
+    up.style.opacity      = curUpOp;
+    down.style.opacity    = curDownOp;
+
+    const rafId = requestAnimationFrame(() => {
+      up.style.transition   = 'opacity 110ms ease, color 110ms ease';
+      down.style.transition = 'opacity 110ms ease';
+      up.style.opacity      = showDown ? '0' : '1';
+      down.style.opacity    = showDown ? '1' : '0';
+      up.style.color        = isSorted ? 'var(--accent)' : 'var(--text-muted)';
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [isSorted, dir]);
+
+  return (
+    <span style={{ position: 'relative', width: 15, height: 15, flexShrink: 0 }}>
+      <span ref={downRef} style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
+        <ArrowDown size={15} />
+      </span>
+      <span ref={upRef} style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <ArrowUp size={15} />
+      </span>
+    </span>
+  );
+}
+
 // ── Column definition ─────────────────────────────────────────────────────────
 
 export interface ColDef<T> {
@@ -245,13 +296,8 @@ export function DataTable<T>({
 
               {/* Sort icon — after filter, before spacer */}
               {col.sortable && (isHov || isSorted) && (
-                <FadeIn style={{ position: 'relative', width: 15, height: 15 }}>
-                  <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', opacity: isSorted && sort!.dir === 'desc' ? 1 : 0, transition: 'opacity 110ms ease' }}>
-                    <ArrowDown size={15} />
-                  </span>
-                  <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: isSorted ? 'var(--accent)' : 'var(--text-muted)', opacity: isSorted && sort!.dir === 'desc' ? 0 : 1, transition: 'opacity 110ms ease, color 110ms ease' }}>
-                    <ArrowUp size={15} />
-                  </span>
+                <FadeIn>
+                  <SortIcon isSorted={isSorted} dir={sort?.dir ?? 'asc'} />
                 </FadeIn>
               )}
 
