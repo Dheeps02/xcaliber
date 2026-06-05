@@ -42,21 +42,20 @@ function SortIcon({ isSorted, dir }: { isSorted: boolean; dir: 'asc' | 'desc' })
       return;
     }
 
+    // Set both arrows to 0 — guaranteed value change the browser commits before rAF
     up.style.transition   = 'none';
     down.style.transition = 'none';
-    void up.offsetHeight; // force reflow so transition:none is committed before rAF
+    up.style.opacity      = '0';
+    down.style.opacity    = '0';
+    up.style.color        = isSorted ? 'var(--accent)' : 'var(--text-muted)';
 
     let cancelled = false;
     const rafId = requestAnimationFrame(() => {
       if (cancelled) return;
-      requestAnimationFrame(() => {
-        if (cancelled) return;
-        up.style.transition   = 'opacity 110ms ease, color 110ms ease';
-        down.style.transition = 'opacity 110ms ease';
-        up.style.opacity      = showDown ? '0' : '1';
-        down.style.opacity    = showDown ? '1' : '0';
-        up.style.color        = isSorted ? 'var(--accent)' : 'var(--text-muted)';
-      });
+      up.style.transition   = 'opacity 110ms ease';
+      down.style.transition = 'opacity 110ms ease';
+      up.style.opacity      = showDown ? '0' : '1';
+      down.style.opacity    = showDown ? '1' : '0';
     });
     return () => { cancelled = true; cancelAnimationFrame(rafId); };
   }, [isSorted, dir]);
