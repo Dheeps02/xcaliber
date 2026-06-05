@@ -11,7 +11,7 @@ interface DialInputProps {
 }
 
 const REEL_W       = 14;
-const TICK_SPACING = 6;
+const TICK_SPACING = 5;
 const PX_PER_STEP  = TICK_SPACING;
 
 export function DialInput({ value, onChange, min, max, step = 1, style, inputStyle }: DialInputProps) {
@@ -87,7 +87,8 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
   }
 
   // Negative phase = value increased = ticks move up = bgPos decreases
-  const bgPos = -(phase * PX_PER_STEP);
+  // Math.round keeps ticks on whole pixels — prevents subpixel thickness variation
+  const bgPos = -Math.round(phase * PX_PER_STEP);
 
   return (
     <div
@@ -121,24 +122,21 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
         onMouseDown={handleReelMouseDown}
         style={{
           width: REEL_W, flexShrink: 0,
-          borderLeft: '1px solid rgba(255,255,255,0.07)',
           cursor: 'ns-resize',
           userSelect: 'none',
           position: 'relative',
-          backgroundColor: 'rgba(0,0,0,0.18)',
           overflow: 'hidden',
         }}
       >
-        {/* Tick layer — clip-path narrows toward edges, mask fades them */}
+        {/* Tick layer — mask fades toward edges */}
         <div
           style={{
             position: 'absolute', inset: 0,
-            backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent ${TICK_SPACING - 1}px, rgba(255,255,255,0.22) ${TICK_SPACING - 1}px, rgba(255,255,255,0.22) ${TICK_SPACING}px)`,
+            backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent ${TICK_SPACING - 1}px, rgba(255,255,255,0.2) ${TICK_SPACING - 1}px, rgba(255,255,255,0.2) ${TICK_SPACING}px)`,
             backgroundPositionY: `${bgPos}px`,
             transition: isDragging ? 'none' : 'background-position-y 80ms ease-out',
-            clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 20%, black 38%, black 62%, rgba(0,0,0,0.7) 80%, transparent 100%)',
-            maskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.7) 20%, black 38%, black 62%, rgba(0,0,0,0.7) 80%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
+            maskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
             pointerEvents: 'none',
           }}
         />
