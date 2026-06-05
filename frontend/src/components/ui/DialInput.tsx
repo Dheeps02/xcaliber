@@ -132,7 +132,7 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
         <div
           style={{
             position: 'absolute', inset: 0,
-            backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent ${TICK_SPACING - 1}px, rgba(255,255,255,0.2) ${TICK_SPACING - 1}px, rgba(255,255,255,0.2) ${TICK_SPACING}px)`,
+            backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent ${TICK_SPACING - 2}px, rgba(255,255,255,0.2) ${TICK_SPACING - 2}px, rgba(255,255,255,0.2) ${TICK_SPACING - 1}px, transparent ${TICK_SPACING - 1}px, transparent ${TICK_SPACING}px)`,
             backgroundPositionY: `${bgPos}px`,
             transition: isDragging ? 'none' : 'background-position-y 60ms linear',
             clipPath: 'ellipse(50% 52% at 50% 50%)',
