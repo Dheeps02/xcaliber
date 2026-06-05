@@ -68,16 +68,21 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
     let prevSteps    = 0;
 
     function onMove(me: MouseEvent) {
-      const steps  = Math.round((startY - me.clientY) / 4);
-      if (steps === prevSteps) return;
-      prevSteps = steps;
-      const next   = clamp(startVal + steps * step);
-      const actual = Math.round((next - startVal) / step);
-      onChange(next);
-      setPhase(startPhase + actual);
-      flash();
+      const dy = startY - me.clientY;
+      // Continuous phase — reel tracks mouse 1px:1px
+      setPhase(startPhase + dy / PX_PER_STEP);
+      // Value changes at step boundaries
+      const steps = Math.round(dy / 4);
+      if (steps !== prevSteps) {
+        prevSteps = steps;
+        const next = clamp(startVal + steps * step);
+        onChange(next);
+        flash();
+      }
     }
     function onUp() {
+      // Snap phase to integer on release so bgPos lands on a clean pixel
+      setPhase(p => Math.round(p));
       setIsDragging(false);
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
@@ -86,9 +91,8 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
     document.addEventListener('mouseup', onUp);
   }
 
-  // Negative phase = value increased = ticks move up = bgPos decreases
-  // Math.round keeps ticks on whole pixels — prevents subpixel thickness variation
-  const bgPos = -Math.round(phase * PX_PER_STEP);
+  // During drag: continuous (follows mouse 1:1). At rest: snapped to integer pixels.
+  const bgPos = isDragging ? -(phase * PX_PER_STEP) : -Math.round(phase * PX_PER_STEP);
 
   return (
     <div
