@@ -2,6 +2,18 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUp, ArrowDown, Funnel, X } from '@phosphor-icons/react';
 
+// ── FadeIn ────────────────────────────────────────────────────────────────────
+
+function FadeIn({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  const [vis, setVis] = useState(false);
+  useEffect(() => setVis(true), []);
+  return (
+    <span style={{ opacity: vis ? 1 : 0, transition: 'opacity 110ms ease', display: 'flex', alignItems: 'center', flexShrink: 0, ...style }}>
+      {children}
+    </span>
+  );
+}
+
 // ── Column definition ─────────────────────────────────────────────────────────
 
 export interface ColDef<T> {
@@ -193,35 +205,30 @@ export function DataTable<T>({
 
               {/* Filter button — right next to label */}
               {col.filterable && (isHov || hasFilter || isFilterOpen) && (
-                <button
-                  key={`${col.key}-filter-${isHov || isFilterOpen}`}
-                  className="sort-icon-fade"
-                  onClick={(e) => { e.stopPropagation(); openFilter(col.key, e.currentTarget); }}
-                  style={{
-                    background: 'none', border: 'none', padding: '1px 2px', cursor: 'pointer',
-                    color: hasFilter || isFilterOpen ? 'var(--accent)' : 'var(--text-muted)',
-                    display: 'flex', alignItems: 'center', borderRadius: 3, flexShrink: 0,
-                  }}
-                >
-                  <Funnel size={13} weight={hasFilter ? 'fill' : 'regular'} />
-                </button>
+                <FadeIn>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openFilter(col.key, e.currentTarget); }}
+                    style={{
+                      background: 'none', border: 'none', padding: '1px 2px', cursor: 'pointer',
+                      color: hasFilter || isFilterOpen ? 'var(--accent)' : 'var(--text-muted)',
+                      display: 'flex', alignItems: 'center', borderRadius: 3, flexShrink: 0,
+                    }}
+                  >
+                    <Funnel size={13} weight={hasFilter ? 'fill' : 'regular'} />
+                  </button>
+                </FadeIn>
               )}
 
               {/* Sort icon — after filter, before spacer */}
               {col.sortable && (isHov || isSorted) && (
-                <span
-                  key={`${col.key}-${isSorted ? sort!.dir : 'hover'}`}
-                  className="sort-icon-fade"
-                  style={{
-                    color: isSorted ? 'var(--accent)' : 'var(--text-muted)',
-                    display: 'flex', flexShrink: 0,
-                  }}
-                >
-                  {isSorted && sort!.dir === 'desc'
-                    ? <ArrowDown size={15} />
-                    : <ArrowUp size={15} />
-                  }
-                </span>
+                <FadeIn style={{ position: 'relative', width: 15, height: 15 }}>
+                  <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', opacity: isSorted && sort!.dir === 'desc' ? 1 : 0, transition: 'opacity 110ms ease' }}>
+                    <ArrowDown size={15} />
+                  </span>
+                  <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: isSorted ? 'var(--accent)' : 'var(--text-muted)', opacity: isSorted && sort!.dir === 'desc' ? 0 : 1, transition: 'opacity 110ms ease, color 110ms ease' }}>
+                    <ArrowUp size={15} />
+                  </span>
+                </FadeIn>
               )}
 
               <div style={{ flex: 1 }} />
@@ -252,7 +259,7 @@ export function DataTable<T>({
 
       {/* ── Rows ────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {displayRows.map((row, rowIdx) => {
+        {displayRows.map((row) => {
           const key      = rowKey(row);
           const isHov    = hoveredRow === key;
           const expanded = isExpanded?.(row) ?? false;
@@ -260,23 +267,19 @@ export function DataTable<T>({
           const hover    = isHov && rowHoverStyle ? rowHoverStyle(row) : undefined;
           const wrapCls  = wrapperClassName?.(row) ?? '';
           const rowCls   = rowClassName?.(row) ?? '';
-
-          // Stagger re-enter animation on sort/filter; don't override packet-new animation
-          const reorderAnim: React.CSSProperties =
-            reorderKey > 0 && !rowCls.includes('packet-new')
-              ? { animation: 'sort-icon-fade 180ms ease-out both' }
-              : {};
+          const isReordering = reorderKey > 0 && !rowCls.includes('packet-new');
 
           return (
             <div key={key} className={wrapCls}>
               <div
-                className={rowCls}
+                key={isReordering ? `${key}-r${reorderKey}` : String(key)}
+                className={`${rowCls}${isReordering ? ' sort-icon-fade' : ''}`}
                 style={{
                   display: 'grid', gridTemplateColumns: gridCols,
                   position: 'relative',
                   cursor: onRowClick ? 'pointer' : 'default',
                   transition: 'background 70ms',
-                  ...base, ...hover, ...reorderAnim,
+                  ...base, ...hover,
                 }}
                 onClick={() => onRowClick?.(row)}
                 onMouseEnter={() => setHoveredRow(key)}

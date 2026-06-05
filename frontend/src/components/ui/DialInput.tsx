@@ -10,14 +10,21 @@ interface DialInputProps {
   inputStyle?: React.CSSProperties;
 }
 
+const REEL_W       = 14;
+const TICK_SPACING = 6;
+const PX_PER_STEP  = TICK_SPACING;
+
 export function DialInput({ value, onChange, min, max, step = 1, style, inputStyle }: DialInputProps) {
-  const [rotation, setRotation]     = useState(0);
+  const [phase, setPhase]           = useState(0);
   const [active, setActive]         = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   const inputRef    = useRef<HTMLInputElement>(null);
+  const reelRef     = useRef<HTMLDivElement>(null);
   const activeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spinRef     = useRef<(delta: number) => void>(() => {});
+
+  useEffect(() => () => { if (activeTimer.current) clearTimeout(activeTimer.current); }, []);
 
   function clamp(n: number) {
     if (min !== undefined) n = Math.max(min, n);
@@ -25,48 +32,53 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
     return n;
   }
 
-  // Always-fresh spin fn; native event handler calls this via ref to avoid stale closure
-  spinRef.current = (delta: number) => {
-    const next = clamp(value + delta * step);
-    if (next === value) return;
-    onChange(next);
-    setRotation(r => r + delta * 30);
+  function flash() {
     setActive(true);
     if (activeTimer.current) clearTimeout(activeTimer.current);
     activeTimer.current = setTimeout(() => setActive(false), 350);
+  }
+
+  spinRef.current = (delta: number) => {
+    const next = clamp(value + delta * step);
+    if (next !== value) {
+      onChange(next);
+      setPhase(p => p + delta);
+    }
+    flash();
   };
 
-  // Non-passive wheel on the input so we can preventDefault (blocks page scroll)
   useEffect(() => {
-    const el = inputRef.current;
-    if (!el) return;
-    const h = (e: WheelEvent) => { e.preventDefault(); spinRef.current(e.deltaY > 0 ? -1 : 1); };
-    el.addEventListener('wheel', h, { passive: false });
-    return () => el.removeEventListener('wheel', h);
+    const handler = (e: WheelEvent) => { e.preventDefault(); spinRef.current(e.deltaY > 0 ? -1 : 1); };
+    const input   = inputRef.current;
+    const reel    = reelRef.current;
+    input?.addEventListener('wheel', handler, { passive: false });
+    reel?.addEventListener('wheel', handler, { passive: false });
+    return () => {
+      input?.removeEventListener('wheel', handler);
+      reel?.removeEventListener('wheel', handler);
+    };
   }, []);
 
-  useEffect(() => () => { if (activeTimer.current) clearTimeout(activeTimer.current); }, []);
-
-  // Drag the dial up/down to change value
-  function handleDialMouseDown(e: React.MouseEvent) {
+  function handleReelMouseDown(e: React.MouseEvent) {
     e.preventDefault();
-    const startY   = e.clientY;
-    const startVal = value;
-    const startRot = rotation;
-    let   lastSteps = 0;
     setIsDragging(true);
+    const startY     = e.clientY;
+    const startVal   = value;
+    const startPhase = phase;
+    let prevSteps    = 0;
 
     function onMove(me: MouseEvent) {
-      const steps = Math.round((startY - me.clientY) / 4);
-      if (steps === lastSteps) return;
-      lastSteps = steps;
-      onChange(clamp(startVal + steps * step));
-      setRotation(startRot + steps * 30);
-      setActive(true);
+      const steps  = Math.round((startY - me.clientY) / 4);
+      if (steps === prevSteps) return;
+      prevSteps = steps;
+      const next   = clamp(startVal + steps * step);
+      const actual = Math.round((next - startVal) / step);
+      onChange(next);
+      setPhase(startPhase + actual);
+      flash();
     }
     function onUp() {
       setIsDragging(false);
-      setActive(false);
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     }
@@ -74,65 +86,60 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
     document.addEventListener('mouseup', onUp);
   }
 
-  function handleDialWheel(e: React.WheelEvent) {
-    e.stopPropagation();
-    spinRef.current(e.deltaY > 0 ? -1 : 1);
-  }
-
-  const ringStroke = active
-    ? 'color-mix(in srgb, var(--accent) 55%, rgba(255,255,255,0.15))'
-    : 'rgba(255,255,255,0.13)';
-  const handStroke = active ? 'var(--accent)' : 'rgba(255,255,255,0.45)';
+  // Negative phase = value increased = ticks move up = bgPos decreases
+  const bgPos = -(phase * PX_PER_STEP);
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 5, ...style }}>
+    <div
+      style={{
+        display: 'inline-flex', alignItems: 'stretch',
+        background: 'rgba(0,0,0,0.25)',
+        border: '1px solid rgba(0,0,0,0.5)',
+        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.3)',
+        borderRadius: 4,
+        overflow: 'hidden',
+        ...style,
+      }}
+    >
       <input
         ref={inputRef}
         type="number"
         value={value}
-        onChange={(e) => { const n = Number(e.target.value); if (!isNaN(n)) onChange(clamp(n)); }}
+        onChange={e => { const n = Number(e.target.value); if (!isNaN(n) && e.target.value !== '') onChange(clamp(n)); }}
         min={min} max={max} step={step}
-        className="xcb-input no-spinner px-2 py-1 font-mono text-xs text-center focus:outline-none"
-        style={{ flex: 1, minWidth: 0, ...inputStyle }}
-        onFocusCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)')}
-        onBlurCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = '')}
+        className="no-spinner"
+        style={{
+          flex: 1, minWidth: 0, background: 'none', border: 'none', outline: 'none',
+          padding: '4px 2px 4px 8px', fontFamily: 'monospace', fontSize: 12,
+          color: 'var(--text-primary)',
+          ...inputStyle,
+        }}
       />
 
-      {/* Dial — drag up/down or scroll to change value */}
-      <svg
-        width={20} height={20}
-        viewBox="0 0 20 20"
-        style={{ flexShrink: 0, cursor: 'ns-resize', display: 'block', userSelect: 'none' }}
-        onMouseDown={handleDialMouseDown}
-        onWheel={handleDialWheel}
+      <div
+        ref={reelRef}
+        onMouseDown={handleReelMouseDown}
+        style={{
+          width: REEL_W, flexShrink: 0,
+          borderLeft: '1px solid rgba(255,255,255,0.07)',
+          cursor: 'ns-resize',
+          userSelect: 'none',
+          position: 'relative',
+          backgroundColor: 'rgba(0,0,0,0.18)',
+          backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent ${TICK_SPACING - 1}px, rgba(255,255,255,0.18) ${TICK_SPACING - 1}px, rgba(255,255,255,0.18) ${TICK_SPACING}px)`,
+          backgroundPositionY: `${bgPos}px`,
+          transition: isDragging ? 'none' : 'background-position-y 80ms ease-out',
+        }}
       >
-        {/* Ring track */}
-        <circle
-          cx={10} cy={10} r={8}
-          fill="rgba(0,0,0,0.3)"
-          stroke={ringStroke}
-          strokeWidth={1}
-          style={{ transition: 'stroke 180ms ease' }}
-        />
-        {/* Rotating hand — transformOrigin at SVG center (10,10) */}
-        <g
-          style={{
-            transform: `rotate(${rotation}deg)`,
-            transformOrigin: '10px 10px',
-            transition: isDragging ? 'none' : 'transform 120ms ease-out',
-          }}
-        >
-          <line
-            x1={10} y1={7.5} x2={10} y2={3.5}
-            stroke={handStroke}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            style={{ transition: 'stroke 180ms ease' }}
-          />
-        </g>
-        {/* Center pip */}
-        <circle cx={10} cy={10} r={1.5} fill="rgba(255,255,255,0.18)" />
-      </svg>
+        {/* Center notch */}
+        <div style={{
+          position: 'absolute', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)',
+          height: 1,
+          background: active ? 'var(--accent)' : 'rgba(255,255,255,0.32)',
+          transition: 'background 200ms ease',
+          pointerEvents: 'none',
+        }} />
+      </div>
     </div>
   );
 }
