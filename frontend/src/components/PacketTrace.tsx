@@ -224,6 +224,7 @@ export function PacketTrace() {
     const maxDelay = liveIds.reduce((m, id) => Math.max(m, staggerDelays.current.get(id) ?? 0), 0);
     const t = setTimeout(() => {
       liveIds.forEach((id) => cleanedUpIds.current.add(id));
+      staggerCounter.current = 0;
       setVersion((v) => v + 1);
     }, maxDelay + 400);
     return () => clearTimeout(t);

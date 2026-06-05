@@ -72,7 +72,8 @@ export function DataTable<T>({
   widthsRef.current = colWidths;
   const [, forceWidth] = useState(0);
 
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const bottomRef        = useRef<HTMLDivElement>(null);
+  const rowsContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -82,6 +83,21 @@ export function DataTable<T>({
   useEffect(() => {
     if (reorderKey === 0) return;
     const t = setTimeout(() => setReorderKey(0), 500);
+    return () => clearTimeout(t);
+  }, [reorderKey]);
+
+  // Imperative row reorder animation: force-reflow restart is the only reliable cross-browser approach
+  useEffect(() => {
+    if (reorderKey === 0 || !rowsContainerRef.current) return;
+    const rows = Array.from(
+      rowsContainerRef.current.querySelectorAll<HTMLElement>('[data-xcbrow]')
+    ).filter(el => !el.classList.contains('packet-new'));
+    rows.forEach(el => {
+      el.classList.remove('sort-icon-fade');
+      void el.offsetHeight; // force reflow — commits the removed state
+      el.classList.add('sort-icon-fade');
+    });
+    const t = setTimeout(() => rows.forEach(el => el.classList.remove('sort-icon-fade')), 200);
     return () => clearTimeout(t);
   }, [reorderKey]);
 
@@ -264,22 +280,21 @@ export function DataTable<T>({
       </div>
 
       {/* ── Rows ────────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div ref={rowsContainerRef} style={{ flex: 1, overflowY: 'auto' }}>
         {displayRows.map((row) => {
-          const key      = rowKey(row);
-          const isHov    = hoveredRow === key;
+          const key     = rowKey(row);
+          const isHov   = hoveredRow === key;
           const expanded = isExpanded?.(row) ?? false;
-          const base     = rowStyle?.(row);
-          const hover    = isHov && rowHoverStyle ? rowHoverStyle(row) : undefined;
-          const wrapCls  = wrapperClassName?.(row) ?? '';
-          const rowCls   = rowClassName?.(row) ?? '';
-          const isReordering = reorderKey > 0 && !rowCls.includes('packet-new');
+          const base    = rowStyle?.(row);
+          const hover   = isHov && rowHoverStyle ? rowHoverStyle(row) : undefined;
+          const wrapCls = wrapperClassName?.(row) ?? '';
+          const rowCls  = rowClassName?.(row) ?? '';
 
           return (
             <div key={key} className={wrapCls}>
               <div
-                key={isReordering ? `${key}-r${reorderKey}` : String(key)}
-                className={`${rowCls}${isReordering ? ' sort-icon-fade' : ''}`}
+                data-xcbrow=""
+                className={rowCls}
                 style={{
                   display: 'grid', gridTemplateColumns: gridCols,
                   position: 'relative',
