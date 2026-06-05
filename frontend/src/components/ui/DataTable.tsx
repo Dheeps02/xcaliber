@@ -60,6 +60,13 @@ export function DataTable<T>({
     if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [rows, autoScroll]);
 
+  // Reset reorderKey after animation window closes so incoming packets don't inherit the delay
+  useEffect(() => {
+    if (reorderKey === 0) return;
+    const t = setTimeout(() => setReorderKey(0), 500);
+    return () => clearTimeout(t);
+  }, [reorderKey]);
+
   // ── Grid template ────────────────────────────────────────────────────────
   const gridCols = columns.map((col, i) =>
     col.flex ? '1fr' : `${widthsRef.current[i]}px`
@@ -196,7 +203,7 @@ export function DataTable<T>({
                     display: 'flex', alignItems: 'center', borderRadius: 3, flexShrink: 0,
                   }}
                 >
-                  <Funnel size={9} weight={hasFilter ? 'fill' : 'regular'} />
+                  <Funnel size={13} weight={hasFilter ? 'fill' : 'regular'} />
                 </button>
               )}
 
@@ -211,8 +218,8 @@ export function DataTable<T>({
                   }}
                 >
                   {isSorted && sort!.dir === 'desc'
-                    ? <ArrowDown size={10} />
-                    : <ArrowUp size={10} />
+                    ? <ArrowDown size={15} />
+                    : <ArrowUp size={15} />
                   }
                 </span>
               )}

@@ -8,10 +8,10 @@ interface ConnectToggleProps {
   className?: string;
 }
 
-const TRACK_W      = 34;
-const TRACK_H      = 18;
-const THUMB_W      = 14;
-const THUMB_H      = 14;
+const TRACK_W      = 36;
+const TRACK_H      = 20;
+const THUMB_W      = 16;
+const THUMB_H      = 16;
 const THUMB_TRAVEL = TRACK_W - THUMB_W - 4;
 
 const SHADOW_RAISED  = '0 2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.25)';
@@ -64,7 +64,7 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
         style={{
           position: 'relative', display: 'inline-block',
           width: TRACK_W, height: TRACK_H,
-          borderRadius: 4,
+          borderRadius: 5,
           border: `1px solid ${trackBorder}`,
           backgroundColor: trackBg,
           boxShadow: trackShadow,
