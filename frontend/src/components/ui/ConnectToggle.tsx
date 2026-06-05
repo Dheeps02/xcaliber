@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link, LinkBreak } from '@phosphor-icons/react';
 
 interface ConnectToggleProps {
   checked: boolean;
@@ -33,18 +34,14 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
     timerRef.current = setTimeout(() => { onChange(); setPressing(false); }, 110);
   }
 
-  const trackBg     = checked
-    ? 'color-mix(in srgb, var(--status-ok) 18%, var(--surface-overlay))'
-    : 'rgba(0,0,0,0.35)';
-  const trackBorder = checked
-    ? 'color-mix(in srgb, var(--status-ok) 30%, rgba(0,0,0,0.5))'
-    : 'rgba(0,0,0,0.55)';
-  const trackShadow = checked
-    ? 'inset 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 1px color-mix(in srgb, var(--status-ok) 15%, transparent)'
-    : 'inset 0 2px 4px rgba(0,0,0,0.45), inset 0 1px 2px rgba(0,0,0,0.3)';
-  const thumbBorder = checked && !pressing
-    ? 'color-mix(in srgb, var(--status-ok) 35%, rgba(0,0,0,0.4))'
-    : 'rgba(0,0,0,0.45)';
+  const statusVar   = checked ? 'var(--status-ok)' : 'var(--status-err)';
+  const trackBg     = `color-mix(in srgb, ${statusVar} 18%, var(--surface-overlay))`;
+  const trackBorder = `color-mix(in srgb, ${statusVar} 30%, rgba(0,0,0,0.5))`;
+  const trackShadow = `inset 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 1px color-mix(in srgb, ${statusVar} 15%, transparent)`;
+  const thumbBorder = pressing
+    ? 'rgba(0,0,0,0.45)'
+    : `color-mix(in srgb, ${statusVar} 35%, rgba(0,0,0,0.4))`;
+  const iconColor   = `color-mix(in srgb, ${statusVar} 75%, rgba(255,255,255,0.5))`;
 
   return (
     <button
@@ -90,8 +87,13 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
             boxShadow: pressing ? SHADOW_PRESSED : SHADOW_RAISED,
             transform: `translateX(${checked ? THUMB_TRAVEL : 0}px)`,
             transition: ready ? THUMB_TRANSITION : 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
-        />
+        >
+          <span style={{ color: iconColor, display: 'flex', transition: ready ? 'color 180ms ease' : 'none', pointerEvents: 'none' }}>
+            {checked ? <Link size={8} weight="bold" /> : <LinkBreak size={8} weight="bold" />}
+          </span>
+        </span>
       </span>
 
       {/* Label — ghost text reserves width of the longer string */}
@@ -100,7 +102,7 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
         <span
           style={{
             position: 'absolute', left: 0, whiteSpace: 'nowrap',
-            color: checked ? 'var(--status-ok)' : 'var(--text-secondary)',
+            color: checked ? 'var(--status-ok)' : 'var(--status-err)',
             transition: ready ? 'color 180ms ease' : 'none',
           }}
         >
