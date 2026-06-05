@@ -90,8 +90,14 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
-          <span style={{ color: iconColor, display: 'flex', transition: ready ? 'color 180ms ease' : 'none', pointerEvents: 'none' }}>
-            {checked ? <Link size={8} weight="bold" /> : <LinkBreak size={8} weight="bold" />}
+          {/* Both icons stacked; crossfade over the full thumb-slide duration */}
+          <span style={{ position: 'relative', width: 8, height: 8, pointerEvents: 'none', flexShrink: 0 }}>
+            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: iconColor, opacity: checked ? 1 : 0, transition: ready ? `opacity 130ms ease-in, color 180ms ease` : 'none' }}>
+              <Link size={8} weight="bold" />
+            </span>
+            <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: iconColor, opacity: checked ? 0 : 1, transition: ready ? `opacity 130ms ease-in, color 180ms ease` : 'none' }}>
+              <LinkBreak size={8} weight="bold" />
+            </span>
           </span>
         </span>
       </span>
@@ -99,15 +105,8 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
       {/* Label — ghost text reserves width of the longer string */}
       <span style={{ position: 'relative', display: 'inline-block', fontSize: 11, userSelect: 'none' }}>
         <span style={{ visibility: 'hidden' }}>Disconnected</span>
-        <span
-          style={{
-            position: 'absolute', left: 0, whiteSpace: 'nowrap',
-            color: checked ? 'var(--status-ok)' : 'var(--status-err)',
-            transition: ready ? 'color 180ms ease' : 'none',
-          }}
-        >
-          {checked ? 'Connected' : 'Disconnected'}
-        </span>
+        <span style={{ position: 'absolute', left: 0, whiteSpace: 'nowrap', color: 'var(--status-ok)', opacity: checked ? 1 : 0, transition: ready ? 'opacity 180ms ease' : 'none' }}>Connected</span>
+        <span style={{ position: 'absolute', left: 0, whiteSpace: 'nowrap', color: 'var(--status-err)', opacity: checked ? 0 : 1, transition: ready ? 'opacity 180ms ease' : 'none' }}>Disconnected</span>
       </span>
     </button>
   );

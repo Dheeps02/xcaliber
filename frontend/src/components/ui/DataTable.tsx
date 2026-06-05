@@ -264,7 +264,7 @@ export function DataTable<T>({
           // Stagger re-enter animation on sort/filter; don't override packet-new animation
           const reorderAnim: React.CSSProperties =
             reorderKey > 0 && !rowCls.includes('packet-new')
-              ? { animation: `sort-icon-fade 180ms ease-out ${Math.min(rowIdx * 18, 240)}ms both` }
+              ? { animation: 'sort-icon-fade 180ms ease-out both' }
               : {};
 
           return (

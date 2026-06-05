@@ -296,11 +296,11 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 
 /* Fade-in for new packets */
 @keyframes packet-fadein {
-  from { opacity: 0; transform: translateY(-3px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .packet-new {
-  animation: packet-fadein 280ms ease-out both;
+  animation: packet-fadein 200ms ease-out both;
 }
 
 /* Expand detail slide-down */
