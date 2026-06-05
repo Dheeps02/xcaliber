@@ -92,10 +92,14 @@ export function DataTable<T>({
     let rafId: number;
     let timeoutId: ReturnType<typeof setTimeout>;
     rafId = requestAnimationFrame(() => {
-      els.forEach(el => { el.style.transition = 'opacity 180ms ease-out'; el.style.opacity = '1'; });
+      els.forEach((el, i) => {
+        const delay = Math.min(i * 35, 210);
+        el.style.transition = `opacity 180ms ease-out ${delay}ms`;
+        el.style.opacity = '1';
+      });
       timeoutId = setTimeout(() => {
         els.forEach(el => { el.style.transition = ''; el.style.opacity = ''; });
-      }, 250);
+      }, 450);
     });
     return () => {
       cancelAnimationFrame(rafId);
