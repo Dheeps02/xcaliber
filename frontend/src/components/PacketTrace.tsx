@@ -270,12 +270,16 @@ export function PacketTrace() {
       staggerCounter.current++;
     }
     const isExpanded = expandedIds.has(p.id);
+    const delay = staggerDelays.current.get(p.id) ?? 0;
     return {
       background: isExpanded ? 'var(--surface-overlay)' : dirBgColor(effectiveDir(p)),
       borderBottom: '1px solid var(--border)',
       paddingRight: 16,
-      ...(isNew ? { animationDelay: `${staggerDelays.current.get(p.id) ?? 0}ms` } : {}),
-    };
+      ...(isNew ? {
+        animationDelay: `${delay}ms`,
+        '--anim-delay': `${delay}ms`,
+      } : {}),
+    } as React.CSSProperties;
   }
 
   function rowHoverStyle(p: PacketEntry): React.CSSProperties {
@@ -285,7 +289,8 @@ export function PacketTrace() {
 
   function rowClassName(p: PacketEntry): string {
     const isNew = animationWatermark !== null && p.id > animationWatermark && !cleanedUpIds.current.has(p.id);
-    return isNew ? 'packet-new' : '';
+    if (!isNew) return '';
+    return `packet-new packet-new-${effectiveDir(p)}`;
   }
 
   function wrapperClassName(p: PacketEntry): string {
