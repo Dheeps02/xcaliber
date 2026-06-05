@@ -249,18 +249,13 @@ export function MemoryBar() {
         }}
       >
         <div style={{ overflow: 'hidden' }}>
-          <div className="flex items-stretch gap-2 px-3.5 py-2">
+          <div className="flex items-end gap-2.5 px-3.5 py-2">
 
-            {/* Panel 1: MTA address + Set MTA */}
+            {/* Group 1: MTA address + Set MTA */}
             <div
               key={`g0-${expandKey}`}
-              className="flex items-end gap-2 rounded-md"
-              style={{
-                background: 'rgba(0,0,0,0.18)',
-                border: '1px solid var(--border)',
-                padding: '6px 10px',
-                ...(expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 0ms both' } : {}),
-              }}
+              className="flex items-end gap-2"
+              style={expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 0ms both' } : undefined}
             >
               <div className="flex flex-col gap-1">
                 <FieldLabel>MTA Address</FieldLabel>
@@ -326,16 +321,13 @@ export function MemoryBar() {
               </Button>
             </div>
 
-            {/* Panel 2: Size + Upload */}
+            <div className="xcb-vdiv-fade" />
+
+            {/* Group 2: Size + Upload */}
             <div
               key={`g1-${expandKey}`}
-              className="flex items-end gap-2 rounded-md"
-              style={{
-                background: 'rgba(0,0,0,0.18)',
-                border: '1px solid var(--border)',
-                padding: '6px 10px',
-                ...(expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 50ms both' } : {}),
-              }}
+              className="flex items-end gap-2"
+              style={expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 50ms both' } : undefined}
             >
               <div className="flex flex-col gap-1">
                 <FieldLabel>Size</FieldLabel>
@@ -362,16 +354,13 @@ export function MemoryBar() {
               </Button>
             </div>
 
-            {/* Panel 3: Data + Download */}
+            <div className="xcb-vdiv-fade" />
+
+            {/* Group 3: Data + Download */}
             <div
               key={`g2-${expandKey}`}
-              className="flex items-end gap-2 flex-1 min-w-0 rounded-md"
-              style={{
-                background: 'rgba(0,0,0,0.18)',
-                border: '1px solid var(--border)',
-                padding: '6px 10px',
-                ...(expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 100ms both' } : {}),
-              }}
+              className="flex items-end gap-2 flex-1 min-w-0"
+              style={expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 100ms both' } : undefined}
             >
               <div className="flex flex-col gap-1 flex-1 min-w-0">
                 <FieldLabel>Data</FieldLabel>

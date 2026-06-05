@@ -79,7 +79,7 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
         <span
           aria-hidden
           style={{
-            position: 'absolute', top: 2, left: 2,
+            position: 'absolute', top: 1, left: 2,
             width: THUMB_W, height: THUMB_H,
             borderRadius: 3,
             border: `1px solid ${thumbBorder}`,

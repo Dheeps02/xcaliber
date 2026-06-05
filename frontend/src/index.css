@@ -276,6 +276,7 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
 
 /* Vertical divider */
 .xcb-vdiv { width: 1px; background: var(--border); flex-shrink: 0; align-self: stretch; margin: 6px 0; }
+.xcb-vdiv-fade { width: 1px; background: linear-gradient(to bottom, transparent, var(--border) 20%, var(--border) 80%, transparent); flex-shrink: 0; align-self: stretch; margin: 2px 0; }
 
 /* Connected blinker */
 @keyframes blink-pulse {
