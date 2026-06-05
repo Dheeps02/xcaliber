@@ -42,21 +42,23 @@ function SortIcon({ isSorted, dir }: { isSorted: boolean; dir: 'asc' | 'desc' })
       return;
     }
 
-    const curUpOp   = up.style.opacity;
-    const curDownOp = down.style.opacity;
     up.style.transition   = 'none';
     down.style.transition = 'none';
-    up.style.opacity      = curUpOp;
-    down.style.opacity    = curDownOp;
+    void up.offsetHeight; // force reflow so transition:none is committed before rAF
 
+    let cancelled = false;
     const rafId = requestAnimationFrame(() => {
-      up.style.transition   = 'opacity 110ms ease, color 110ms ease';
-      down.style.transition = 'opacity 110ms ease';
-      up.style.opacity      = showDown ? '0' : '1';
-      down.style.opacity    = showDown ? '1' : '0';
-      up.style.color        = isSorted ? 'var(--accent)' : 'var(--text-muted)';
+      if (cancelled) return;
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        up.style.transition   = 'opacity 110ms ease, color 110ms ease';
+        down.style.transition = 'opacity 110ms ease';
+        up.style.opacity      = showDown ? '0' : '1';
+        down.style.opacity    = showDown ? '1' : '0';
+        up.style.color        = isSorted ? 'var(--accent)' : 'var(--text-muted)';
+      });
     });
-    return () => cancelAnimationFrame(rafId);
+    return () => { cancelled = true; cancelAnimationFrame(rafId); };
   }, [isSorted, dir]);
 
   return (
