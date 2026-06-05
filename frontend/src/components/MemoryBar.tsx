@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, ArrowLineUp, ArrowLineDown, Info, CornersIn, CornersOut } from '@phosphor-icons/react';
+import { MapPin, ArrowLineUp, ArrowLineDown, Info, CornersIn, CornersOut, Crosshair } from '@phosphor-icons/react';
+import { Toggle } from './ui/Toggle';
 import { useAppStore } from '../stores/app-store';
 import { useTooltip } from '../context/TooltipContext';
 import { api } from '../lib/api';
@@ -53,6 +54,7 @@ export function MemoryBar() {
   const [dataError, setDataError]       = useState(false);
 
   const [expandKey, setExpandKey]             = useState(0);
+  const [toggleKey, setToggleKey]             = useState(0);
   const prevCollapsedRef                      = useRef(collapsed);
 
   const [mtaPinning, setMtaPinning]           = useState(false);
@@ -190,21 +192,51 @@ export function MemoryBar() {
       <div
         className="flex items-center gap-2 px-3.5 cursor-pointer"
         style={{ height: 34, borderBottom: collapsed ? 'none' : '1px solid var(--border)' }}
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={() => { setCollapsed(!collapsed); setToggleKey((k) => k + 1); }}
       >
         <span
-          className="text-[11px] font-semibold tracking-[0.07em] uppercase"
+          className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.07em] uppercase"
           style={{ color: 'var(--text-secondary)' }}
           onClick={(e) => e.stopPropagation()}
         >
-          Memory
+          <Crosshair size={12} style={{ color: 'var(--text-muted)' }} />
+          Probe
         </span>
 
         <div className="flex-1" />
 
+        <div
+          className="flex items-center gap-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Toggle checked={autoMta} onChange={() => setAutoMta(!autoMta)} />
+          <span
+            className="text-[10px] font-medium select-none"
+            style={{ color: autoMta ? 'var(--text-secondary)' : 'var(--text-muted)' }}
+          >Auto SET_MTA</span>
+          <Info
+            size={12}
+            className="shrink-0 cursor-default transition-colors"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as SVGElement).style.color = 'var(--text-secondary)';
+              showTip(
+                e.currentTarget as unknown as HTMLElement,
+                'When enabled, a SET_MTA is sent automatically before every Upload or Download.'
+              );
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as SVGElement).style.color = 'var(--text-muted)';
+              hideTip();
+            }}
+          />
+        </div>
+
+        <div className="xcb-vdiv" />
+
         {collapsed
-          ? <CornersOut size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-          : <CornersIn  size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          ? <CornersOut key={toggleKey} size={12} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          : <CornersIn  key={toggleKey} size={12} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
         }
       </div>
 
@@ -217,13 +249,18 @@ export function MemoryBar() {
         }}
       >
         <div style={{ overflow: 'hidden' }}>
-          <div className="flex items-end gap-2 px-3.5 py-2">
+          <div className="flex items-stretch gap-2 px-3.5 py-2">
 
-            {/* Group 1: MTA address + Set MTA */}
+            {/* Panel 1: MTA address + Set MTA */}
             <div
               key={`g0-${expandKey}`}
-              className="flex items-end gap-2"
-              style={expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 0ms both' } : undefined}
+              className="flex items-end gap-2 rounded-md"
+              style={{
+                background: 'rgba(0,0,0,0.18)',
+                border: '1px solid var(--border)',
+                padding: '6px 10px',
+                ...(expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 0ms both' } : {}),
+              }}
             >
               <div className="flex flex-col gap-1">
                 <FieldLabel>MTA Address</FieldLabel>
@@ -289,13 +326,16 @@ export function MemoryBar() {
               </Button>
             </div>
 
-            <div className="xcb-vdiv" />
-
-            {/* Group 2: Size + Upload */}
+            {/* Panel 2: Size + Upload */}
             <div
               key={`g1-${expandKey}`}
-              className="flex items-end gap-2"
-              style={expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 50ms both' } : undefined}
+              className="flex items-end gap-2 rounded-md"
+              style={{
+                background: 'rgba(0,0,0,0.18)',
+                border: '1px solid var(--border)',
+                padding: '6px 10px',
+                ...(expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 50ms both' } : {}),
+              }}
             >
               <div className="flex flex-col gap-1">
                 <FieldLabel>Size</FieldLabel>
@@ -322,13 +362,16 @@ export function MemoryBar() {
               </Button>
             </div>
 
-            <div className="xcb-vdiv" />
-
-            {/* Group 3: Data + Download */}
+            {/* Panel 3: Data + Download */}
             <div
               key={`g2-${expandKey}`}
-              className="flex items-end gap-2 flex-1 min-w-0"
-              style={expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 100ms both' } : undefined}
+              className="flex items-end gap-2 flex-1 min-w-0 rounded-md"
+              style={{
+                background: 'rgba(0,0,0,0.18)',
+                border: '1px solid var(--border)',
+                padding: '6px 10px',
+                ...(expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 100ms both' } : {}),
+              }}
             >
               <div className="flex flex-col gap-1 flex-1 min-w-0">
                 <FieldLabel>Data</FieldLabel>
@@ -370,40 +413,6 @@ export function MemoryBar() {
                 </span>
                 Download
               </Button>
-            </div>
-
-            <div className="xcb-vdiv" />
-
-            {/* Group 4: Auto SET_MTA + Info */}
-            <div
-              key={`g3-${expandKey}`}
-              className="flex items-center gap-1"
-              style={expandKey > 0 ? { animation: 'bar-enter 200ms ease-out 150ms both' } : undefined}
-            >
-              <Button
-                variant="ghost"
-                on={autoMta}
-                className="!text-[11px] !py-1 !px-2.5 !gap-1"
-                onClick={() => setAutoMta(!autoMta)}
-              >
-                Auto SET_MTA
-              </Button>
-              <Info
-                size={12}
-                className="shrink-0 cursor-default transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as SVGElement).style.color = 'var(--text-secondary)';
-                  showTip(
-                    e.currentTarget as unknown as HTMLElement,
-                    'When enabled, a SET_MTA is sent automatically before every Upload or Download.'
-                  );
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as SVGElement).style.color = 'var(--text-muted)';
-                  hideTip();
-                }}
-              />
             </div>
 
           </div>

@@ -63,7 +63,8 @@ export function CommandBar() {
   const [typeKeys, setTypeKeys]   = useState<number[]>(Array(BASE_CELLS).fill(0));
   const [sendFlying, setSendFlying] = useState(false);
   const [dropdown, setDropdown]   = useState<DropdownState | null>(null);
-  const [expandKey, setExpandKey] = useState(0);
+  const [expandKey, setExpandKey]   = useState(0);
+  const [toggleKey, setToggleKey]   = useState(0);
 
   const inputRefs        = useRef<(HTMLInputElement | null)[]>([]);
   const prevCollapsedRef = useRef(collapsed);
@@ -240,7 +241,7 @@ export function CommandBar() {
       <div
         className="flex items-center gap-2 px-3.5 cursor-pointer"
         style={{ height: 34, borderBottom: collapsed ? 'none' : '1px solid var(--border)' }}
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={() => { setCollapsed(!collapsed); setToggleKey((k) => k + 1); }}
       >
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <span
@@ -295,8 +296,8 @@ export function CommandBar() {
         <div className="flex-1" />
 
         {collapsed
-          ? <CornersOut size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-          : <CornersIn  size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          ? <CornersOut key={toggleKey} size={12} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          : <CornersIn  key={toggleKey} size={12} className={toggleKey > 0 ? 'icon-pop' : ''} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
         }
       </div>
 
@@ -337,8 +338,8 @@ export function CommandBar() {
                   <div className="flex items-baseline justify-between mb-1 h-4 overflow-hidden pr-0.5">
                     <span
                       key={`lbl-${labelKey}-${i}`}
-                      className={`text-[10px] truncate min-w-0 overflow-hidden ${lblCls}`}
-                      style={{ color: fieldDef ? 'var(--text-secondary)' : 'transparent' }}
+                      className={`text-[9px] font-semibold uppercase tracking-widest leading-none truncate min-w-0 overflow-hidden ${lblCls}`}
+                      style={{ color: fieldDef ? 'var(--text-muted)' : 'transparent' }}
                     >{fieldDef ? toTitleCase(fieldDef.label) : '.'}</span>
                     {fieldDef && (
                       <div className="flex items-center gap-0.5 shrink-0">
@@ -356,7 +357,7 @@ export function CommandBar() {
                           style={{ color: 'var(--text-muted)' }}
                           onMouseEnter={(e) => showTip(e.currentTarget, fieldDef.tip)}
                           onMouseLeave={hideTip}
-                        ><Info size={10} /></button>
+                        ><Info size={13} /></button>
                       </div>
                     )}
                   </div>

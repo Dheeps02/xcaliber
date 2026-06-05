@@ -10,6 +10,7 @@ import type { PacketEntry } from '../lib/types';
 import { flattenDecoded, formatValue } from './PacketDetail';
 import { Button } from './ui/Button';
 import { SegmentControl } from './ui/SegmentControl';
+import { Toggle } from './ui/Toggle';
 
 // ── types ─────────────────────────────────────────────────────────────────
 
@@ -316,14 +317,13 @@ export function PacketTrace() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            on={autoScroll}
-            className="!px-2 !py-1 !text-[11px]"
-            onClick={() => setAutoScroll(!autoScroll)}
-          >
-            Auto-scroll
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Toggle checked={autoScroll} onChange={() => setAutoScroll(!autoScroll)} />
+            <span
+              className="text-[11px] select-none"
+              style={{ color: autoScroll ? 'var(--text-primary)' : 'var(--text-muted)' }}
+            >Auto-scroll</span>
+          </div>
 
           <Button
             variant="ghost"

@@ -1,16 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 
-interface ConnectToggleProps {
+interface ToggleProps {
   checked: boolean;
   onChange: () => void;
   disabled?: boolean;
-  className?: string;
 }
 
-const TRACK_W      = 34;
-const TRACK_H      = 18;
-const THUMB_W      = 14;
-const THUMB_H      = 14;
+const TRACK_W      = 36;
+const TRACK_H      = 20;
+const THUMB_W      = 16;
+const THUMB_H      = 16;
 const THUMB_TRAVEL = TRACK_W - THUMB_W - 4;
 
 const SHADOW_RAISED  = '0 2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.25)';
@@ -19,7 +18,7 @@ const SHADOW_PRESSED = 'inset 0 2px 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(0,0,
 const THUMB_TRANSITION = 'transform 130ms ease-in, box-shadow 230ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 180ms ease';
 const TRACK_TRANSITION = 'background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease';
 
-export function ConnectToggle({ checked, onChange, disabled = false, className = '' }: ConnectToggleProps) {
+export function Toggle({ checked, onChange, disabled = false }: ToggleProps) {
   const [ready, setReady]       = useState(false);
   const [pressing, setPressing] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,22 +51,20 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
       aria-checked={checked}
       disabled={disabled}
       onClick={handleClick}
-      title={checked ? 'Disconnect' : 'Connect'}
-      className={className}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6,
+        display: 'inline-flex', alignItems: 'center',
         background: 'none', border: 'none', padding: 0,
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.4 : 1,
+        flexShrink: 0,
       }}
     >
-      {/* Track */}
       <span
         aria-hidden
         style={{
           position: 'relative', display: 'inline-block',
           width: TRACK_W, height: TRACK_H,
-          borderRadius: 4,
+          borderRadius: 5,
           border: `1px solid ${trackBorder}`,
           backgroundColor: trackBg,
           boxShadow: trackShadow,
@@ -75,7 +72,6 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
           transition: ready ? TRACK_TRANSITION : 'none',
         }}
       >
-        {/* Thumb */}
         <span
           aria-hidden
           style={{
@@ -92,18 +88,6 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
             transition: ready ? THUMB_TRANSITION : 'none',
           }}
         />
-      </span>
-
-      {/* Label */}
-      <span
-        style={{
-          fontSize: 11,
-          color: checked ? 'var(--status-ok)' : 'var(--text-secondary)',
-          transition: ready ? 'color 180ms ease' : 'none',
-          userSelect: 'none',
-        }}
-      >
-        {checked ? 'Connected' : 'Connect'}
       </span>
     </button>
   );
