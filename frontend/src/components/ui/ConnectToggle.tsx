@@ -94,16 +94,18 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
         />
       </span>
 
-      {/* Label */}
-      <span
-        style={{
-          fontSize: 11,
-          color: checked ? 'var(--status-ok)' : 'var(--text-secondary)',
-          transition: ready ? 'color 180ms ease' : 'none',
-          userSelect: 'none',
-        }}
-      >
-        {checked ? 'Connected' : 'Connect'}
+      {/* Label — ghost text reserves width of the longer string */}
+      <span style={{ position: 'relative', display: 'inline-block', fontSize: 11, userSelect: 'none' }}>
+        <span style={{ visibility: 'hidden' }}>Disconnected</span>
+        <span
+          style={{
+            position: 'absolute', left: 0, whiteSpace: 'nowrap',
+            color: checked ? 'var(--status-ok)' : 'var(--text-secondary)',
+            transition: ready ? 'color 180ms ease' : 'none',
+          }}
+        >
+          {checked ? 'Connected' : 'Disconnected'}
+        </span>
       </span>
     </button>
   );
