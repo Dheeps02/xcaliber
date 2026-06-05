@@ -6,6 +6,7 @@ interface DialInputProps {
   min?: number;
   max?: number;
   step?: number;
+  digits?: number;
   style?: React.CSSProperties;
   inputStyle?: React.CSSProperties;
 }
@@ -14,7 +15,7 @@ const REEL_W       = 14;
 const TICK_SPACING = 5;
 const PX_PER_STEP  = TICK_SPACING;
 
-export function DialInput({ value, onChange, min, max, step = 1, style, inputStyle }: DialInputProps) {
+export function DialInput({ value, onChange, min, max, step = 1, digits = 3, style, inputStyle }: DialInputProps) {
   const [phase, setPhase]           = useState(0);
   const [active, setActive] = useState(false);
 
@@ -89,6 +90,7 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
     <div
       style={{
         display: 'inline-flex', alignItems: 'stretch',
+        width: digits * 8 + 10 + REEL_W,
         background: 'rgba(0,0,0,0.25)',
         border: '1px solid rgba(0,0,0,0.5)',
         boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.3)',

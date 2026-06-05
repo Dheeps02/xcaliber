@@ -332,7 +332,7 @@ export function MemoryBar() {
             >
               <div className="flex flex-col gap-1">
                 <FieldLabel>Size</FieldLabel>
-                <DialInput value={size} onChange={setSize} min={1} style={{ width: 72 }} />
+                <DialInput value={size} onChange={setSize} min={1} digits={3} />
               </div>
               <Button
                 variant="upload"
