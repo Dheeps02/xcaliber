@@ -128,13 +128,13 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
           overflow: 'hidden',
         }}
       >
-        {/* Tick layer — ellipse clip shortens lines at edges, mask fades opacity */}
+        {/* Tick layer — mask fades and narrows toward edges for depth */}
         <div
           style={{
             position: 'absolute', inset: 0,
             backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent ${TICK_SPACING - 1}px, rgba(255,255,255,0.2) ${TICK_SPACING - 1}px, rgba(255,255,255,0.2) ${TICK_SPACING}px)`,
             backgroundPositionY: `${bgPos}px`,
-            clipPath: 'ellipse(50% 52% at 50% 50%)',
+            transition: isDragging ? 'none' : 'background-position-y 60ms linear',
             WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.25) 18%, rgba(0,0,0,0.8) 32%, black 42%, black 58%, rgba(0,0,0,0.8) 68%, rgba(0,0,0,0.25) 82%, transparent 100%)',
             maskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.25) 18%, rgba(0,0,0,0.8) 32%, black 42%, black 58%, rgba(0,0,0,0.8) 68%, rgba(0,0,0,0.25) 82%, transparent 100%)',
             pointerEvents: 'none',
