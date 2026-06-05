@@ -187,6 +187,8 @@ export function DataTable<T>({
               {/* Filter button — right next to label */}
               {col.filterable && (isHov || hasFilter || isFilterOpen) && (
                 <button
+                  key={`${col.key}-filter-${isHov || isFilterOpen}`}
+                  className="sort-icon-fade"
                   onClick={(e) => { e.stopPropagation(); openFilter(col.key, e.currentTarget); }}
                   style={{
                     background: 'none', border: 'none', padding: '1px 2px', cursor: 'pointer',
@@ -255,7 +257,7 @@ export function DataTable<T>({
           // Stagger re-enter animation on sort/filter; don't override packet-new animation
           const reorderAnim: React.CSSProperties =
             reorderKey > 0 && !rowCls.includes('packet-new')
-              ? { animation: `bar-enter 180ms ease-out ${Math.min(rowIdx * 18, 240)}ms both` }
+              ? { animation: `sort-icon-fade 180ms ease-out ${Math.min(rowIdx * 18, 240)}ms both` }
               : {};
 
           return (
