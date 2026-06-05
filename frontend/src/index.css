@@ -505,6 +505,12 @@ input, textarea, [contenteditable] { user-select: text; cursor: text; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes sort-icon-fade {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sort-icon-fade { animation: sort-icon-fade 110ms ease-out both; }
+
 @keyframes icon-pop {
   0%   { transform: scale(0.65); }
   55%  { transform: scale(1.2); }

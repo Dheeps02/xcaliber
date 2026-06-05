@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useMemo, createPortal } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowUp, ArrowDown, Funnel, X } from '@phosphor-icons/react';
 
 // ── Column definition ─────────────────────────────────────────────────────────
@@ -40,15 +41,16 @@ export function DataTable<T>({
   onRowClick, renderExpand, isExpanded,
   rowStyle, rowHoverStyle, rowClassName, wrapperClassName, rowDecoration,
 }: DataTableProps<T>) {
-  const [colWidths] = useState<number[]>(() => columns.map(c => c.width ?? 120));
+  const [colWidths]   = useState<number[]>(() => columns.map(c => c.width ?? 120));
   const [sort, setSort]       = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [filterOpen, setFilterOpen]   = useState<string | null>(null);
-  const [filterRect, setFilterRect]   = useState<DOMRect | null>(null);
-  const [hoveredRow, setHoveredRow]   = useState<string | number | null>(null);
-  const [hoveredCol, setHoveredCol]   = useState<string | null>(null);
+  const [filterOpen, setFilterOpen] = useState<string | null>(null);
+  const [filterRect, setFilterRect] = useState<DOMRect | null>(null);
+  const [hoveredRow, setHoveredRow] = useState<string | number | null>(null);
+  const [hoveredCol, setHoveredCol] = useState<string | null>(null);
+  const [reorderKey, setReorderKey] = useState(0);
 
-  const widthsRef  = useRef(colWidths);
+  const widthsRef = useRef(colWidths);
   widthsRef.current = colWidths;
   const [, forceWidth] = useState(0);
 
@@ -120,13 +122,23 @@ export function DataTable<T>({
       if (prev.dir === 'asc')  return { key, dir: 'desc' };
       return null;
     });
+    setReorderKey(k => k + 1);
   }
 
-  // ── Filter popover ───────────────────────────────────────────────────────
+  // ── Filter open/close ────────────────────────────────────────────────────
   function openFilter(key: string, btn: HTMLElement) {
-    if (filterOpen === key) { setFilterOpen(null); return; }
+    if (filterOpen === key) {
+      setFilterOpen(null);
+      setReorderKey(k => k + 1);
+      return;
+    }
     setFilterRect(btn.getBoundingClientRect());
     setFilterOpen(key);
+  }
+
+  function closeFilter() {
+    setFilterOpen(null);
+    setReorderKey(k => k + 1);
   }
 
   return (
@@ -143,16 +155,16 @@ export function DataTable<T>({
         }}
       >
         {columns.map((col, i) => {
-          const isSorted    = sort?.key === col.key;
-          const hasFilter   = !!filters[col.key]?.trim();
-          const isHov       = hoveredCol === col.key;
+          const isSorted     = sort?.key === col.key;
+          const hasFilter    = !!filters[col.key]?.trim();
+          const isHov        = hoveredCol === col.key;
           const isFilterOpen = filterOpen === col.key;
 
           return (
             <div
               key={col.key}
               style={{
-                position: 'relative', display: 'flex', alignItems: 'center', gap: 4,
+                position: 'relative', display: 'flex', alignItems: 'center', gap: 3,
                 padding: '5px 8px 5px 12px',
                 cursor: col.sortable ? 'pointer' : 'default',
               }}
@@ -172,12 +184,30 @@ export function DataTable<T>({
                 {col.header}
               </span>
 
-              {/* Sort icon */}
+              {/* Filter button — right next to label */}
+              {col.filterable && (isHov || hasFilter || isFilterOpen) && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); openFilter(col.key, e.currentTarget); }}
+                  style={{
+                    background: 'none', border: 'none', padding: '1px 2px', cursor: 'pointer',
+                    color: hasFilter || isFilterOpen ? 'var(--accent)' : 'var(--text-muted)',
+                    display: 'flex', alignItems: 'center', borderRadius: 3, flexShrink: 0,
+                  }}
+                >
+                  <Funnel size={9} weight={hasFilter ? 'fill' : 'regular'} />
+                </button>
+              )}
+
+              {/* Sort icon — after filter, before spacer */}
               {col.sortable && (isHov || isSorted) && (
-                <span style={{
-                  color: isSorted ? 'var(--accent)' : 'var(--text-muted)',
-                  display: 'flex', flexShrink: 0,
-                }}>
+                <span
+                  key={`${col.key}-${isSorted ? sort!.dir : 'hover'}`}
+                  className="sort-icon-fade"
+                  style={{
+                    color: isSorted ? 'var(--accent)' : 'var(--text-muted)',
+                    display: 'flex', flexShrink: 0,
+                  }}
+                >
                   {isSorted && sort!.dir === 'desc'
                     ? <ArrowDown size={10} />
                     : <ArrowUp size={10} />
@@ -186,20 +216,6 @@ export function DataTable<T>({
               )}
 
               <div style={{ flex: 1 }} />
-
-              {/* Filter button */}
-              {col.filterable && (isHov || hasFilter || isFilterOpen) && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); openFilter(col.key, e.currentTarget); }}
-                  style={{
-                    background: 'none', border: 'none', padding: 2, cursor: 'pointer',
-                    color: hasFilter || isFilterOpen ? 'var(--accent)' : 'var(--text-muted)',
-                    display: 'flex', alignItems: 'center', borderRadius: 3,
-                  }}
-                >
-                  <Funnel size={10} weight={hasFilter ? 'fill' : 'regular'} />
-                </button>
-              )}
 
               {/* Resize handle */}
               {!col.flex && (
@@ -227,7 +243,7 @@ export function DataTable<T>({
 
       {/* ── Rows ────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {displayRows.map(row => {
+        {displayRows.map((row, rowIdx) => {
           const key      = rowKey(row);
           const isHov    = hoveredRow === key;
           const expanded = isExpanded?.(row) ?? false;
@@ -235,6 +251,12 @@ export function DataTable<T>({
           const hover    = isHov && rowHoverStyle ? rowHoverStyle(row) : undefined;
           const wrapCls  = wrapperClassName?.(row) ?? '';
           const rowCls   = rowClassName?.(row) ?? '';
+
+          // Stagger re-enter animation on sort/filter; don't override packet-new animation
+          const reorderAnim: React.CSSProperties =
+            reorderKey > 0 && !rowCls.includes('packet-new')
+              ? { animation: `bar-enter 180ms ease-out ${Math.min(rowIdx * 18, 240)}ms both` }
+              : {};
 
           return (
             <div key={key} className={wrapCls}>
@@ -245,7 +267,7 @@ export function DataTable<T>({
                   position: 'relative',
                   cursor: onRowClick ? 'pointer' : 'default',
                   transition: 'background 70ms',
-                  ...base, ...hover,
+                  ...base, ...hover, ...reorderAnim,
                 }}
                 onClick={() => onRowClick?.(row)}
                 onMouseEnter={() => setHoveredRow(key)}
@@ -271,7 +293,7 @@ export function DataTable<T>({
           rect={filterRect}
           value={filters[filterOpen] ?? ''}
           onChange={v => setFilters(prev => ({ ...prev, [filterOpen]: v }))}
-          onClose={() => setFilterOpen(null)}
+          onClose={closeFilter}
         />,
         document.body
       )}
