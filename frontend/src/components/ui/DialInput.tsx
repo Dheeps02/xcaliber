@@ -16,8 +16,7 @@ const PX_PER_STEP  = TICK_SPACING;
 
 export function DialInput({ value, onChange, min, max, step = 1, style, inputStyle }: DialInputProps) {
   const [phase, setPhase]           = useState(0);
-  const [active, setActive]         = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  const [active, setActive] = useState(false);
 
   const inputRef    = useRef<HTMLInputElement>(null);
   const reelRef     = useRef<HTMLDivElement>(null);
@@ -61,29 +60,22 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
 
   function handleReelMouseDown(e: React.MouseEvent) {
     e.preventDefault();
-    setIsDragging(true);
     const startY     = e.clientY;
     const startVal   = value;
     const startPhase = phase;
     let prevSteps    = 0;
 
     function onMove(me: MouseEvent) {
-      const dy = startY - me.clientY;
-      // Continuous phase — reel tracks mouse 1px:1px
-      setPhase(startPhase + dy / PX_PER_STEP);
-      // Value changes at step boundaries
-      const steps = Math.round(dy / 4);
-      if (steps !== prevSteps) {
-        prevSteps = steps;
-        const next = clamp(startVal + steps * step);
-        onChange(next);
-        flash();
-      }
+      const steps  = Math.round((startY - me.clientY) / 4);
+      if (steps === prevSteps) return;
+      prevSteps = steps;
+      const next   = clamp(startVal + steps * step);
+      const actual = Math.round((next - startVal) / step);
+      onChange(next);
+      setPhase(startPhase + actual);
+      flash();
     }
     function onUp() {
-      // Snap phase to integer on release so bgPos lands on a clean pixel
-      setPhase(p => Math.round(p));
-      setIsDragging(false);
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     }
@@ -91,8 +83,7 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
     document.addEventListener('mouseup', onUp);
   }
 
-  // During drag: continuous (follows mouse 1:1). At rest: snapped to integer pixels.
-  const bgPos = isDragging ? -(phase * PX_PER_STEP) : -Math.round(phase * PX_PER_STEP);
+  const bgPos = -Math.round(phase * PX_PER_STEP);
 
   return (
     <div
@@ -143,7 +134,7 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
             backgroundSize: `100% ${TICK_SPACING}px`,
             backgroundRepeat: 'repeat-y',
             backgroundPositionY: `${bgPos}px`,
-            transition: isDragging ? 'none' : 'background-position-y 60ms linear',
+            transition: 'background-position-y 60ms linear',
             pointerEvents: 'none',
           }}
         />
