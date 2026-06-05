@@ -73,23 +73,35 @@ export function DataTable<T>({
 
   const bottomRef        = useRef<HTMLDivElement>(null);
   const rowsContainerRef = useRef<HTMLDivElement>(null);
+  const isFirstRenderRef = useRef(true);
 
   useEffect(() => {
     if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [rows, autoScroll]);
 
-  // Animate rows whenever sort or filter changes — force-reflow restart is the reliable cross-browser approach
-  useEffect(() => {
+  // Animate rows whenever sort or filter changes.
+  // useLayoutEffect fires before the browser paints so we can set opacity:0
+  // on the newly-ordered rows before they're ever visible, then fade them in.
+  useLayoutEffect(() => {
+    if (isFirstRenderRef.current) { isFirstRenderRef.current = false; return; }
     const container = rowsContainerRef.current;
     if (!container) return;
-    const els = Array.from(container.querySelectorAll<HTMLElement>('[data-xcbrow]'))
-      .filter(el => !el.classList.contains('packet-new'));
+    const els = Array.from(container.querySelectorAll<HTMLElement>('[data-xcbrow]'));
     if (els.length === 0) return;
-    els.forEach(el => el.classList.remove('sort-icon-fade'));
-    void container.offsetHeight; // single reflow for all rows
-    els.forEach(el => el.classList.add('sort-icon-fade'));
-    const t = setTimeout(() => els.forEach(el => el.classList.remove('sort-icon-fade')), 200);
-    return () => clearTimeout(t);
+    els.forEach(el => { el.style.transition = 'none'; el.style.opacity = '0'; });
+    let rafId: number;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    rafId = requestAnimationFrame(() => {
+      els.forEach(el => { el.style.transition = 'opacity 180ms ease-out'; el.style.opacity = '1'; });
+      timeoutId = setTimeout(() => {
+        els.forEach(el => { el.style.transition = ''; el.style.opacity = ''; });
+      }, 250);
+    });
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(timeoutId);
+      els.forEach(el => { el.style.transition = ''; el.style.opacity = ''; });
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort, filters]);
 
