@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { MapPin, ArrowLineUp, ArrowLineDown, Info, CornersIn, CornersOut, Crosshair } from '@phosphor-icons/react';
 import { Toggle } from './ui/Toggle';
+import { DialInput } from './ui/DialInput';
 import { useAppStore } from '../stores/app-store';
 import { useTooltip } from '../context/TooltipContext';
 import { api } from '../lib/api';
@@ -331,16 +332,7 @@ export function MemoryBar() {
             >
               <div className="flex flex-col gap-1">
                 <FieldLabel>Size</FieldLabel>
-                <input
-                  type="number"
-                  min={1}
-                  value={size}
-                  onChange={(e) => setSize(Math.max(1, Number(e.target.value)))}
-                  className="xcb-input no-spinner px-2 py-1 font-mono text-xs text-center focus:outline-none"
-                  style={{ width: 48 }}
-                  onFocusCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)')}
-                  onBlurCapture={(e) => ((e.currentTarget as HTMLElement).style.borderColor = '')}
-                />
+                <DialInput value={size} onChange={setSize} min={1} style={{ width: 72 }} />
               </div>
               <Button
                 variant="upload"
