@@ -133,7 +133,9 @@ export function DialInput({ value, onChange, min, max, step = 1, style, inputSty
         <div
           style={{
             position: 'absolute', inset: 0,
-            backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent ${TICK_SPACING - 2}px, rgba(255,255,255,0.2) ${TICK_SPACING - 2}px, rgba(255,255,255,0.2) ${TICK_SPACING - 1}px, transparent ${TICK_SPACING - 1}px, transparent ${TICK_SPACING}px)`,
+            backgroundImage: `linear-gradient(to bottom, transparent 0%, transparent ${(TICK_SPACING - 2) / TICK_SPACING * 100}%, rgba(255,255,255,0.2) ${(TICK_SPACING - 2) / TICK_SPACING * 100}%, rgba(255,255,255,0.2) ${(TICK_SPACING - 1) / TICK_SPACING * 100}%, transparent ${(TICK_SPACING - 1) / TICK_SPACING * 100}%)`,
+            backgroundSize: `100% ${TICK_SPACING}px`,
+            backgroundRepeat: 'repeat-y',
             backgroundPositionY: `${bgPos}px`,
             transition: isDragging ? 'none' : 'background-position-y 60ms linear',
             WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.25) 18%, rgba(0,0,0,0.8) 32%, black 42%, black 58%, rgba(0,0,0,0.8) 68%, rgba(0,0,0,0.25) 82%, transparent 100%)',
