@@ -66,7 +66,6 @@ export function DataTable<T>({
   const [filterRect, setFilterRect] = useState<DOMRect | null>(null);
   const [hoveredRow, setHoveredRow] = useState<string | number | null>(null);
   const [hoveredCol, setHoveredCol] = useState<string | null>(null);
-  const [reorderKey, setReorderKey] = useState(0);
 
   const widthsRef = useRef(colWidths);
   widthsRef.current = colWidths;
@@ -79,27 +78,20 @@ export function DataTable<T>({
     if (autoScroll) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [rows, autoScroll]);
 
-  // Reset reorderKey after animation window closes so incoming packets don't inherit the delay
+  // Animate rows whenever sort or filter changes — force-reflow restart is the reliable cross-browser approach
   useEffect(() => {
-    if (reorderKey === 0) return;
-    const t = setTimeout(() => setReorderKey(0), 500);
+    const container = rowsContainerRef.current;
+    if (!container) return;
+    const els = Array.from(container.querySelectorAll<HTMLElement>('[data-xcbrow]'))
+      .filter(el => !el.classList.contains('packet-new'));
+    if (els.length === 0) return;
+    els.forEach(el => el.classList.remove('sort-icon-fade'));
+    void container.offsetHeight; // single reflow for all rows
+    els.forEach(el => el.classList.add('sort-icon-fade'));
+    const t = setTimeout(() => els.forEach(el => el.classList.remove('sort-icon-fade')), 200);
     return () => clearTimeout(t);
-  }, [reorderKey]);
-
-  // Imperative row reorder animation: force-reflow restart is the only reliable cross-browser approach
-  useEffect(() => {
-    if (reorderKey === 0 || !rowsContainerRef.current) return;
-    const rows = Array.from(
-      rowsContainerRef.current.querySelectorAll<HTMLElement>('[data-xcbrow]')
-    ).filter(el => !el.classList.contains('packet-new'));
-    rows.forEach(el => {
-      el.classList.remove('sort-icon-fade');
-      void el.offsetHeight; // force reflow — commits the removed state
-      el.classList.add('sort-icon-fade');
-    });
-    const t = setTimeout(() => rows.forEach(el => el.classList.remove('sort-icon-fade')), 200);
-    return () => clearTimeout(t);
-  }, [reorderKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort, filters]);
 
   // ── Grid template ────────────────────────────────────────────────────────
   const gridCols = columns.map((col, i) =>
@@ -163,23 +155,17 @@ export function DataTable<T>({
       if (prev.dir === 'asc')  return { key, dir: 'desc' };
       return null;
     });
-    setReorderKey(k => k + 1);
   }
 
   // ── Filter open/close ────────────────────────────────────────────────────
   function openFilter(key: string, btn: HTMLElement) {
-    if (filterOpen === key) {
-      setFilterOpen(null);
-      setReorderKey(k => k + 1);
-      return;
-    }
+    if (filterOpen === key) { setFilterOpen(null); return; }
     setFilterRect(btn.getBoundingClientRect());
     setFilterOpen(key);
   }
 
   function closeFilter() {
     setFilterOpen(null);
-    setReorderKey(k => k + 1);
   }
 
   return (
