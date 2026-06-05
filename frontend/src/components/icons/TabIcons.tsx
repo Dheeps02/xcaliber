@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useRef, useEffect } from 'react';
 
 // ── TraceIcon (Phosphor Rows + scroll) ───────────────────────────────────────
 // HTML wrapper keeps everything in CSS pixel space — no SVG/CSS coordinate
@@ -57,8 +57,34 @@ const DAQ_WAVE_STATIC = "M16,128 C39,73 57,73 80,128 C103,183 121,183 144,128 C1
 const DAQ_WAVE_SCROLL = "M-128,128 C-105,73 -87,73 -64,128 C-41,183 -23,183 0,128 C23,73 41,73 64,128 C87,183 105,183 128,128 C151,73 169,73 192,128 C215,183 233,183 256,128 C279,73 297,73 320,128 C343,183 361,183 384,128";
 
 export function DaqIcon({ size, animKey, live }: { size: number; animKey: number; live?: boolean }) {
-  const uid  = useId();
-  const clip = `daq-${uid.replace(/:/g, '')}`;
+  const uid    = useId();
+  const clip   = `daq-${uid.replace(/:/g, '')}`;
+  const gRef   = useRef<SVGGElement>(null);
+  const rafRef = useRef<number>(0);
+  const phase  = useRef(0);
+  const lastTs = useRef(0);
+
+  useEffect(() => {
+    if (!live) {
+      phase.current = 0;
+      gRef.current?.setAttribute('transform', 'translate(0,0)');
+      return;
+    }
+    // Animate in SVG user-unit space: one period = 128 SVG units at 1.4 s/cycle.
+    const PERIOD = 128;
+    const SPEED  = PERIOD / 1400; // SVG units per ms
+    lastTs.current = performance.now();
+
+    function tick(now: number) {
+      phase.current = (phase.current + (now - lastTs.current) * SPEED) % PERIOD;
+      lastTs.current = now;
+      gRef.current?.setAttribute('transform', `translate(${-phase.current},0)`);
+      rafRef.current = requestAnimationFrame(tick);
+    }
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [live]);
+
   return (
     <svg viewBox="0 0 256 256" width={size} height={size} aria-hidden className="tab-icon-fade-x">
       <defs>
@@ -66,21 +92,20 @@ export function DaqIcon({ size, animKey, live }: { size: number; animKey: number
           <rect x="16" y="44" width="224" height="168" />
         </clipPath>
       </defs>
-      {/* X-axis */}
       <path d="M16,128 L240,128" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" opacity="0.3" />
-      {/* Y-axis */}
       <path d="M24,44 L24,212" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" opacity="0.3" />
       <g clipPath={`url(#${clip})`}>
         {live ? (
-          <path
-            d={DAQ_WAVE_SCROLL}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="16"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="daq-wave-scroll"
-          />
+          <g ref={gRef}>
+            <path
+              d={DAQ_WAVE_SCROLL}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="16"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </g>
         ) : (
           <path
             key={animKey}

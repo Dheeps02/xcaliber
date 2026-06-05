@@ -1,4 +1,4 @@
-import { useRef, useLayoutEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 interface ConnectToggleProps {
   checked: boolean;
@@ -7,47 +7,30 @@ interface ConnectToggleProps {
   className?: string;
 }
 
-const SPRING = 'transform 220ms cubic-bezier(0.34, 1.25, 0.64, 1), background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease';
+const THUMB_TRANSITION = 'transform 220ms cubic-bezier(0.34, 1.25, 0.64, 1), border-color 180ms ease, box-shadow 180ms ease';
+const TRACK_TRANSITION = 'background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease';
 
 export function ConnectToggle({ checked, onChange, disabled = false, className = '' }: ConnectToggleProps) {
-  const thumbRef = useRef<HTMLSpanElement>(null);
-  const trackRef = useRef<HTMLSpanElement>(null);
-  const ready = useRef(false);
+  const [ready, setReady] = useState(false);
 
-  useLayoutEffect(() => {
-    const thumb = thumbRef.current;
-    const track = trackRef.current;
-    if (!thumb || !track) return;
+  // Enable transitions only after mount so the initial position snaps without animation.
+  useEffect(() => { setReady(true); }, []);
 
-    const tx = checked ? 18 : 0;
-
-    if (!ready.current) {
-      thumb.style.transform = `translateX(${tx}px)`;
-      void thumb.offsetWidth;
-      thumb.style.transition = SPRING;
-      track.style.transition = 'background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease';
-      ready.current = true;
-    } else {
-      thumb.style.transform = `translateX(${tx}px)`;
-    }
-
-    track.style.backgroundColor = checked
-      ? 'color-mix(in srgb, var(--status-ok) 18%, var(--surface-overlay))'
-      : 'rgba(0,0,0,0.35)';
-    track.style.borderColor = checked
-      ? 'color-mix(in srgb, var(--status-ok) 30%, rgba(0,0,0,0.5))'
-      : 'rgba(0,0,0,0.55)';
-    track.style.boxShadow = checked
-      ? 'inset 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 1px color-mix(in srgb, var(--status-ok) 15%, transparent)'
-      : 'inset 0 2px 4px rgba(0,0,0,0.45), inset 0 1px 2px rgba(0,0,0,0.3)';
-
-    thumb.style.borderColor = checked
-      ? 'color-mix(in srgb, var(--status-ok) 35%, rgba(0,0,0,0.4))'
-      : 'rgba(0,0,0,0.45)';
-    thumb.style.boxShadow = checked
-      ? 'inset 0 1px 0 rgba(255,255,255,0.15), 0 2px 4px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3), 0 0 6px color-mix(in srgb, var(--status-ok) 30%, transparent)'
-      : 'inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 4px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3)';
-  }, [checked]);
+  const trackBg     = checked
+    ? 'color-mix(in srgb, var(--status-ok) 18%, var(--surface-overlay))'
+    : 'rgba(0,0,0,0.35)';
+  const trackBorder = checked
+    ? 'color-mix(in srgb, var(--status-ok) 30%, rgba(0,0,0,0.5))'
+    : 'rgba(0,0,0,0.55)';
+  const trackShadow = checked
+    ? 'inset 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 2px rgba(0,0,0,0.3), 0 0 0 1px color-mix(in srgb, var(--status-ok) 15%, transparent)'
+    : 'inset 0 2px 4px rgba(0,0,0,0.45), inset 0 1px 2px rgba(0,0,0,0.3)';
+  const thumbBorder = checked
+    ? 'color-mix(in srgb, var(--status-ok) 35%, rgba(0,0,0,0.4))'
+    : 'rgba(0,0,0,0.45)';
+  const thumbShadow = checked
+    ? 'inset 0 1px 0 rgba(255,255,255,0.15), 0 2px 4px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3), 0 0 6px color-mix(in srgb, var(--status-ok) 30%, transparent)'
+    : 'inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 4px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3)';
 
   return (
     <button
@@ -70,7 +53,6 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
     >
       {/* Track */}
       <span
-        ref={trackRef}
         aria-hidden
         style={{
           position: 'relative',
@@ -78,15 +60,15 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
           width: 34,
           height: 18,
           borderRadius: 9,
-          border: '1px solid rgba(0,0,0,0.55)',
-          background: 'rgba(0,0,0,0.35)',
-          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.45), inset 0 1px 2px rgba(0,0,0,0.3)',
+          border: `1px solid ${trackBorder}`,
+          backgroundColor: trackBg,
+          boxShadow: trackShadow,
           flexShrink: 0,
+          transition: ready ? TRACK_TRANSITION : 'none',
         }}
       >
         {/* Thumb */}
         <span
-          ref={thumbRef}
           aria-hidden
           style={{
             position: 'absolute',
@@ -95,10 +77,12 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
             width: 12,
             height: 12,
             borderRadius: '50%',
-            border: '1px solid rgba(0,0,0,0.45)',
+            border: `1px solid ${thumbBorder}`,
             background: 'var(--surface-overlay)',
             backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.04) 50%, rgba(0,0,0,0.06) 100%)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 4px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3)',
+            boxShadow: thumbShadow,
+            transform: `translateX(${checked ? 18 : 0}px)`,
+            transition: ready ? THUMB_TRANSITION : 'none',
           }}
         />
       </span>
@@ -108,7 +92,7 @@ export function ConnectToggle({ checked, onChange, disabled = false, className =
         style={{
           fontSize: 11,
           color: checked ? 'var(--status-ok)' : 'var(--text-secondary)',
-          transition: 'color 180ms ease',
+          transition: ready ? 'color 180ms ease' : 'none',
           userSelect: 'none',
         }}
       >

@@ -3,7 +3,10 @@ import {
   type ChangeEvent, type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { PaperPlaneTilt, CaretUp } from '@phosphor-icons/react';
+import {
+  PaperPlaneTilt, CaretLeft, CaretRight,
+  CornersIn, CornersOut, CaretDown, Info, X, Command,
+} from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { useTooltip } from '../context/TooltipContext';
 import { CMD_DEFS } from '../lib/cmd-defs';
@@ -64,6 +67,11 @@ export function CommandBar() {
   const inputRefs      = useRef<(HTMLInputElement | null)[]>([]);
   const shownValuesRef = useRef(shownValues);
   shownValuesRef.current = shownValues;
+  const sectionRef     = useRef(section);
+  sectionRef.current   = section;
+  const allBytesRef    = useRef(allBytes);
+  allBytesRef.current  = allBytes;
+  const holdTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevLabelTextsRef = useRef<string[]>(Array(BASE_CELLS).fill(''));
 
   useEffect(() => {
@@ -92,6 +100,19 @@ export function CommandBar() {
     setLabelKey((k) => k + 1);
     setTypeKeys(Array(BASE_CELLS).fill(0));
   }, [byteValues]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => { if (holdTimerRef.current) clearTimeout(holdTimerRef.current); }, []);
+
+  function startHold(action: () => void, delay = 1000) {
+    holdTimerRef.current = setTimeout(() => {
+      action();
+      startHold(action, Math.max(50, delay * 0.7));
+    }, delay);
+  }
+
+  function stopHold() {
+    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+  }
 
   function getCellValue(i: number): string { return allBytes[section * BASE_CELLS + i] ?? ''; }
 
@@ -126,9 +147,10 @@ export function CommandBar() {
   }
 
   function goBack() {
-    if (section === 0) return;
-    const newSec = section - 1;
-    const newShown = Array.from({ length: BASE_CELLS }, (_, i) => allBytes[newSec * BASE_CELLS + i] ?? '');
+    const sec = sectionRef.current;
+    if (sec === 0) return;
+    const newSec = sec - 1;
+    const newShown = Array.from({ length: BASE_CELLS }, (_, i) => allBytesRef.current[newSec * BASE_CELLS + i] ?? '');
     animate(newShown, shownValuesRef.current);
     setSection(newSec);
     setLabelKey((k) => k + 1);
@@ -136,8 +158,9 @@ export function CommandBar() {
   }
 
   function goForward() {
-    const newSec = section + 1;
-    const newShown = Array.from({ length: BASE_CELLS }, (_, i) => allBytes[newSec * BASE_CELLS + i] ?? '');
+    const sec = sectionRef.current;
+    const newSec = sec + 1;
+    const newShown = Array.from({ length: BASE_CELLS }, (_, i) => allBytesRef.current[newSec * BASE_CELLS + i] ?? '');
     animate(newShown, shownValuesRef.current);
     setSection(newSec);
     setLabelKey((k) => k + 1);
@@ -217,51 +240,57 @@ export function CommandBar() {
             className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.07em] uppercase"
             style={{ color: 'var(--text-secondary)' }}
           >
-            <span style={{ color: 'var(--text-muted)' }}>⌘</span>
+            <Command size={12} style={{ color: 'var(--text-muted)' }} />
             {cmdLabel}
           </span>
           <div className="flex items-center gap-1">
             <button
               disabled={section === 0}
-              onClick={(e) => { e.stopPropagation(); goBack(); }}
-              className="w-[18px] h-5 flex items-center justify-center rounded text-[12px] border transition-colors"
+              className="w-[18px] h-5 flex items-center justify-center rounded transition-colors"
               style={{
-                borderColor: section === 0 ? 'var(--border)' : 'var(--border-strong)',
                 color: section === 0 ? 'var(--text-muted)' : 'var(--text-secondary)',
                 opacity: section === 0 ? 0.3 : 1,
                 background: 'none',
                 cursor: section === 0 ? 'not-allowed' : 'pointer',
               }}
-            >‹</button>
+              onMouseDown={(e) => { e.stopPropagation(); if (section === 0) return; goBack(); startHold(goBack); }}
+              onMouseUp={stopHold}
+              onMouseLeave={stopHold}
+            >
+              <CaretLeft size={10} />
+            </button>
             <span
               key={`sec-${labelKey}`}
-              className="text-[10px] font-mono label-fade text-center"
-              style={{ color: 'var(--text-muted)', minWidth: 56 }}
-            >Bytes {startByte}–{endByte}</span>
+              className="text-[10px] font-mono label-fade inline-flex items-baseline justify-center gap-0.5"
+              style={{ color: 'var(--text-muted)', width: '13ch' }}
+            >
+              <span>Bytes</span>
+              <span style={{ display: 'inline-block', width: '3ch', textAlign: 'right' }}>{startByte}</span>
+              <span>–</span>
+              <span style={{ display: 'inline-block', width: '3ch', textAlign: 'left' }}>{endByte}</span>
+            </span>
             <button
-              onClick={(e) => { e.stopPropagation(); goForward(); }}
-              className="w-[18px] h-5 flex items-center justify-center rounded text-[12px] border transition-colors"
+              className="w-[18px] h-5 flex items-center justify-center rounded transition-colors"
               style={{
-                borderColor: 'var(--border-strong)',
                 color: 'var(--text-secondary)',
                 background: 'none',
                 cursor: 'pointer',
               }}
-            >›</button>
+              onMouseDown={(e) => { e.stopPropagation(); goForward(); startHold(goForward); }}
+              onMouseUp={stopHold}
+              onMouseLeave={stopHold}
+            >
+              <CaretRight size={10} />
+            </button>
           </div>
         </div>
 
         <div className="flex-1" />
 
-        <CaretUp
-          size={12}
-          style={{
-            color: 'var(--text-muted)',
-            flexShrink: 0,
-            transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 150ms ease',
-          }}
-        />
+        {collapsed
+          ? <CornersOut size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          : <CornersIn  size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+        }
       </div>
 
       {/* ── Collapsible body ────────────────────────────────────────── */}
@@ -295,46 +324,38 @@ export function CommandBar() {
               return (
                 <div key={i} className="flex-1 flex flex-col min-w-0">
                   <div className="flex items-baseline justify-between mb-1 h-4 overflow-hidden pr-0.5">
-                    <div className="flex items-baseline gap-2 min-w-0 overflow-hidden">
-                      <span
-                        key={`idx-${labelKey}-${i}`}
-                        className="text-[9px] font-mono shrink-0 label-fade"
-                        style={{ color: 'var(--text-muted)' }}
-                      >{absIdx}</span>
-                      <span
-                        key={`lbl-${labelKey}-${i}`}
-                        className={`text-[10px] truncate ${lblCls}`}
-                        style={{ color: fieldDef ? 'var(--text-secondary)' : 'var(--text-muted)' }}
-                      >{fieldDef ? toTitleCase(fieldDef.label) : ''}</span>
-                    </div>
+                    <span
+                      key={`lbl-${labelKey}-${i}`}
+                      className={`text-[10px] truncate min-w-0 overflow-hidden ${lblCls}`}
+                      style={{ color: fieldDef ? 'var(--text-secondary)' : 'transparent' }}
+                    >{fieldDef ? toTitleCase(fieldDef.label) : '.'}</span>
                     {fieldDef && (
                       <div className="flex items-center gap-0.5 shrink-0">
                         {fieldDef.options && (
                           <button
-                            className="text-[10px] px-0.5 leading-none transition-colors"
+                            className="flex items-center px-0.5 leading-none transition-colors"
                             style={{ color: 'var(--text-muted)' }}
                             onClick={(e) => openDropdown(i, fieldDef.options!, e)}
                             onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--accent)')}
                             onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
-                          >▾</button>
+                          ><CaretDown size={10} /></button>
                         )}
                         <button
-                          className="text-[10px] px-0.5 leading-none transition-colors"
+                          className="flex items-center px-0.5 leading-none transition-colors"
                           style={{ color: 'var(--text-muted)' }}
                           onMouseEnter={(e) => showTip(e.currentTarget, fieldDef.tip)}
                           onMouseLeave={hideTip}
-                        >ℹ</button>
+                        ><Info size={10} /></button>
                       </div>
                     )}
                   </div>
 
-                  <div
-                    className="relative group rounded"
-                    style={{
-                      border: '1px solid var(--border)',
-                      background: isLocked ? 'var(--surface-overlay)' : 'var(--surface-base)',
-                    }}
-                  >
+                  <div className={`relative group rounded xcb-input${isLocked ? ' opacity-60' : ''}`}>
+                    <span
+                      key={`idx-${labelKey}-${i}`}
+                      className="absolute top-0.5 left-1 text-[8px] font-mono pointer-events-none label-fade"
+                      style={{ color: 'var(--text-muted)', lineHeight: 1 }}
+                    >{absIdx}</span>
                     <input
                       ref={(el) => { inputRefs.current[i] = el; }}
                       maxLength={2}
@@ -360,7 +381,7 @@ export function CommandBar() {
                       }}
                     >{cellShown || '00'}</span>
                     <button
-                      className="absolute top-0.5 right-0.5 w-[13px] h-[13px] text-[8px] flex items-center justify-center rounded cursor-pointer z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-0.5 right-0.5 w-[13px] h-[13px] flex items-center justify-center rounded cursor-pointer z-10 opacity-0 group-hover:opacity-100 transition-opacity"
                       style={{ background: 'var(--surface-overlay)', color: 'var(--text-muted)' }}
                       onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
                       onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
@@ -374,7 +395,7 @@ export function CommandBar() {
                           inputRefs.current[i]?.focus();
                         }
                       }}
-                    >✕</button>
+                    ><X size={9} /></button>
                   </div>
                 </div>
               );
@@ -383,7 +404,7 @@ export function CommandBar() {
             {activeMainTab !== 'sequence' && (
               <Button
                 variant="primary"
-                className="!text-[11px] !py-1 !px-2.5 shrink-0"
+                className="!text-[11px] !py-1.5 leading-4 !px-2.5 shrink-0 self-end"
                 onClick={() => {
                   setSendFlying(true);
                   setTimeout(() => setSendFlying(false), 550);

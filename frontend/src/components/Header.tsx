@@ -12,27 +12,29 @@ import { Button } from './ui/Button';
 import { ConnectToggle } from './ui/ConnectToggle';
 import type { DaqEntryType } from '../lib/types';
 import { TraceIcon, DaqIcon, SequenceIcon } from './icons/TabIcons';
+import { AnimatedCount } from './AnimatedCount';
 
 type MainTab = 'trace' | 'daq' | 'sequence';
 
-function BroadcastCustom({ size, pulsing, pulseKey }: { size: number; pulsing: boolean; pulseKey: number }) {
+// Phosphor "regular" Broadcast paths split into 3 layers for independent animation.
+// Regular weight: r=40 outer dot / r=24 inner, 8-unit arc fills (~half bold's 12-unit).
+// Inner arc start: m73.71,7.14 from dot close (128,152) → M201.71,159.14 (absolute).
+const BC_DOT   = 'M128,88a40,40,0,1,0,40,40A40,40,0,0,0,128,88Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,152Z';
+const BC_INNER = 'M201.71,159.14a80,80,0,0,1-14.08,22.2,8,8,0,0,1-11.92-10.67,63.95,63.95,0,0,0,0-85.33,8,8,0,1,1,11.92-10.67,80.08,80.08,0,0,1,14.08,84.47ZM69,103.09a64,64,0,0,0,11.26,67.58,8,8,0,0,1-11.92,10.67,79.93,79.93,0,0,1,0-106.67A8,8,0,1,1,80.29,85.34,63.77,63.77,0,0,0,69,103.09Z';
+const BC_OUTER = 'M248,128a119.58,119.58,0,0,1-34.29,84,8,8,0,1,1-11.42-11.2,103.9,103.9,0,0,0,0-145.56A8,8,0,1,1,213.71,44,119.58,119.58,0,0,1,248,128ZM53.71,200.78A8,8,0,1,1,42.29,212a119.87,119.87,0,0,1,0-168,8,8,0,1,1,11.42,11.2,103.9,103.9,0,0,0,0,145.56Z';
+
+function BroadcastCustom({ size, pulseKey }: { size: number; pulseKey: number }) {
   return (
-    <svg viewBox="0 0 256 256" width={size} height={size} fill="currentColor" aria-hidden="true">
-      <g key={`dot-${pulseKey}`}>
-        <path
-          fillRule="evenodd"
-          className={pulsing ? 'broadcast-dot-pulse' : ''}
-          d="M128,84a44,44,0,1,0,44,44A44.05,44.05,0,0,0,128,84Zm0,64a20,20,0,1,1,20-20A20,20,0,0,1,128,148Z"
-        />
-      </g>
-      <g key={`inner-${pulseKey}`}>
-        <path className={pulsing ? 'broadcast-arc-inner' : ''} d="M205.39,160.7A83.94,83.94,0,0,1,190.61,184a12,12,0,0,1-17.89-16,59.92,59.92,0,0,0,0-80,12,12,0,0,1,17.89-16,84.07,84.07,0,0,1,14.78,88.7Z" />
-        <path className={pulsing ? 'broadcast-arc-inner' : ''} d="M83.28,168a12,12,0,0,1-17.89,16,83.94,83.94,0,0,1,0-112A12,12,0,0,1,83.28,88a59.92,59.92,0,0,0,0,80Z" />
-      </g>
-      <g key={`outer-${pulseKey}`}>
-        <path className={pulsing ? 'broadcast-arc-outer' : ''} d="M252,128a123.63,123.63,0,0,1-35.43,86.78A12,12,0,1,1,199.43,198a99.88,99.88,0,0,0,0-140,12,12,0,0,1,17.14-16.8A123.63,123.63,0,0,1,252,128Z" />
-        <path className={pulsing ? 'broadcast-arc-outer' : ''} d="M56.57,198a12,12,0,0,1-17.14,16.8,123.89,123.89,0,0,1,0-173.56A12,12,0,0,1,56.57,58a99.88,99.88,0,0,0,0,140Z" />
-      </g>
+    <svg
+      key={pulseKey}
+      viewBox="0 0 256 256"
+      style={{ width: size, height: size, flexShrink: 0 }}
+      fill="currentColor"
+      aria-hidden
+    >
+      <path fillRule="evenodd" d={BC_DOT}   className={pulseKey > 0 ? 'broadcast-dot-pulse' : ''} />
+      <path                    d={BC_INNER} className={pulseKey > 0 ? 'broadcast-arc-inner' : ''} />
+      <path                    d={BC_OUTER} className={pulseKey > 0 ? 'broadcast-arc-outer' : ''} />
     </svg>
   );
 }
@@ -58,7 +60,6 @@ export function Header() {
   const a2lInputRef = useRef<HTMLInputElement>(null);
   const [a2lFileName, setA2lFileName] = useState<string | null>(null);
   const [a2lFilePath, setA2lFilePath] = useState<string | null>(null);
-  const [broadcastPulsing, setBroadcastPulsing] = useState(false);
   const [broadcastPulseKey, setBroadcastPulseKey] = useState(0);
   const [syncSpinning, setSyncSpinning] = useState(false);
   const [gearKey, setGearKey] = useState(0);
@@ -132,8 +133,6 @@ export function Header() {
 
   function handleGetStatus() {
     setBroadcastPulseKey((k) => k + 1);
-    setBroadcastPulsing(true);
-    setTimeout(() => setBroadcastPulsing(false), 750);
     api.getStatus().catch(() => {});
   }
 
@@ -239,15 +238,9 @@ export function Header() {
         <div className="flex items-center gap-2" style={{ minWidth: 200, justifyContent: 'flex-end' }}>
           {/* TX / RX counters */}
           <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>TX</span>
-              <span className="font-mono text-[11px]" style={{ color: 'var(--tx)' }}>{txCount}</span>
-            </div>
+            <AnimatedCount value={txCount} label="TX" color="var(--tx)" />
             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>·</span>
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>RX</span>
-              <span className="font-mono text-[11px]" style={{ color: 'var(--rx)' }}>{rxCount}</span>
-            </div>
+            <AnimatedCount value={rxCount} label="RX" color="var(--rx)" />
           </div>
 
           <div className="xcb-vdiv" />
@@ -260,7 +253,7 @@ export function Header() {
             title="Get Status"
             onClick={handleGetStatus}
           >
-            <BroadcastCustom size={21} pulsing={broadcastPulsing} pulseKey={broadcastPulseKey} />
+            <BroadcastCustom size={22} pulseKey={broadcastPulseKey} />
           </Button>
 
           {/* Sync */}
@@ -272,7 +265,7 @@ export function Header() {
             onClick={handleSync}
           >
             <span className={syncSpinning ? 'icon-spin-once' : ''}>
-              <ArrowsClockwise size={21} />
+              <ArrowsClockwise size={18} />
             </span>
           </Button>
 
@@ -287,7 +280,7 @@ export function Header() {
           >
             <GearSix
               key={gearKey}
-              size={22}
+              size={18}
               className={gearKey > 0 ? (gearReverse ? 'icon-spin-90-reverse' : 'icon-spin-90') : ''}
             />
           </Button>
