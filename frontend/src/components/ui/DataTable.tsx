@@ -1,14 +1,20 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUp, ArrowDown, Funnel, X } from '@phosphor-icons/react';
 
 // ── FadeIn ────────────────────────────────────────────────────────────────────
 
 function FadeIn({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  const [vis, setVis] = useState(false);
-  useEffect(() => setVis(true), []);
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.opacity = '0';
+    const id = requestAnimationFrame(() => { if (el) el.style.opacity = ''; });
+    return () => cancelAnimationFrame(id);
+  }, []);
   return (
-    <span style={{ opacity: vis ? 1 : 0, transition: 'opacity 110ms ease', display: 'flex', alignItems: 'center', flexShrink: 0, ...style }}>
+    <span ref={ref} style={{ transition: 'opacity 150ms ease', display: 'flex', alignItems: 'center', flexShrink: 0, ...style }}>
       {children}
     </span>
   );

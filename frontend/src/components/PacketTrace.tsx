@@ -265,7 +265,7 @@ export function PacketTrace() {
   function rowStyle(p: PacketEntry): React.CSSProperties {
     const isNew = animationWatermark !== null && p.id > animationWatermark && !cleanedUpIds.current.has(p.id);
     if (isNew && !staggerDelays.current.has(p.id)) {
-      staggerDelays.current.set(p.id, Math.min(staggerCounter.current * 25, 75));
+      staggerDelays.current.set(p.id, Math.min(staggerCounter.current * 60, 180));
       staggerCounter.current++;
     }
     const isExpanded = expandedIds.has(p.id);
