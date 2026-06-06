@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FolderOpen } from '@phosphor-icons/react';
-import { invoke, isTauri } from '@tauri-apps/api/core';
-import { documentDir } from '@tauri-apps/api/path';
-import { open } from '@tauri-apps/plugin-dialog';
+import { isElectron } from '../lib/electron';
 
-const inTauri = isTauri();
+const inElectron = isElectron();
 
 const EXIT_MS = 130;
 
@@ -28,8 +26,8 @@ export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: P
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
-    if (!inTauri) return;
-    documentDir().then(setFolder).catch(() => setFolder(''));
+    if (!inElectron) return;
+    window.electron!.getDocumentsDir().then(setFolder).catch(() => setFolder(''));
   }, []);
 
   function close() {
@@ -38,8 +36,8 @@ export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: P
   }
 
   async function browseFolder() {
-    const selected = await open({ directory: true, multiple: false });
-    if (typeof selected === 'string') setFolder(selected);
+    const selected = await window.electron!.openDirectory();
+    if (selected) setFolder(selected);
   }
 
   async function handleSave() {
@@ -50,10 +48,10 @@ export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: P
     setError('');
 
     try {
-      if (inTauri) {
+      if (inElectron) {
         const sep = folder.endsWith('/') || folder.endsWith('\\') ? '' : '/';
         const path = folder ? `${folder}${sep}${name}` : name;
-        await invoke('save_file', { path, content });
+        await window.electron!.saveFile(path, content);
       } else {
         const blob = new Blob([content], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -98,7 +96,7 @@ export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: P
         </div>
 
         {/* Folder — Tauri only */}
-        {inTauri && (
+        {inElectron && (
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Folder</label>
             <div className="flex gap-2">

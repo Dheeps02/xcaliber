@@ -1,4 +1,11 @@
 @import "@fontsource/inter/400.css";
+
+/* Electron frameless window — drag region support */
+[data-tauri-drag-region] { -webkit-app-region: drag; }
+[data-tauri-drag-region] button,
+[data-tauri-drag-region] input,
+[data-tauri-drag-region] a,
+[data-tauri-drag-region] label { -webkit-app-region: no-drag; }
 @import "@fontsource/inter/500.css";
 @import "@fontsource/inter/600.css";
 @import "@fontsource/jetbrains-mono/400.css";

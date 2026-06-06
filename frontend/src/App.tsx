@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useSSE } from './hooks/useSSE';
 import { TooltipProvider } from './context/TooltipContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -36,7 +35,7 @@ function AppInner() {
   }, [animationsEnabled]);
 
   useEffect(() => {
-    getCurrentWebviewWindow().setZoom(uiZoom).catch(() => {});
+    window.electron?.setZoom(uiZoom).catch(() => {});
   }, [uiZoom]);
 
   return (

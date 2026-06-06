@@ -1,0 +1,26 @@
+{
+  "name": "xcaliber",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "predev": "cargo build && npm run electron:compile",
+    "dev": "concurrently -k \"npm run frontend:dev\" \"wait-on tcp:5173 && npx electron . 2>&1 | grep -v Fontconfig\"",
+    "frontend:dev": "npm run dev --prefix frontend",
+    "electron:compile": "tsc --project electron/tsconfig.json",
+    "build": "cargo build --release && npm run frontend:build && npm run electron:compile",
+    "frontend:build": "npm run build --prefix frontend"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "concurrently": "^9.0.0",
+    "electron": "^36.0.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "~6.0.0",
+    "wait-on": "^8.0.0"
+  },
+  "allowScripts": {
+    "electron@36.9.5": true,
+    "electron-winstaller@5.4.0": true
+  }
+}

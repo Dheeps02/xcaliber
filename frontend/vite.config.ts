@@ -5,11 +5,12 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 const { version } = JSON.parse(
-  readFileSync(resolve(__dirname, '../tauri.conf.json'), 'utf-8')
+  readFileSync(resolve(__dirname, '../package.json'), 'utf-8')
 ) as { version: string };
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  base: './',
   resolve: {
     dedupe: ['react', 'react-dom'],
   },
