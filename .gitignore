@@ -40,8 +40,12 @@ dist/
 .vuepress/dist
 
 ### Project-specific ###
+dev/
 /frontend/node_modules
 /frontend/dist
 /frontend/.vite
 __pycache__/
 gen/
+dist-electron/
+wry-patch/
+.claude/
