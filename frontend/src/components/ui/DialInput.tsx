@@ -94,7 +94,7 @@ export function DialInput({ value, onChange, min, max, step = 1, digits = 3, sty
         background: 'var(--input-bg)',
         border: '1px solid var(--input-border)',
         borderTopColor: 'var(--input-border-top)',
-        boxShadow: 'inset 0 1px 3px var(--shadow-6)',
+        boxShadow: 'inset 0 2px 4px var(--shadow-8), inset 0 1px 2px var(--shadow-6), 0 1px 0 var(--shine-2)',
         borderRadius: 4,
         overflow: 'hidden',
         ...style,
@@ -120,6 +120,7 @@ export function DialInput({ value, onChange, min, max, step = 1, digits = 3, sty
         onMouseDown={handleReelMouseDown}
         style={{
           width: REEL_W, flexShrink: 0,
+          transform: 'translateX(-3px)',
           cursor: 'ns-resize',
           userSelect: 'none',
           position: 'relative',

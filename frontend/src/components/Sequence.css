@@ -1,4 +1,7 @@
 /* ── Sequence tab ────────────────────────────────────────────────── */
+.seq-step-shell {
+  position: relative;
+}
 .seq-step-hdr {
   display: flex;
   align-items: center;
@@ -7,13 +10,29 @@
   cursor: pointer;
   user-select: none;
   border-bottom: 1px solid var(--border);
-  transition: background 100ms;
+  background: color-mix(in srgb, var(--tx) 5%, transparent);
+  transition: background 70ms;
+  position: relative;
 }
-.seq-step-hdr:hover { background: var(--surface-raised); }
-.seq-step-hdr.active {
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
-  border-left: 2px solid var(--accent);
-  padding-left: 14px;
+.seq-step-hdr:hover { background: color-mix(in srgb, var(--tx) 10%, transparent); }
+.seq-step-hdr.active { background: var(--surface-overlay); }
+
+.seq-step-decoration {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--tx);
+  box-shadow: 3px 0 10px color-mix(in srgb, var(--tx) 45%, transparent);
+}
+.seq-step-hdr.active .seq-step-decoration {
+  background: var(--accent);
+  box-shadow: 3px 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.seq-step-frames {
+  min-height: 0;
+  overflow: hidden;
+  padding-left: 28px;
 }
 .seq-step-status {
   width: 14px;

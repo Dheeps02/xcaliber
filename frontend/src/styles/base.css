@@ -112,6 +112,7 @@ button:active:not(:disabled) { transform: scale(0.95); }
   flex-direction: column;
   overflow: hidden;
   transition: opacity var(--duration-base) var(--ease-out);
+  will-change: opacity;
 }
 .tab-panel-active {
   opacity: 1;

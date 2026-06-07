@@ -1,16 +1,21 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useLayoutEffect } from 'react';
 import {
   Plus, X, ArrowSquareOut, FolderOpen, ListBullets, Timer,
-  PaperPlaneTilt, DownloadSimple,
 } from '@phosphor-icons/react';
-import { ExpandDetailFlat, HexCell, dirBadgeCls } from './PacketDetail';
+import {
+  CommandIcon, ExpandPanel, HexCells,
+  dirBgColor, dirBgHover, dirColor, getCommandName,
+} from './PacketTrace';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import { CMD_DEFS } from '../lib/cmd-defs';
-import type { Sequence as SeqType, SeqFile, SeqStepOutcome, SeqStepResp } from '../lib/types';
+import { SEQUENCE_STEP_STAGGER_MS } from '../lib/constants';
+import { formatTime } from '../lib/utils';
+import type { PacketEntry, Sequence as SeqType, SeqFile, SeqStepOutcome, SeqStepResp } from '../lib/types';
 import { ExportDialog } from './ExportDialog';
 import { Button } from './ui/Button';
-import { Input } from './ui/Input';
+import { DialInput } from './ui/DialInput';
+import { Toggle } from './ui/Toggle';
 import { RunStopButton } from './ui/RunStopButton';
 
 // ── helpers ───────────────────────────────────────────────────────
@@ -68,6 +73,81 @@ function RespToggle({ value, onChange }: { value: SeqStepResp; onChange: (v: Seq
   );
 }
 
+// ── Trace-style sequence packet row ────────────────────────────────
+
+function packetDir(p: PacketEntry) {
+  return p.pid === 'FE' ? 'err' : p.direction;
+}
+
+function SequenceTraceFrame({
+  packet,
+  open,
+  onClick,
+  fallbackText,
+}: {
+  packet: PacketEntry;
+  open: boolean;
+  onClick: () => void;
+  fallbackText?: string;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const dir = packetDir(packet);
+  const color = dirColor(dir);
+
+  return (
+    <>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '200px 110px 1fr',
+          position: 'relative',
+          cursor: 'pointer',
+          transition: 'background 70ms',
+          background: open ? 'var(--surface-overlay)' : hovered ? dirBgHover(dir) : dirBgColor(dir),
+          borderBottom: '1px solid var(--border)',
+          paddingRight: 16,
+        }}
+        onClick={onClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        <div
+          style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0,
+            width: 3,
+            borderRadius: '0 2px 2px 0',
+            background: color,
+            boxShadow: `3px 0 10px color-mix(in srgb, ${color} 45%, transparent)`,
+          }}
+        />
+
+        <div className="flex items-center gap-1.5 py-2 min-w-0 overflow-hidden" style={{ paddingLeft: 12 }}>
+          <CommandIcon p={packet} />
+          <span className="trace-mono font-medium text-[12px] truncate" style={{ color: 'var(--text-primary)' }}>
+            {getCommandName(packet)}
+          </span>
+          <span className="text-[10px] font-mono shrink-0" style={{ color: 'var(--text-muted)' }}>
+            #{packet.counter}
+          </span>
+        </div>
+
+        <div className="flex items-center py-2 font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
+          {packet.timestamp_ms > 0 ? formatTime(packet.timestamp_ms) : '—'}
+        </div>
+
+        <div className="flex items-center gap-1 py-2 font-mono text-[11px] overflow-hidden">
+          {fallbackText
+            ? <span className="truncate" style={{ color }}>{fallbackText}</span>
+            : <HexCells hex={packet.hex} dir={dir} />
+          }
+        </div>
+      </div>
+
+      <ExpandPanel p={packet} open={open} />
+    </>
+  );
+}
+
 // ── Sequence ──────────────────────────────────────────────────────
 
 export function Sequence() {
@@ -102,7 +182,7 @@ export function Sequence() {
   const staggerDelaysRef = useRef<Map<string, number>>(new Map());
 
   const stepIdKey = activeSeq?.steps.map((s) => s.id).join(',') ?? '';
-  useEffect(() => {
+  useLayoutEffect(() => {
     const currentIds = new Set(activeSeq?.steps.map((s) => s.id) ?? []);
     const added: string[] = [];
     for (const id of currentIds) {
@@ -110,10 +190,10 @@ export function Sequence() {
     }
     prevStepIdsRef.current = currentIds;
     if (added.length === 0) return;
-    added.forEach((id, i) => staggerDelaysRef.current.set(id, Math.min(i, 3) * 120));
+    added.forEach((id, i) => staggerDelaysRef.current.set(id, i * SEQUENCE_STEP_STAGGER_MS));
     const addedSet = new Set(added);
     setNewStepIds((prev) => new Set([...prev, ...addedSet]));
-    const maxDelay = Math.min(added.length - 1, 3) * 120;
+    const maxDelay = (added.length - 1) * SEQUENCE_STEP_STAGGER_MS;
     const t = setTimeout(() => {
       setNewStepIds((prev) => { const n = new Set(prev); addedSet.forEach((id) => n.delete(id)); return n; });
     }, 280 + maxDelay + 50);
@@ -298,25 +378,25 @@ export function Sequence() {
         <div className="xcb-vdiv" />
 
         {/* Abort on error */}
-        <button
-          className={`xcb-pill${activeSeq?.abortOnError ? ' active' : ''}`}
-          disabled={!activeSeq}
-          onClick={() => activeSeq && updateSequence({ ...activeSeq, abortOnError: !activeSeq.abortOnError })}
-        >
-          Abort on error
-        </button>
+        <div className="flex items-center gap-1.5" style={{ opacity: activeSeq ? 1 : 0.4, pointerEvents: activeSeq ? undefined : 'none' }}>
+          <Toggle
+            checked={activeSeq?.abortOnError ?? false}
+            onChange={() => activeSeq && updateSequence({ ...activeSeq, abortOnError: !activeSeq.abortOnError })}
+          />
+          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Abort on error</span>
+        </div>
         <div className="xcb-vdiv" />
 
         {/* Step delay */}
         <div className="flex items-center gap-1.5 shrink-0">
           <Timer size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-          <Input
-            type="number"
+          <DialInput
             value={activeSeq?.stepDelayMs ?? 0}
-            onChange={(v) => activeSeq && updateSequence({ ...activeSeq, stepDelayMs: Math.max(0, Number(v)) })}
-            disabled={!activeSeq}
-            size="sm"
-            style={{ width: 64, fontFamily: 'monospace' }}
+            onChange={(v) => activeSeq && updateSequence({ ...activeSeq, stepDelayMs: v })}
+            min={0}
+            step={10}
+            digits={4}
+            style={{ opacity: activeSeq ? 1 : 0.4, pointerEvents: activeSeq ? undefined : 'none' }}
           />
           <span className="text-[10px] shrink-0" style={{ color: 'var(--text-muted)' }}>ms</span>
         </div>
@@ -324,10 +404,10 @@ export function Sequence() {
         <div className="flex-1" />
 
         {/* Export / Import */}
-        <Button variant="ghost" className="!px-2 !py-0.5 !text-[10px] !gap-1" disabled={!sequences.length} onClick={handleExport}>
+        <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" disabled={!sequences.length} onClick={handleExport}>
           <ArrowSquareOut size={13} />Export
         </Button>
-        <Button variant="ghost" className="!px-2 !py-0.5 !text-[10px] !gap-1" onClick={() => importRef.current?.click()}>
+        <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" onClick={() => importRef.current?.click()}>
           <FolderOpen size={13} />Import
         </Button>
       </div>
@@ -376,7 +456,6 @@ export function Sequence() {
             const txHex = result?.txHex ?? bytePreview(step.bytes);
             const rxHex = result?.rxHex;
             const hasRx = !!(rxHex || (result?.errorMsg && result.outcome === 'error'));
-            const isErrOutcome = result?.outcome === 'error' || result?.outcome === 'fail';
 
             const startTime  = stepStartTimesRef.current.get(step.id);
             const endTime    = stepEndTimesRef.current.get(step.id);
@@ -389,18 +468,39 @@ export function Sequence() {
             const rxPacket = result?.rxHex
               ? [...packets].reverse().find((p) => p.hex === result.rxHex && p.direction === 'rx')
               : undefined;
+            const txFramePacket: PacketEntry = txPacket ?? {
+              id: -idx - 1,
+              direction: 'tx',
+              counter: idx + 1,
+              timestamp_ms: 0,
+              hex: txHex,
+              pid: txHex.trim().split(/\s+/)[0] || '00',
+              decoded: { command: cmdLabel(step.cmdKey) },
+            };
+            const rxFramePacket: PacketEntry | undefined = hasRx
+              ? rxPacket ?? {
+                id: -idx - 10_000,
+                direction: 'rx',
+                counter: idx + 1,
+                timestamp_ms: 0,
+                hex: rxHex ?? '',
+                pid: result?.errorMsg ? 'FE' : (rxHex?.trim().split(/\s+/)[0] || 'FF'),
+                decoded: result?.errorMsg ? { type: 'error', data: { message: result.errorMsg } } : {},
+              }
+              : undefined;
 
             return (
               <div
                 key={step.id}
-                className={isExiting ? 'row-out' : isNew ? 'packet-new' : ''}
-                style={isNew ? { animationDelay: `${staggerDelay}ms` } : undefined}
+                className={`seq-step-shell${isExiting ? ' row-out' : ''}${isNew ? ' packet-new packet-new-tx' : ''}`}
+                style={isNew ? { animationDelay: `${staggerDelay}ms`, '--anim-delay': `${staggerDelay}ms` } as React.CSSProperties : undefined}
               >
                 {/* Group header row */}
                 <div
                   className={`seq-step-hdr group${isSelected ? ' active' : ''}`}
                   onClick={() => onStepClick(step.id)}
                 >
+                  <div className="seq-step-decoration" />
                   <div className="w-14 flex items-center gap-1.5 shrink-0">
                     <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{isCollapsed ? '▸' : '▾'}</span>
                     <div className={outcomeClass(result?.outcome, isStepRunning)}>
@@ -453,65 +553,24 @@ export function Sequence() {
                   opacity: isCollapsed ? 0 : 1,
                   transition: 'grid-template-rows 180ms ease, opacity 120ms ease',
                 }}>
-                  <div style={{ minHeight: 0, overflow: 'hidden' }}>
+                  <div className="seq-step-frames">
 
-                    {hasTx && (<>
-                      <div
-                        className="flex items-center font-mono text-xs cursor-pointer transition-colors"
-                        style={{
-                          borderBottom: '1px solid var(--border)',
-                          background: expandedSubRows.has(txKey) ? 'var(--surface-raised)' : undefined,
-                        }}
-                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-raised)')}
-                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = expandedSubRows.has(txKey) ? 'var(--surface-raised)' : '')}
+                    {hasTx && (
+                      <SequenceTraceFrame
+                        packet={txFramePacket}
+                        open={expandedSubRows.has(txKey)}
                         onClick={() => toggleSubRow(txKey)}
-                      >
-                        <div className="pl-7 pr-2 py-1.5 w-28 shrink-0">
-                          <span className="text-[10px] flex items-center gap-1" style={{ color: 'var(--tx)' }}>
-                            <PaperPlaneTilt size={11} />Request
-                          </span>
-                        </div>
-                        <div className="px-2 py-1.5 shrink-0">
-                          <span className="dir-badge tx">TX</span>
-                        </div>
-                        <div className="px-3 py-1.5 flex-1 min-w-0">
-                          <HexCell hex={txHex} dir="tx" />
-                        </div>
-                      </div>
-                      {txPacket && <ExpandDetailFlat p={txPacket} open={expandedSubRows.has(txKey)} />}
-                    </>)}
+                      />
+                    )}
 
-                    {hasRx && (<>
-                      <div
-                        className="flex items-center font-mono text-xs cursor-pointer transition-colors"
-                        style={{
-                          borderBottom: '1px solid var(--border)',
-                          background: expandedSubRows.has(rxKey) ? 'var(--surface-raised)' : undefined,
-                        }}
-                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-raised)')}
-                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = expandedSubRows.has(rxKey) ? 'var(--surface-raised)' : '')}
+                    {rxFramePacket && (
+                      <SequenceTraceFrame
+                        packet={rxFramePacket}
+                        open={expandedSubRows.has(rxKey)}
                         onClick={() => toggleSubRow(rxKey)}
-                      >
-                        <div className="pl-7 pr-2 py-1.5 w-28 shrink-0">
-                          <span className="text-[10px] flex items-center gap-1" style={{ color: isErrOutcome ? 'var(--status-err)' : 'var(--rx)' }}>
-                            <DownloadSimple size={11} />Response
-                          </span>
-                        </div>
-                        <div className="px-2 py-1.5 shrink-0">
-                          {rxPacket
-                            ? <span className={dirBadgeCls(rxPacket)}>RX</span>
-                            : <span className="dir-badge err">ERR</span>
-                          }
-                        </div>
-                        <div className="px-3 py-1.5 flex-1 min-w-0">
-                          {rxHex
-                            ? <HexCell hex={rxHex} dir={isErrOutcome ? 'tx' : 'rx'} />
-                            : <span className="text-[10px]" style={{ color: 'var(--status-err)' }}>{result?.errorMsg}</span>
-                          }
-                        </div>
-                      </div>
-                      {rxPacket && <ExpandDetailFlat p={rxPacket} open={expandedSubRows.has(rxKey)} />}
-                    </>)}
+                        fallbackText={rxHex ? undefined : result?.errorMsg}
+                      />
+                    )}
 
                   </div>
                 </div>

@@ -19,7 +19,7 @@ type DirFilter = 'all' | 'tx' | 'rx';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function getCommandName(p: PacketEntry): string {
+export function getCommandName(p: PacketEntry): string {
   const d = p.decoded as Record<string, unknown>;
   if (typeof d.command === 'string') return formatLabel(d.command);
   if (p.direction === 'rx') {
@@ -29,25 +29,25 @@ function getCommandName(p: PacketEntry): string {
   return `0x${p.pid}`;
 }
 
-function CommandIcon({ p }: { p: PacketEntry }) {
+export function CommandIcon({ p }: { p: PacketEntry }) {
   if (p.direction === 'tx') return <PaperPlaneTilt size={TRACE_DIR_ICON_SIZE} style={{ color: 'var(--tx)', flexShrink: 0 }} />;
   if (p.pid === 'FE') return <XCircle size={TRACE_DIR_ICON_SIZE} style={{ color: 'var(--status-err)', flexShrink: 0 }} />;
   return <CheckCircle size={TRACE_DIR_ICON_SIZE} style={{ color: 'var(--rx)', flexShrink: 0 }} />;
 }
 
-function dirColor(dir: string): string {
+export function dirColor(dir: string): string {
   if (dir === 'tx') return 'var(--tx)';
   if (dir === 'rx') return 'var(--rx)';
   return 'var(--status-err)';
 }
 
-function dirBgColor(dir: string): string {
+export function dirBgColor(dir: string): string {
   if (dir === 'tx') return 'color-mix(in srgb, var(--tx) 5%, transparent)';
   if (dir === 'rx') return 'color-mix(in srgb, var(--rx) 4%, transparent)';
   return 'color-mix(in srgb, var(--status-err) 5%, transparent)';
 }
 
-function dirBgHover(dir: string): string {
+export function dirBgHover(dir: string): string {
   if (dir === 'tx') return 'color-mix(in srgb, var(--tx) 10%, transparent)';
   if (dir === 'rx') return 'color-mix(in srgb, var(--rx) 8%, transparent)';
   return 'color-mix(in srgb, var(--status-err) 10%, transparent)';
@@ -55,7 +55,7 @@ function dirBgHover(dir: string): string {
 
 // ── ExpandPanel ───────────────────────────────────────────────────────────────
 
-function ExpandPanel({ p, open }: { p: PacketEntry; open: boolean }) {
+export function ExpandPanel({ p, open }: { p: PacketEntry; open: boolean }) {
   const isErr  = p.pid === 'FE';
   const effectiveDir = isErr ? 'err' : p.direction;
   const color  = dirColor(effectiveDir);
@@ -114,7 +114,7 @@ function ExpandPanel({ p, open }: { p: PacketEntry; open: boolean }) {
 
 // ── HexCells ──────────────────────────────────────────────────────────────────
 
-function HexCells({ hex, dir }: { hex: string; dir: string }) {
+export function HexCells({ hex, dir }: { hex: string; dir: string }) {
   const color = dirColor(dir);
   return (
     <>
