@@ -1,8 +1,8 @@
-use std::{collections::HashMap, sync::Mutex};
-use tokio::sync::{broadcast, Mutex as AsyncMutex};
+use crate::{config::Config, session::XcpSession};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
-use crate::{config::Config, session::XcpSession};
+use std::{collections::HashMap, sync::Mutex};
+use tokio::sync::{Mutex as AsyncMutex, broadcast};
 
 // ── DAQ data model ────────────────────────────────────────────────
 
@@ -87,7 +87,8 @@ impl AppState {
                pid          TEXT    NOT NULL,
                decoded      TEXT    NOT NULL
              );",
-        ).expect("schema init failed");
+        )
+        .expect("schema init failed");
 
         let (tx, _) = broadcast::channel(1024);
         Self {
@@ -127,10 +128,12 @@ impl AppState {
     pub fn query_packets(&self, since_id: Option<i64>, limit: usize) -> Vec<PacketEntry> {
         let db = self.db.lock().unwrap();
         let since = since_id.unwrap_or(0);
-        let mut stmt = db.prepare(
-            "SELECT id, direction, counter, timestamp_ms, hex, pid, decoded
-             FROM packets WHERE id > ?1 ORDER BY id ASC LIMIT ?2"
-        ).unwrap();
+        let mut stmt = db
+            .prepare(
+                "SELECT id, direction, counter, timestamp_ms, hex, pid, decoded
+             FROM packets WHERE id > ?1 ORDER BY id ASC LIMIT ?2",
+            )
+            .unwrap();
         stmt.query_map(rusqlite::params![since, limit as i64], |row| {
             let decoded_str: String = row.get(6)?;
             Ok(PacketEntry {

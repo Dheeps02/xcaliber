@@ -22,8 +22,10 @@ type Tab = 'appearance' | 'connection' | 'trace' | 'events' | 'accessibility' | 
 
 // ── Theme definitions ─────────────────────────────────────────────
 
+type ThemeId = 'default' | 'light';
+
 interface ThemeDef {
-  id: string;
+  id: ThemeId;
   label: string;
   preview: { bg: string; sidebar: string; accent: string; text: string };
 }
@@ -53,8 +55,10 @@ const CONN_DEFAULTS = {
   timeout_ms: 1000,
   listen_port: 8080,
   bind_ip: '',
+  source_port: 5555,
   src_mac: '',
   dst_mac: '',
+  vlan_id: '',
   endian: 'little',
 };
 
@@ -65,8 +69,10 @@ interface ConnDraft {
   timeout_ms: number;
   listen_port: number;
   bind_ip: string;
+  source_port: number;
   src_mac: string;
   dst_mac: string;
+  vlan_id: string;
   endian: string;
 }
 
@@ -79,7 +85,7 @@ function AppearanceTab() {
   const setUiZoom = useAppStore((s) => s.setUiZoom);
   const [draftZoom, setDraftZoom] = useState(uiZoom);
 
-  function handleSelect(id: string) {
+  function handleSelect(id: ThemeId) {
     setTheme(id);
     applyTheme(id);
   }
@@ -177,8 +183,10 @@ function ConnectionTab() {
     timeout_ms: config?.connection.timeout_ms ?? CONN_DEFAULTS.timeout_ms,
     listen_port: config?.server.listen_port ?? CONN_DEFAULTS.listen_port,
     bind_ip: config?.connection.bind_ip ?? CONN_DEFAULTS.bind_ip,
+    source_port: config?.connection.source_port ?? config?.connection.server_port ?? CONN_DEFAULTS.source_port,
     src_mac: config?.connection.src_mac ?? CONN_DEFAULTS.src_mac,
     dst_mac: config?.connection.dst_mac ?? CONN_DEFAULTS.dst_mac,
+    vlan_id: config?.connection.vlan_id != null ? String(config.connection.vlan_id) : CONN_DEFAULTS.vlan_id,
     endian: config?.endian ?? CONN_DEFAULTS.endian,
   });
   const [draft, setDraft] = useState<ConnDraft>({ ...initial });
@@ -212,8 +220,10 @@ function ConnectionTab() {
       await api.updateConfig({
         ...draft,
         bind_ip: draft.bind_ip || undefined,
+        source_port: draft.source_port || undefined,
         src_mac: draft.src_mac || undefined,
         dst_mac: draft.dst_mac || undefined,
+        vlan_id: draft.vlan_id ? Number(draft.vlan_id) : undefined,
         endian: draft.endian,
       });
       if (config) {
@@ -226,8 +236,10 @@ function ConnectionTab() {
             protocol: draft.protocol,
             timeout_ms: draft.timeout_ms,
             bind_ip: draft.bind_ip || undefined,
+            source_port: draft.source_port || undefined,
             src_mac: draft.src_mac || undefined,
             dst_mac: draft.dst_mac || undefined,
+            vlan_id: draft.vlan_id ? Number(draft.vlan_id) : undefined,
           },
           server: { ...config.server, listen_port: draft.listen_port },
           endian: draft.endian,
@@ -267,12 +279,12 @@ function ConnectionTab() {
         <div className={ipRowCls} style={ipGridStyle}>
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-gray-400 font-medium">Source</span>
-            {(isDirty('bind_ip') || isDirty('listen_port')) && (
-              <button onClick={() => { resetField('bind_ip'); resetField('listen_port'); }} className="text-amber-500 hover:text-amber-300 transition-colors flex items-center" title="Reset row"><ArrowCounterClockwise size={20} /></button>
+            {(isDirty('bind_ip') || isDirty('source_port')) && (
+              <button onClick={() => { resetField('bind_ip'); resetField('source_port'); }} className="text-amber-500 hover:text-amber-300 transition-colors flex items-center" title="Reset row"><ArrowCounterClockwise size={20} /></button>
             )}
           </div>
           <input type="text" placeholder="0.0.0.0 (any)" value={draft.bind_ip} onChange={(e) => set('bind_ip', e.target.value)} className={inputCls('bind_ip')} />
-          <SpinInput value={draft.listen_port} onChange={(v) => set('listen_port', v)} min={1024} max={65535} inputClassName={inputCls('listen_port')} />
+          <SpinInput value={draft.source_port} onChange={(v) => set('source_port', v)} min={1} max={65535} inputClassName={inputCls('source_port')} />
         </div>
         {/* Destination row */}
         <div className={ipRowCls} style={ipGridStyle}>
@@ -323,18 +335,21 @@ function ConnectionTab() {
         Byte order for SET_MTA addresses and multi-byte DOWNLOAD values. Match your target ECU.
       </p>
 
-      {/* ── MAC Addresses ── */}
-      <ConnSection label="MAC Addresses" icon={Circuitry} />
-      <div className={`grid grid-cols-2 gap-3 ${draft.protocol !== 'ethernet' ? 'opacity-40 pointer-events-none' : ''}`}>
+      {/* ── Raw Ethernet ── */}
+      <ConnSection label="Raw Ethernet" icon={Circuitry} />
+      <div className={`grid grid-cols-3 gap-3 ${draft.protocol !== 'ethernet' ? 'opacity-40 pointer-events-none' : ''}`}>
         <Field label="Source MAC" dirty={isDirty('src_mac')} onReset={() => resetField('src_mac')}>
           <input type="text" placeholder="AA:BB:CC:DD:EE:FF" value={draft.src_mac} onChange={(e) => set('src_mac', e.target.value)} className={inputCls('src_mac')} />
         </Field>
         <Field label="Destination MAC" dirty={isDirty('dst_mac')} onReset={() => resetField('dst_mac')}>
           <input type="text" placeholder="AA:BB:CC:DD:EE:FF" value={draft.dst_mac} onChange={(e) => set('dst_mac', e.target.value)} className={inputCls('dst_mac')} />
         </Field>
+        <Field label="VLAN ID" dirty={isDirty('vlan_id')} onReset={() => resetField('vlan_id')}>
+          <input type="number" min={1} max={4094} placeholder="none" value={draft.vlan_id} onChange={(e) => set('vlan_id', e.target.value)} className={inputCls('vlan_id')} />
+        </Field>
       </div>
       {draft.protocol !== 'ethernet' && (
-        <p className="text-[10px] text-gray-600 -mt-2">Select Raw Ethernet protocol to configure MAC addresses.</p>
+        <p className="text-[10px] text-gray-600 -mt-2">Select Raw Ethernet protocol to configure MAC addresses and VLAN tagging.</p>
       )}
 
       {/* ── Network Interface ── */}
@@ -350,6 +365,12 @@ function ConnectionTab() {
             ))
           )}
         </select>
+      </Field>
+
+      {/* ── Backend ── */}
+      <ConnSection label="Backend" icon={Terminal} />
+      <Field label="HTTP Listen Port" dirty={isDirty('listen_port')} onReset={() => resetField('listen_port')}>
+        <SpinInput value={draft.listen_port} onChange={(v) => set('listen_port', v)} min={1024} max={65535} inputClassName={inputCls('listen_port')} />
       </Field>
 
       <div className="flex items-center gap-2 pt-1">
@@ -487,7 +508,12 @@ function EventsTab() {
         timeout_ms: config.connection.timeout_ms,
         listen_port: config.server.listen_port,
         bind_ip: config.connection.bind_ip,
+        source_port: config.connection.source_port,
+        src_mac: config.connection.src_mac,
+        dst_mac: config.connection.dst_mac,
+        vlan_id: config.connection.vlan_id,
         events: draft,
+        endian: config.endian,
       });
       setEvents(draft);
       setConfig({ ...config, events: draft });

@@ -5,6 +5,7 @@ server_ip = "127.0.0.1"
 server_port = 5555
 protocol = "udp"
 timeout_ms = 1000
+source_port = 5555
 
 [server]
 listen_port = 8080

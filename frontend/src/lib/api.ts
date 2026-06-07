@@ -68,8 +68,10 @@ export const api = {
     timeout_ms: number;
     listen_port: number;
     bind_ip?: string;
+    source_port?: number;
     src_mac?: string;
     dst_mac?: string;
+    vlan_id?: number;
     events?: EventDef[];
     endian?: string;
   }) => post<{ ok: boolean }>('/api/config', body),

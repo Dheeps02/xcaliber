@@ -305,7 +305,7 @@ export function PacketTrace() {
     return `packet-new packet-new-${effectiveDir(p)}`;
   }
 
-  function wrapperClassName(p: PacketEntry): string {
+  function wrapperClassName(): string {
     return isClearing ? 'row-out' : '';
   }
 

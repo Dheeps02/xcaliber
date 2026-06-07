@@ -94,9 +94,12 @@ export function DialInput({ value, onChange, min, max, step = 1, digits = 3, sty
         background: 'var(--input-bg)',
         border: '1px solid var(--input-border)',
         borderTopColor: 'var(--input-border-top)',
-        boxShadow: 'inset 0 2px 4px var(--shadow-8), inset 0 1px 2px var(--shadow-6), 0 1px 0 var(--shine-2)',
+        boxShadow: active
+          ? 'inset 0 2px 4px var(--shadow-8), inset 0 1px 2px var(--shadow-6), 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent)'
+          : 'inset 0 2px 4px var(--shadow-8), inset 0 1px 2px var(--shadow-6), 0 1px 0 var(--shine-2)',
         borderRadius: 4,
         overflow: 'hidden',
+        transition: 'box-shadow 120ms ease',
         ...style,
       }}
     >

@@ -1,7 +1,8 @@
-use async_trait::async_trait;
 use crate::xcp::{error::XcpError, packet::XcpPacket};
+use async_trait::async_trait;
 
 pub mod dispatched;
+pub mod ethernet;
 pub mod tcp;
 pub mod udp;
 

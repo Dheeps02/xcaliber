@@ -1,8 +1,8 @@
+use super::XcpTransport;
+use crate::xcp::{error::XcpError, packet::XcpPacket};
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use tokio::{net::UdpSocket, time};
-use crate::xcp::{error::XcpError, packet::XcpPacket};
-use super::XcpTransport;
 
 pub struct UdpTransport {
     socket: UdpSocket,
@@ -21,7 +21,8 @@ impl UdpTransport {
         let socket = UdpSocket::bind(local)
             .await
             .map_err(|e| XcpError::Transport(e.to_string()))?;
-        socket.connect(remote)
+        socket
+            .connect(remote)
             .await
             .map_err(|e| XcpError::Transport(e.to_string()))?;
         Ok(Self { socket, remote })

@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::xcp::{
     command::XcpCommand,
     error::XcpError,
@@ -6,6 +5,7 @@ use crate::xcp::{
     response::{ConnectResponse, XcpResponse},
     transport::{XcpTransport, dispatched::DispatchedTransport},
 };
+use std::sync::Arc;
 
 /// State of an XCP session.
 #[derive(Debug, Clone, PartialEq, Eq)]

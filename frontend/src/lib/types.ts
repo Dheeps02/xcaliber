@@ -64,8 +64,10 @@ export interface AppConfig {
     protocol: string;
     timeout_ms: number;
     bind_ip?: string;
+    source_port?: number;
     src_mac?: string;
     dst_mac?: string;
+    vlan_id?: number;
   };
   server: {
     listen_port: number;

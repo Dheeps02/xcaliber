@@ -1,11 +1,11 @@
+use crate::http::state::AppState;
 use axum::{
     extract::State,
     response::{Sse, sse::Event},
 };
-use std::{convert::Infallible, sync::Arc, time::Duration};
-use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 use futures_util::stream::{self, Stream};
-use crate::http::state::AppState;
+use std::{convert::Infallible, sync::Arc, time::Duration};
+use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 
 pub async fn sse_handler(
     State(state): State<Arc<AppState>>,
@@ -15,7 +15,6 @@ pub async fn sse_handler(
         .filter_map(|msg| msg.ok())
         .map(|data| Ok(Event::default().data(data)));
 
-    Sse::new(stream).keep_alive(
-        axum::response::sse::KeepAlive::new().interval(Duration::from_secs(15)),
-    )
+    Sse::new(stream)
+        .keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(15)))
 }

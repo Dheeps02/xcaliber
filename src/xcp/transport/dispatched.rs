@@ -1,15 +1,12 @@
+use crate::xcp::{
+    command::XcpCommand, error::XcpError, packet::XcpPacket, response::XcpResponse,
+    transport::XcpTransport,
+};
 use std::sync::{
     Arc,
     atomic::{AtomicU16, Ordering},
 };
 use tokio::{sync::broadcast, time};
-use crate::xcp::{
-    command::XcpCommand,
-    error::XcpError,
-    packet::XcpPacket,
-    response::XcpResponse,
-    transport::XcpTransport,
-};
 
 const BROADCAST_CAP: usize = 1024;
 const POLL_MS: u64 = 50;
@@ -19,25 +16,27 @@ const POLL_MS: u64 = 50;
 /// channel and filter by PID rather than calling `recv()` directly. This
 /// allows concurrent command-response exchange and DAQ DTO collection.
 pub struct DispatchedTransport {
-    inner:        Arc<dyn XcpTransport>,
+    inner: Arc<dyn XcpTransport>,
     broadcast_tx: broadcast::Sender<Arc<XcpPacket>>,
-    task:         tokio::task::JoinHandle<()>,
-    counter:      AtomicU16,
-    timeout_ms:   u64,
+    task: tokio::task::JoinHandle<()>,
+    counter: AtomicU16,
+    timeout_ms: u64,
 }
 
 impl DispatchedTransport {
     pub fn new(inner: Arc<dyn XcpTransport>, timeout_ms: u64) -> Self {
         let (tx, _) = broadcast::channel(BROADCAST_CAP);
-        let tx2    = tx.clone();
+        let tx2 = tx.clone();
         let inner2 = Arc::clone(&inner);
 
         let task = tokio::spawn(async move {
             loop {
                 match inner2.recv(POLL_MS).await {
-                    Ok(pkt)                  => { let _ = tx2.send(Arc::new(pkt)); }
-                    Err(XcpError::Timeout)   => {}   // nothing arrived
-                    Err(_)                   => break, // transport closed
+                    Ok(pkt) => {
+                        let _ = tx2.send(Arc::new(pkt));
+                    }
+                    Err(XcpError::Timeout) => {} // nothing arrived
+                    Err(_) => break,             // transport closed
                 }
             }
         });
@@ -73,7 +72,7 @@ impl DispatchedTransport {
         // Subscribe before sending to avoid a race where the response arrives
         // before we start listening.
         let mut sub = self.broadcast_tx.subscribe();
-        let ctr    = self.counter.fetch_add(1, Ordering::Relaxed);
+        let ctr = self.counter.fetch_add(1, Ordering::Relaxed);
         let packet = XcpPacket::new(ctr, cmd.encode());
         self.inner.send(&packet).await?;
 
@@ -82,8 +81,9 @@ impl DispatchedTransport {
                 let pkt = match sub.recv().await {
                     Ok(p) => p,
                     Err(broadcast::error::RecvError::Lagged(_)) => continue, // missed some DTOs, keep waiting
-                    Err(broadcast::error::RecvError::Closed) =>
-                        return Err(XcpError::Transport("dispatch channel closed".into())),
+                    Err(broadcast::error::RecvError::Closed) => {
+                        return Err(XcpError::Transport("dispatch channel closed".into()));
+                    }
                 };
                 if pkt.payload.first().copied().unwrap_or(0) >= 0xFC {
                     return XcpResponse::decode(&pkt.payload, Some(cmd_pid));

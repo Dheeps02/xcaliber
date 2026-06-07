@@ -37,7 +37,10 @@ impl XcpPacket {
         if buf.len() < 4 + len {
             return Err(crate::xcp::error::XcpError::FrameTooShort(buf.len()));
         }
-        Ok(Self { counter, payload: buf[4..4 + len].to_vec() })
+        Ok(Self {
+            counter,
+            payload: buf[4..4 + len].to_vec(),
+        })
     }
 }
 

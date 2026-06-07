@@ -1,5 +1,5 @@
-use serde::Serialize;
 use crate::xcp::error::{XcpError, XcpErrorCode};
+use serde::Serialize;
 
 /// Decoded XCP response.
 #[derive(Debug, Clone, Serialize)]
@@ -16,7 +16,9 @@ pub enum XcpResponse {
     BuildChecksum(BuildChecksumResponse),
     Error(ErrorResponse),
     /// Raw positive response with unknown payload.
-    PositiveRaw { payload: Vec<u8> },
+    PositiveRaw {
+        payload: Vec<u8>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -117,9 +119,9 @@ impl XcpResponse {
                     protocol_version: payload[7],
                     transport_version: payload[7], // same byte on XCP 1.0
                     cal_pag: resource & 0x01 != 0,
-                    daq:     resource & 0x04 != 0,
-                    stim:    resource & 0x08 != 0,
-                    pgm:     resource & 0x10 != 0,
+                    daq: resource & 0x04 != 0,
+                    stim: resource & 0x08 != 0,
+                    pgm: resource & 0x10 != 0,
                 }))
             }
             Some(0xFE) => Ok(Self::Disconnect),
@@ -133,7 +135,7 @@ impl XcpResponse {
                     resource_protection: payload[2],
                     session_config_id: u16::from_le_bytes([payload[4], payload[5]]),
                     daq_running: ss & 0x04 != 0,
-                    resume:      ss & 0x80 != 0,
+                    resume: ss & 0x80 != 0,
                 }))
             }
             Some(0xFB) => {
@@ -147,8 +149,8 @@ impl XcpResponse {
                     min_st: payload[5],
                     queue_size: payload[6],
                     driver_version: payload[7],
-                    interleaved:   cm & 0x02 != 0,
-                    master_block:  cm & 0x01 != 0,
+                    interleaved: cm & 0x02 != 0,
+                    master_block: cm & 0x01 != 0,
                 }))
             }
             Some(0xFA) => {
@@ -163,12 +165,14 @@ impl XcpResponse {
                 }))
             }
             Some(0xF6) => Ok(Self::SetMta),
-            Some(0xF5) => {
-                Ok(Self::Upload(UploadResponse { data: payload[1..].to_vec() }))
-            }
+            Some(0xF5) => Ok(Self::Upload(UploadResponse {
+                data: payload[1..].to_vec(),
+            })),
             Some(0xF4) => {
                 // SHORT_UPLOAD — same response layout as UPLOAD
-                Ok(Self::Upload(UploadResponse { data: payload[1..].to_vec() }))
+                Ok(Self::Upload(UploadResponse {
+                    data: payload[1..].to_vec(),
+                }))
             }
             Some(0xF3) => {
                 if payload.len() < 8 {
@@ -176,10 +180,15 @@ impl XcpResponse {
                 }
                 let checksum_type = payload[1];
                 let checksum = u32::from_le_bytes([payload[4], payload[5], payload[6], payload[7]]);
-                Ok(Self::BuildChecksum(BuildChecksumResponse { checksum_type, checksum }))
+                Ok(Self::BuildChecksum(BuildChecksumResponse {
+                    checksum_type,
+                    checksum,
+                }))
             }
             Some(0xF0) => Ok(Self::Download),
-            _ => Ok(Self::PositiveRaw { payload: payload.to_vec() }),
+            _ => Ok(Self::PositiveRaw {
+                payload: payload.to_vec(),
+            }),
         }
     }
 
@@ -188,15 +197,40 @@ impl XcpResponse {
         match self {
             Self::Connect(r) => {
                 let [dto_lo, dto_hi] = r.max_dto.to_le_bytes();
-                vec![0xFF, r.resource, r.comm_mode_basic, 0x00, r.max_cto, dto_lo, dto_hi, r.protocol_version]
+                vec![
+                    0xFF,
+                    r.resource,
+                    r.comm_mode_basic,
+                    0x00,
+                    r.max_cto,
+                    dto_lo,
+                    dto_hi,
+                    r.protocol_version,
+                ]
             }
             Self::Disconnect => vec![0xFF],
             Self::GetStatus(r) => {
                 let [id_lo, id_hi] = r.session_config_id.to_le_bytes();
-                vec![0xFF, r.session_status, r.resource_protection, 0x00, id_lo, id_hi]
+                vec![
+                    0xFF,
+                    r.session_status,
+                    r.resource_protection,
+                    0x00,
+                    id_lo,
+                    id_hi,
+                ]
             }
             Self::GetCommModeInfo(r) => {
-                vec![0xFF, 0x00, r.comm_mode_optional, 0x00, r.max_bs, r.min_st, r.queue_size, r.driver_version]
+                vec![
+                    0xFF,
+                    0x00,
+                    r.comm_mode_optional,
+                    0x00,
+                    r.max_bs,
+                    r.min_st,
+                    r.queue_size,
+                    r.driver_version,
+                ]
             }
             Self::GetId(r) => {
                 let len = r.length.to_le_bytes();
@@ -211,7 +245,16 @@ impl XcpResponse {
             Self::Download => vec![0xFF],
             Self::BuildChecksum(r) => {
                 let cs = r.checksum.to_le_bytes();
-                vec![0xFF, r.checksum_type, 0x00, 0x00, cs[0], cs[1], cs[2], cs[3]]
+                vec![
+                    0xFF,
+                    r.checksum_type,
+                    0x00,
+                    0x00,
+                    cs[0],
+                    cs[1],
+                    cs[2],
+                    cs[3],
+                ]
             }
             Self::Error(e) => vec![0xFE, e.code],
             Self::PositiveRaw { payload } => payload.clone(),
@@ -237,7 +280,10 @@ impl XcpResponse {
             Self::GetId(r) => format!(
                 "+OK GET_ID — {} bytes{}",
                 r.length,
-                r.value.as_ref().map(|v| format!(" \"{v}\"")).unwrap_or_default()
+                r.value
+                    .as_ref()
+                    .map(|v| format!(" \"{v}\""))
+                    .unwrap_or_default()
             ),
             Self::SetMta => "+OK SET_MTA".into(),
             Self::Upload(r) => format!("+OK UPLOAD — {} bytes", r.data.len()),

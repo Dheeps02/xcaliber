@@ -9,15 +9,32 @@ pub struct EventDef {
 
 fn default_events() -> Vec<EventDef> {
     vec![
-        EventDef { id: 1,  name: "1 ms".into()   },
-        EventDef { id: 2,  name: "10 ms".into()  },
-        EventDef { id: 3,  name: "100 ms".into() },
-        EventDef { id: 4,  name: "1 s".into()    },
-        EventDef { id: 5,  name: "10 s".into()   },
+        EventDef {
+            id: 1,
+            name: "1 ms".into(),
+        },
+        EventDef {
+            id: 2,
+            name: "10 ms".into(),
+        },
+        EventDef {
+            id: 3,
+            name: "100 ms".into(),
+        },
+        EventDef {
+            id: 4,
+            name: "1 s".into(),
+        },
+        EventDef {
+            id: 5,
+            name: "10 s".into(),
+        },
     ]
 }
 
-fn default_endian() -> String { "little".into() }
+fn default_endian() -> String {
+    "little".into()
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
@@ -39,6 +56,14 @@ pub struct ConnectionConfig {
     pub timeout_ms: u64,
     #[serde(default)]
     pub bind_ip: Option<String>,
+    #[serde(default)]
+    pub source_port: Option<u16>,
+    #[serde(default)]
+    pub src_mac: Option<String>,
+    #[serde(default)]
+    pub dst_mac: Option<String>,
+    #[serde(default)]
+    pub vlan_id: Option<u16>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -129,6 +154,10 @@ impl Default for Config {
                 protocol: "udp".into(),
                 timeout_ms: 1000,
                 bind_ip: None,
+                source_port: None,
+                src_mac: None,
+                dst_mac: None,
+                vlan_id: None,
             },
             server: ServerConfig { listen_port: 8080 },
             custom_commands: vec![],

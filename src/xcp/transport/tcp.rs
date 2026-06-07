@@ -1,12 +1,18 @@
+use super::XcpTransport;
+use crate::xcp::{error::XcpError, packet::XcpPacket};
 use async_trait::async_trait;
 use bytes::BytesMut;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::tcp::{OwnedReadHalf, OwnedWriteHalf}, net::TcpStream, sync::Mutex, time};
-use crate::xcp::{error::XcpError, packet::XcpPacket};
-use super::XcpTransport;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+    sync::Mutex,
+    time,
+};
 
 pub struct TcpTransport {
     write: Mutex<OwnedWriteHalf>,
-    read:  Mutex<OwnedReadHalf>,
+    read: Mutex<OwnedReadHalf>,
 }
 
 impl TcpTransport {
@@ -20,20 +26,28 @@ impl TcpTransport {
             let local: std::net::SocketAddr = format!("{bind}:0")
                 .parse()
                 .map_err(|e: std::net::AddrParseError| XcpError::Transport(e.to_string()))?;
-            socket.bind(local).map_err(|e| XcpError::Transport(e.to_string()))?;
+            socket
+                .bind(local)
+                .map_err(|e| XcpError::Transport(e.to_string()))?;
         }
-        let stream: TcpStream = socket.connect(remote)
+        let stream: TcpStream = socket
+            .connect(remote)
             .await
             .map_err(|e| XcpError::Transport(e.to_string()))?;
         let (r, w) = stream.into_split();
-        Ok(Self { write: Mutex::new(w), read: Mutex::new(r) })
+        Ok(Self {
+            write: Mutex::new(w),
+            read: Mutex::new(r),
+        })
     }
 }
 
 #[async_trait]
 impl XcpTransport for TcpTransport {
     async fn send(&self, packet: &XcpPacket) -> Result<(), XcpError> {
-        self.write.lock().await
+        self.write
+            .lock()
+            .await
             .write_all(&packet.encode())
             .await
             .map_err(|e| XcpError::Transport(e.to_string()))
