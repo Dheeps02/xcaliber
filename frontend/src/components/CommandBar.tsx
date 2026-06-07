@@ -5,16 +5,17 @@ import {
 import { TOOLBAR_ICON_SIZE, INFO_ICON_SIZE } from '../lib/constants';
 import { createPortal } from 'react-dom';
 import {
-  PaperPlaneTilt, CaretLeft, CaretRight,
+  PaperPlaneTilt, Plus, CaretLeft, CaretRight,
   CornersIn, CornersOut, CaretDown, Info, X, Command, MagnifyingGlass,
 } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { useTooltip } from '../context/TooltipContext';
-import { CMD_DEFS } from '../lib/cmd-defs';
+import { CMD_DEFS, CMD_CATEGORIES } from '../lib/cmd-defs';
 import { api } from '../lib/api';
 import type { FieldOption, SeqStep } from '../lib/types';
-import { toTitleCase } from '../lib/utils';
+import { toTitleCase, formatLabel } from '../lib/utils';
 import { Button } from './ui/Button';
+import { SegmentControl } from './ui/SegmentControl';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -44,10 +45,8 @@ export function CommandBar() {
   const showToast           = useAppStore((s) => s.showToast);
   const activeMainTab       = useAppStore((s) => s.activeMainTab);
   const activeSequenceId    = useAppStore((s) => s.activeSequenceId);
-  const seqSelectedStepId   = useAppStore((s) => s.seqSelectedStepId);
   const sequences           = useAppStore((s) => s.sequences);
   const updateSequence      = useAppStore((s) => s.updateSequence);
-  const setSeqSelectedStepId = useAppStore((s) => s.setSeqSelectedStepId);
 
   const { showTip, hideTip } = useTooltip();
 
@@ -66,7 +65,9 @@ export function CommandBar() {
   const [dropdown, setDropdown]   = useState<DropdownState | null>(null);
   const [expandKey, setExpandKey]   = useState(0);
   const [toggleKey, setToggleKey]   = useState(0);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerOpen, setPickerOpen]   = useState(false);
+  const [pickerTab, setPickerTab]     = useState<'system' | 'user' | 'saved'>('system');
+  const [pickerQuery, setPickerQuery] = useState('');
 
   const inputRefs    = useRef<(HTMLInputElement | null)[]>([]);
   const pickerRef    = useRef<HTMLDivElement>(null);
@@ -233,11 +234,24 @@ export function CommandBar() {
     updateSequence({ ...seq, steps: [...seq.steps, newStep] });
   }
 
-  function handleRemoveFromSequence() {
-    const seq = sequences.find((s) => s.id === activeSequenceId);
-    if (!seq || !seqSelectedStepId) return;
-    updateSequence({ ...seq, steps: seq.steps.filter((s) => s.id !== seqSelectedStepId) });
-    setSeqSelectedStepId(null);
+  const q = pickerQuery.toLowerCase().trim();
+  const filteredCategories = CMD_CATEGORIES
+    .map(cat => ({
+      ...cat,
+      commands: cat.commands.filter(cmd =>
+        !q || cmd.id.includes(q) || cmd.label.toLowerCase().includes(q) || cmd.pid.toLowerCase().includes(q)
+      ),
+    }))
+    .filter(cat => cat.commands.length > 0);
+  const userEntries   = Object.entries(userCmdDefs).filter(([key, def]) =>
+    !q || key.includes(q) || (def.userCmdName ?? '').toLowerCase().includes(q)
+  );
+  const customEntries = Object.entries(customCmdDefs).filter(([key]) => !q || key.includes(q));
+
+  function selectCmd(id: string) {
+    setActiveCmd(id);
+    setPickerOpen(false);
+    setPickerQuery('');
   }
 
   const startByte = section * BASE_CELLS;
@@ -249,7 +263,7 @@ export function CommandBar() {
   return (
     <div
       className="xcb-glass shrink-0"
-      style={{ borderBottom: '1px solid var(--border)' }}
+      style={{ borderBottom: '1px solid var(--border)', position: 'relative', zIndex: pickerOpen ? 10 : undefined }}
     >
       {/* ── Title row ───────────────────────────────────────────────── */}
       <div
@@ -257,7 +271,7 @@ export function CommandBar() {
         style={{ height: 34, borderBottom: collapsed ? 'none' : '1px solid var(--border)' }}
         onClick={() => { setCollapsed(!collapsed); setToggleKey((k) => k + 1); }}
       >
-        {/* Centered search bar — grows upward into picker panel */}
+        {/* Centered search bar — grows downward into picker panel */}
         <div
           ref={pickerRef}
           className={pickerOpen ? 'xcb-glass' : ''}
@@ -266,38 +280,24 @@ export function CommandBar() {
             left: '50%',
             transform: 'translateX(-50%)',
             width: 280,
-            bottom: 0,
+            top: 4,
             overflow: 'hidden',
-            borderRadius: pickerOpen ? '8px 8px 4px 4px' : 4,
+            borderRadius: pickerOpen ? '4px 4px 8px 8px' : 4,
             border: `1px solid ${pickerOpen ? 'var(--border-strong)' : 'transparent'}`,
-            boxShadow: pickerOpen ? '0 -16px 48px rgba(0,0,0,0.5)' : undefined,
+            boxShadow: pickerOpen ? '0 16px 48px rgba(0,0,0,0.5)' : undefined,
             transition: 'border-radius 200ms ease, box-shadow 200ms ease, border-color 150ms',
             zIndex: 20,
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Panel — collapses to 0 when closed */}
-          <div style={{
-            display: 'grid',
-            gridTemplateRows: pickerOpen ? '1fr' : '0fr',
-            transition: 'grid-template-rows 220ms ease',
-          }}>
-            <div style={{ minHeight: 0, overflow: 'hidden' }}>
-              <div style={{ height: 374 }} />
-            </div>
-          </div>
-
-          {/* Separator */}
-          <div style={{ height: 1, background: pickerOpen ? 'var(--border)' : 'transparent' }} />
-
           {/* Search input */}
           <div
             className="xcb-input relative flex items-center"
             style={{
               height: 26,
-              borderRadius: pickerOpen ? '0 0 4px 4px' : 4,
+              borderRadius: pickerOpen ? '4px 4px 0 0' : 4,
               border: pickerOpen ? 'none' : undefined,
-              borderTop: pickerOpen ? '1px solid var(--border)' : undefined,
+              borderBottom: pickerOpen ? '1px solid var(--border)' : undefined,
             }}
           >
             <MagnifyingGlass
@@ -318,8 +318,93 @@ export function CommandBar() {
                 border: 'none',
                 outline: 'none',
               }}
+              value={pickerQuery}
+              onChange={e => setPickerQuery(e.target.value)}
               onFocus={() => setPickerOpen(true)}
             />
+          </div>
+
+          {/* Panel — expands downward */}
+          <div style={{
+            display: 'grid',
+            gridTemplateRows: pickerOpen ? '1fr' : '0fr',
+            transition: 'grid-template-rows 220ms ease',
+          }}>
+            <div style={{ minHeight: 0, overflow: 'hidden' }}>
+              <div style={{ height: 374, display: 'flex', flexDirection: 'column' }}>
+                {/* Tabs */}
+                <div style={{ padding: '8px 8px 5px', flexShrink: 0 }}>
+                  <SegmentControl<'system' | 'user' | 'saved'>
+                    items={[
+                      { value: 'system', label: 'System' },
+                      { value: 'user',   label: 'User'   },
+                      { value: 'saved',  label: 'Saved'  },
+                    ]}
+                    value={pickerTab}
+                    onChange={setPickerTab}
+                    size="sm"
+                  />
+                </div>
+                {/* Command list */}
+                <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingBottom: 6 }}>
+                  {pickerTab === 'system' && (
+                    filteredCategories.length === 0
+                      ? <div style={{ padding: '16px 10px', fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>No commands match</div>
+                      : filteredCategories.map(cat => (
+                          <div key={cat.name}>
+                            <div style={{ padding: '8px 10px 2px', fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                              {cat.name}
+                            </div>
+                            {cat.commands.map(cmd => (
+                              <button
+                                key={cmd.id}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '3px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-hover)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                                onClick={() => selectCmd(cmd.id)}
+                              >
+                                <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--text-muted)', width: '2ch', textAlign: 'right', flexShrink: 0 }}>{cmd.pid.slice(2)}</span>
+                                <span style={{ fontSize: 11, color: 'var(--text-primary)' }}>{formatLabel(cmd.id)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ))
+                  )}
+                  {pickerTab === 'user' && (
+                    userEntries.length === 0
+                      ? <div style={{ padding: '16px 10px', fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>{q ? 'No commands match' : 'No user commands loaded'}</div>
+                      : userEntries.map(([key, def]) => (
+                          <button
+                            key={key}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '3px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-hover)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                            onClick={() => selectCmd(key)}
+                          >
+                            <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--text-muted)', width: '2ch', textAlign: 'right', flexShrink: 0 }}>{def.pid ?? '--'}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-primary)' }}>{def.userCmdName ?? formatLabel(key)}</span>
+                          </button>
+                        ))
+                  )}
+                  {pickerTab === 'saved' && (
+                    customEntries.length === 0
+                      ? <div style={{ padding: '16px 10px', fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>{q ? 'No commands match' : 'No saved commands'}</div>
+                      : customEntries.map(([key, def]) => (
+                          <button
+                            key={key}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '3px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-hover)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                            onClick={() => selectCmd(key)}
+                          >
+                            <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--text-muted)', width: '2ch', textAlign: 'right', flexShrink: 0 }}>{def.pid ?? '--'}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-primary)' }}>{formatLabel(key)}</span>
+                          </button>
+                        ))
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -493,11 +578,23 @@ export function CommandBar() {
               );
             })}
 
-            {activeMainTab !== 'sequence' && (
+            {activeMainTab === 'sequence' ? (
+              <Button
+                key={`add-${expandKey}`}
+                variant="primary"
+                className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
+                style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${BASE_CELLS * 28}ms both` } : undefined}
+                disabled={!activeSequenceId}
+                onClick={handleAddToSequence}
+              >
+                <Plus size={14} />
+                Add
+              </Button>
+            ) : (
               <Button
                 key={`send-${expandKey}`}
                 variant="primary"
-                className="!text-[11px] !py-1.5 leading-4 !px-2.5 shrink-0 self-end"
+                className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
                 style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${BASE_CELLS * 28}ms both` } : undefined}
                 onClick={() => {
                   setSendFlying(true);
@@ -512,24 +609,6 @@ export function CommandBar() {
               </Button>
             )}
           </div>
-
-          {/* Action row — sequence mode only */}
-          {activeMainTab === 'sequence' && (
-            <div className="px-3.5 pb-2">
-              <div className="flex gap-2">
-                <Button
-                  variant="primary"
-                  className="flex-1 justify-center"
-                  disabled={!activeSequenceId}
-                  onClick={handleAddToSequence}
-                >+ Add to Sequence</Button>
-                <Button
-                  disabled={!seqSelectedStepId}
-                  onClick={handleRemoveFromSequence}
-                >Remove</Button>
-              </div>
-            </div>
-          )}
 
         </div>
       </div>
