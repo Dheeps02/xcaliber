@@ -477,12 +477,24 @@ select {
 }
 .daq-moved { animation: daq-moved-flash 450ms var(--ease-out); }
 
-/* ── Waveform live pulse ─────────────────────────────────────────── */
-@keyframes waveform-live-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.35; }
+@keyframes spark-reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0%   0 0); }
 }
-.waveform-live { animation: waveform-live-pulse 1.2s ease-in-out infinite; }
+.spark-reveal {
+  animation: spark-reveal 380ms var(--ease-out) both;
+}
+.no-animations .spark-reveal { animation: none; }
+
+/* ── Waveform live pulse ─────────────────────────────────────────── */
+@keyframes waveform-enter {
+  from { transform: scaleY(0);    }
+  to   { transform: scaleY(0.42); }
+}
+@keyframes waveform-bar {
+  0%, 100% { transform: scaleY(0.42); }
+  50%      { transform: scaleY(1);    }
+}
 
 /* ── Sequence result pulse ───────────────────────────────────────── */
 @keyframes result-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }

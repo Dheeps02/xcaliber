@@ -1,51 +1,64 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 export function AnimatedCount({
   value,
   label,
   color,
+  className = '',
+  pad,
 }: {
   value: number;
   label?: string;
   color: string;
+  className?: string;
+  /** Zero-pad the number to this many digits */
+  pad?: number;
 }) {
-  const [displayed, setDisplayed] = useState(value);
-  const [animKey, setAnimKey] = useState(0);
-  const [animCls, setAnimCls] = useState('');
-  const displayedRef = useRef(displayed);
-  displayedRef.current = displayed;
-  const t1 = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const t2 = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fmt = (n: number) => pad ? String(n).padStart(pad, '0') : String(n);
+
+  const [anim, setAnim] = useState({
+    prev: fmt(value),
+    cur:  fmt(value),
+    epoch: 0,
+    up: true,
+  });
 
   useEffect(() => {
-    if (value === displayedRef.current) return;
-    if (t1.current) clearTimeout(t1.current);
-    if (t2.current) clearTimeout(t2.current);
-
-    if (value === 0) {
-      setAnimCls('count-exit');
-      t1.current = setTimeout(() => {
-        setDisplayed(0);
-        setAnimCls('count-enter-from-top');
-        t2.current = setTimeout(() => setAnimCls(''), 250);
-      }, 160);
-    } else {
-      setDisplayed(value);
-      setAnimKey((k) => k + 1);
-      setAnimCls('count-tick');
-      t1.current = setTimeout(() => setAnimCls(''), 240);
-    }
+    const cur = fmt(value);
+    setAnim(s => {
+      if (s.cur === cur) return s;
+      return { prev: s.cur, cur, epoch: s.epoch + 1, up: value >= Number(s.cur) };
+    });
   }, [value]);
 
-  useEffect(() => () => {
-    if (t1.current) clearTimeout(t1.current);
-    if (t2.current) clearTimeout(t2.current);
-  }, []);
+  const { prev, cur, epoch, up } = anim;
+  const animCls = up ? 'count-tick' : 'count-enter-from-top';
+
+  // Right-align comparison: compare each digit by its position from the right
+  const len = cur.length;
+  const digits = cur.split('').map((char, i) => {
+    const posFromRight = len - 1 - i;
+    const prevChar = posFromRight < prev.length
+      ? prev[prev.length - 1 - posFromRight]
+      : undefined; // digit didn't exist in previous value
+    return { char, changed: prevChar !== char };
+  });
 
   return (
-    <span className="inline-flex items-center gap-0.5 font-mono text-[11px] overflow-hidden" style={{ color }}>
-      {label && <span style={{ opacity: 0.6 }}>{label}</span>}
-      <span key={animKey} className={animCls} style={{ display: 'inline-block' }}>{displayed}</span>
+    <span
+      className={`inline-flex items-center font-mono text-[11px] overflow-hidden ${className}`}
+      style={{ color }}
+    >
+      {label && <span style={{ opacity: 0.6, marginRight: 3 }}>{label}</span>}
+      {digits.map((d, i) => (
+        <span
+          key={`${i}-${epoch}`}
+          className={d.changed ? animCls : ''}
+          style={{ display: 'inline-block' }}
+        >
+          {d.char}
+        </span>
+      ))}
     </span>
   );
 }

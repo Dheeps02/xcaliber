@@ -1,4 +1,4 @@
-/* ── Input / Select design system ────────────────────────────────── */
+/* ── Input / Select / Slider design system ───────────────────────── */
 
 /* Hide number input spinners */
 .no-spinner::-webkit-outer-spin-button,
@@ -25,6 +25,74 @@
     0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent) !important;
   outline: none;
 }
+/* ── Range slider ────────────────────────────────────────────────── */
+/* Electron = Chromium only, so -webkit- pseudo-elements are sufficient.
+   --fill is set inline from React and drives the accent trail on the track. */
+.xcb-slider {
+  -webkit-appearance: none;
+  height: 20px;        /* tall enough to contain the protruding thumb */
+  background: transparent;
+  cursor: ew-resize;
+  outline: none;
+}
+.xcb-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 55%, transparent) calc(var(--fill, 0%) * 0.5),
+    var(--accent) var(--fill, 0%),
+    var(--input-bg) var(--fill, 0%),
+    var(--input-bg) 100%
+  );
+  border: 1px solid var(--input-border);
+  border-top-color: var(--input-border-top);
+  box-shadow:
+    inset 0 1px 3px var(--shadow-8),
+    inset 0 1px 1px var(--shadow-6);
+}
+.xcb-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 16px;
+  border-radius: 3px;
+  margin-top: -6px;
+  background-color: var(--surface-overlay);
+  /* notch layer: constrained to middle ~35% of thumb height, centered.
+     background-size / background-position apply to both layers by index. */
+  background-image:
+    linear-gradient(to right, transparent 43%, var(--shadow-8) 43%, var(--shadow-8) 57%, transparent 57%),
+    linear-gradient(180deg, var(--shine-4) 0%, var(--shine-1) 40%, var(--shadow-2) 100%);
+  background-size: 100% 35%, 100% 100%;
+  background-position: center center, center center;
+  background-repeat: no-repeat, no-repeat;
+  border: 1px solid var(--shadow-10);
+  box-shadow:
+    inset 0 1px 0 var(--shine-4),
+    inset 0 -1px 0 var(--shadow-6),
+    0 2px 4px var(--shadow-8),
+    0 1px 2px var(--shadow-7);
+}
+.xcb-slider:hover::-webkit-slider-thumb {
+  background-image:
+    linear-gradient(to right, transparent 43%, var(--shadow-8) 43%, var(--shadow-8) 57%, transparent 57%),
+    linear-gradient(180deg, var(--shine-5) 0%, var(--shine-2) 40%, var(--shadow-1) 100%);
+  box-shadow:
+    inset 0 1px 0 var(--shine-5),
+    inset 0 -1px 0 var(--shadow-6),
+    0 3px 6px var(--shadow-9),
+    0 1px 3px var(--shadow-7);
+}
+.xcb-slider:active::-webkit-slider-thumb {
+  background-image:
+    linear-gradient(to right, transparent 43%, var(--shadow-8) 43%, var(--shadow-8) 57%, transparent 57%),
+    linear-gradient(180deg, var(--shadow-1) 0%, var(--shine-1) 100%);
+  box-shadow:
+    inset 0 1px 3px var(--shadow-7),
+    inset 0 2px 4px var(--shadow-5),
+    0 1px 2px var(--shadow-6);
+}
+
 .xcb-select {
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);

@@ -4,10 +4,11 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Trash, Wrench, Pulse, ArrowSquareOut, FolderOpen,
-  Plus, X, DotsSixVertical, Waveform,
+  Trash, Wrench, ArrowSquareOut, FolderOpen,
+  Plus, X, DotsSixVertical,
 } from '@phosphor-icons/react';
 import { useAppStore, SPARK_ZOOM_MIN_MS, SPARK_ZOOM_MAX_MS } from '../stores/app-store';
+import { AnimatedCount } from './AnimatedCount';
 import { api } from '../lib/api';
 import type { DaqList, DaqOdt, DaqEntry, DaqEntryType, A2lVariable } from '../lib/types';
 import { ExportDialog } from './ExportDialog';
@@ -215,34 +216,6 @@ const Sparkline = memo(function Sparkline({
   );
 });
 
-// ── DtoRateCount ─────────────────────────────────────────────────
-function DtoRateCount({ value }: { value: number }) {
-  const [displayed, setDisplayed] = useState(value);
-  const [key, setKey]             = useState(0);
-  const [cls, setCls]             = useState('');
-  const prevRef = useRef(value);
-  const timer   = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (value === prevRef.current) return;
-    const up = value > prevRef.current;
-    prevRef.current = value;
-    setDisplayed(value);
-    setKey(k => k + 1);
-    setCls(up ? 'count-tick' : 'count-enter-from-top');
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setCls(''), 260);
-  }, [value]);
-
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-  return (
-    <span key={key} className={cls} style={{ display: 'inline-block', overflow: 'hidden' }}>
-      {displayed}
-    </span>
-  );
-}
-
 // ── DaqToolbar ───────────────────────────────────────────────────
 interface ToolbarProps {
   lists: DaqList[];
@@ -265,6 +238,7 @@ function DaqToolbar({
   const sparkWindowMs = useAppStore(s => s.sparkWindowMs);
   const setSparkWindowMs = useAppStore(s => s.setSparkWindowMs);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sliderRef    = useRef<HTMLInputElement>(null);
   const [wrenchKey,      setWrenchKey]      = useState(0);
   const [runPending,     setRunPending]     = useState(false);
   const [confirmOpen,    setConfirmOpen]    = useState(false);
@@ -279,6 +253,19 @@ function DaqToolbar({
     if (prev === 'configured' && daqStatus === 'running')    setRunPending(false);
     if (prev === 'running'    && daqStatus === 'configured') setRunPending(false);
   }, [daqStatus]);
+
+  useEffect(() => {
+    const el = sliderRef.current;
+    if (!el) return;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const { sparkWindowMs, setSparkWindowMs } = useAppStore.getState();
+      const next = Math.max(0, Math.min(100, msToSlider(sparkWindowMs) + (e.deltaY > 0 ? -4 : 4)));
+      setSparkWindowMs(sliderToMs(next));
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   function closeConfirm() {
     setConfirmExiting(true);
@@ -307,7 +294,7 @@ function DaqToolbar({
       <span className="text-[10px] w-16 shrink-0" style={{ color: stateColor }}>{stateLabel}</span>
       <div className="xcb-vdiv" />
 
-      <Button variant="ghost" className="!px-2 !py-0.5 !text-[10px] !gap-1" disabled={!canFree} onClick={() => setConfirmOpen(true)}>
+      <Button variant="ghost" intent="danger" className="!px-2 !py-0.5 !text-[10px] !gap-1" disabled={!canFree} onClick={() => setConfirmOpen(true)}>
         <Trash size={13} />Free All
       </Button>
       <div className="xcb-vdiv" />
@@ -341,11 +328,13 @@ function DaqToolbar({
       <div className="flex items-center gap-1.5 shrink-0">
         <span className="text-[9px] uppercase tracking-wider select-none" style={{ color: 'var(--text-muted)' }}>Window</span>
         <input
+          ref={sliderRef}
           type="range"
           min={0} max={100} step={0.5}
           value={msToSlider(sparkWindowMs)}
           onChange={e => setSparkWindowMs(sliderToMs(Number(e.target.value)))}
-          style={{ width: 72, accentColor: 'var(--accent)', cursor: 'pointer' }}
+          className="xcb-slider"
+          style={{ '--fill': `${msToSlider(sparkWindowMs).toFixed(1)}%`, width: 72 } as React.CSSProperties}
           title={`Spark window: ${fmtZoom(sparkWindowMs)}`}
         />
         <span className="text-[10px] font-mono tabular-nums shrink-0" style={{ width: 28, textAlign: 'right', color: 'var(--text-primary)' }}>
@@ -354,15 +343,48 @@ function DaqToolbar({
       </div>
       <div className="xcb-vdiv" />
 
-      <span className="text-[10px] font-mono flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-        <Pulse size={13} /><DtoRateCount value={daqDtoRate} /> DTOs/s
-      </span>
+      {/* LCD-style DTO rate display */}
+      <div style={{
+        background: 'var(--input-bg)',
+        border: '1px solid var(--input-border)',
+        borderTopColor: 'var(--input-border-top)',
+        borderRadius: 4,
+        boxShadow: 'inset 0 2px 4px var(--shadow-8), inset 0 1px 2px var(--shadow-6)',
+        padding: '2px 7px',
+        display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1,
+        userSelect: 'none',
+      }}>
+        <div style={{ position: 'relative' }}>
+          {/* ghost: block layout sizes the container, monospace width matches live digits */}
+          <span aria-hidden style={{
+            display: 'block', textAlign: 'right',
+            fontFamily: 'monospace', fontSize: 13, lineHeight: 1,
+            color: 'var(--status-ok)',
+            opacity: daqStatus === 'running' && daqDtoRate > 0 ? 0 : 0.18,
+            transition: 'opacity 400ms ease',
+            pointerEvents: 'none', userSelect: 'none',
+          }}>8888</span>
+          {/* live count: always mounted, fades in when data starts flowing */}
+          <span style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+            textShadow: '0 0 8px color-mix(in srgb, var(--status-ok) 50%, transparent)',
+            opacity: daqStatus === 'running' && daqDtoRate > 0 ? 1 : 0,
+            transition: 'opacity 400ms ease',
+          }}>
+            <AnimatedCount value={daqDtoRate} color="var(--status-ok)" className="!text-[13px] !leading-none" pad={4} />
+          </span>
+        </div>
+        <span style={{ fontSize: 8, color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', lineHeight: 1 }}>
+          DTOs/s
+        </span>
+      </div>
       <div className="xcb-vdiv" />
 
-      <Button variant="ghost" className="!px-2 !py-0.5 !text-[10px] !gap-1" title="Export" onClick={onSave}>
+      <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" title="Export" onClick={onSave}>
         <ArrowSquareOut size={13} />Export
       </Button>
-      <Button variant="ghost" className="!px-2 !py-0.5 !text-[10px] !gap-1" title="Import" onClick={() => fileInputRef.current?.click()}>
+      <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" title="Import" onClick={() => fileInputRef.current?.click()}>
         <FolderOpen size={13} />Import
       </Button>
 
@@ -564,6 +586,53 @@ function DaqInlineEdit({ onSave, onCancel }: InlineEditProps) {
   );
 }
 
+// ── WaveformBars ─────────────────────────────────────────────────
+// 5 bars, 2px wide, 0.5px gap → total 12px wide; viewBox 12×12
+const BAR_DELAYS = [0, 0.3, 0.15, 0.45, 0.22]; // s — organic stagger, not sequential
+
+function WaveformBars({ size = 12, active = false }: { size?: number; active?: boolean }) {
+  const [phase, setPhase] = useState<'idle' | 'resetting' | 'zero' | 'active'>(active ? 'active' : 'idle');
+  const prevActiveRef = useRef(active);
+
+  useEffect(() => {
+    if (active === prevActiveRef.current) return;
+    prevActiveRef.current = active;
+
+    if (active) {
+      // idle → active: bars are at scaleY(0.42), collapse then animate
+      setPhase('zero');
+      const t = setTimeout(() => setPhase('active'), 200);
+      return () => clearTimeout(t);
+    } else {
+      // active → idle: snap to known base first (one frame), then collapse, then expand to idle
+      setPhase('resetting');
+      const t1 = setTimeout(() => setPhase('zero'), 16);
+      const t2 = setTimeout(() => setPhase('idle'), 216);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+  }, [active]);
+
+  const base: React.CSSProperties = { transformBox: 'fill-box', transformOrigin: 'center' };
+
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="currentColor" aria-hidden>
+      {BAR_DELAYS.map((delay, i) => {
+        let style: React.CSSProperties;
+        if (phase === 'resetting') {
+          style = { ...base, transform: 'scaleY(0.42)' };
+        } else if (phase === 'zero') {
+          style = { ...base, transform: 'scaleY(0)', transition: 'transform 200ms ease' };
+        } else if (phase === 'active') {
+          style = { ...base, animation: `waveform-enter 200ms ease forwards, waveform-bar 0.9s ease-in-out ${0.2 + delay}s infinite` };
+        } else {
+          style = { ...base, transform: 'scaleY(0.42)', transition: 'transform 200ms ease' };
+        }
+        return <rect key={i} x={i * 2.5} y={0} width={2} height={12} rx={1} style={style} />;
+      })}
+    </svg>
+  );
+}
+
 // ── DaqEntryRow ───────────────────────────────────────────────────
 interface EntryRowProps {
   entry: DaqEntry;
@@ -571,6 +640,7 @@ interface EntryRowProps {
   liveKey: string;
   exiting: boolean;
   recentlyMoved: boolean;
+  entryIndex: number;
   onDelete: () => void;
   onPointerDown: (e: React.PointerEvent) => void;
   entryRef: (el: HTMLElement | null) => void;
@@ -579,7 +649,7 @@ interface EntryRowProps {
 
 function DaqEntryRow({
   entry, color, liveKey,
-  exiting, recentlyMoved, onDelete, onPointerDown, entryRef, dataAttrs,
+  exiting, recentlyMoved, entryIndex, onDelete, onPointerDown, entryRef, dataAttrs,
 }: EntryRowProps) {
   // Per-signal subscriptions — only this row re-renders when its value changes
   const value     = useAppStore(s => s.daqLiveValues.get(liveKey)?.value ?? null);
@@ -596,8 +666,8 @@ function DaqEntryRow({
   return (
     <div
       ref={entryRef}
-      className={`group flex items-center h-[30px] transition-colors${exiting ? ' daq-exiting' : ''}${recentlyMoved ? ' daq-moved' : ''}`}
-      style={{ borderBottom: '1px solid var(--border)', paddingLeft: 36, paddingRight: 12, position: 'relative' }}
+      className={`group flex items-center h-[30px] transition-colors daq-row-enter${exiting ? ' daq-exiting' : ''}${recentlyMoved ? ' daq-moved' : ''}`}
+      style={{ borderBottom: '1px solid var(--border)', paddingLeft: 36, paddingRight: 12, position: 'relative', animationDelay: `${60 + entryIndex * 40}ms` }}
       onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-raised)')}
       onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '')}
       {...dataAttrs}
@@ -613,10 +683,10 @@ function DaqEntryRow({
 
       {/* waveform icon */}
       <span
-        className={`shrink-0 mr-2 ${isLive ? 'waveform-live' : ''}`}
-        style={{ color: isLive ? color : 'var(--text-muted)', lineHeight: 0 }}
+        className="shrink-0 mr-2"
+        style={{ color: isLive ? color : 'var(--text-muted)', lineHeight: 0, transition: 'color 280ms ease' }}
       >
-        <Waveform size={12} />
+        <WaveformBars size={12} active={isLive} />
       </span>
 
       {/* name */}
@@ -643,7 +713,7 @@ function DaqEntryRow({
       </span>
 
       {/* sparkline */}
-      <div style={{ flex: 1, minWidth: 0, padding: '0 4px' }}>
+      <div className="spark-reveal" style={{ flex: 1, minWidth: 0, padding: '0 4px', animationDelay: `${60 + entryIndex * 40 + 280}ms` }}>
         <Sparkline liveKey={liveKey} color={color} />
       </div>
 
@@ -667,6 +737,7 @@ interface OdtSectionProps {
   odt: DaqOdt;
   color: string;
   exiting: boolean;
+  listExpandEpoch: number;
   onColorChange: (color: string) => void;
   onDelete: () => void;
   onSaveEntry: (entry: DaqEntry, idx: number | null) => void;
@@ -675,10 +746,13 @@ interface OdtSectionProps {
 }
 
 function DaqOdtSection({
-  list, odt, color, exiting,
+  list, odt, color, exiting, listExpandEpoch,
   onColorChange, onDelete, onSaveEntry, onDeleteEntry, onMoveEntry,
 }: OdtSectionProps) {
   const [collapsed,      setCollapsed]      = useState(false);
+  const [entryExpandKey, setEntryExpandKey] = useState(0);
+  const prevCollapsedRef   = useRef(false);
+  const prevListEpochRef   = useRef(listExpandEpoch);
   const [addingEntry,    setAddingEntry]    = useState(false);
   const [colorPickerPos, setColorPickerPos] = useState<{ x: number; y: number } | null>(null);
   const [exitingEntries, setExitingEntries] = useState<Set<number>>(new Set());
@@ -688,6 +762,20 @@ function DaqOdtSection({
   const dropRef     = useRef<{ listId: number; odtId: number; toIdx: number; above: boolean } | null>(null);
   const entryElsRef = useRef<Map<string, HTMLElement>>(new Map());
   const snapshotRef = useRef<Map<string, number>>(new Map());
+
+  // Re-animate entries when this ODT section is expanded
+  useEffect(() => {
+    if (prevCollapsedRef.current && !collapsed) setEntryExpandKey(k => k + 1);
+    prevCollapsedRef.current = collapsed;
+  }, [collapsed]);
+
+  // Re-animate entries when the parent list group is expanded
+  useEffect(() => {
+    if (prevListEpochRef.current !== listExpandEpoch) {
+      prevListEpochRef.current = listExpandEpoch;
+      if (!collapsed) setEntryExpandKey(k => k + 1);
+    }
+  }, [listExpandEpoch, collapsed]);
 
   useEffect(() => {
     if (!colorPickerPos) return;
@@ -820,12 +908,13 @@ function DaqOdtSection({
 
             return (
               <DaqEntryRow
-                key={entry.name}
+                key={`${entry.name}-${entryExpandKey}`}
                 entry={entry}
                 color={color}
                 liveKey={liveKey}
                 exiting={exitingEntries.has(ei)}
                 recentlyMoved={recentlyMoved === `${odt.id}:${entry.name}`}
+                entryIndex={ei}
                 onDelete={() => handleDeleteEntry(ei)}
                 onPointerDown={e => {
                   if (e.button !== 0) return;
@@ -929,7 +1018,14 @@ function DaqListGroup({
     { id: 4, name: '1 s'  }, { id: 5, name: '10 s'  },
   ];
   const [collapsed,    setCollapsed]    = useState(false);
+  const [expandEpoch,  setExpandEpoch]  = useState(0);
   const [exitingOdts,  setExitingOdts]  = useState<Set<number>>(new Set());
+  const prevListCollapsedRef = useRef(false);
+
+  useEffect(() => {
+    if (prevListCollapsedRef.current && !collapsed) setExpandEpoch(k => k + 1);
+    prevListCollapsedRef.current = collapsed;
+  }, [collapsed]);
 
   function handleDeleteOdt(odtId: number) {
     setExitingOdts(s => new Set(s).add(odtId));
@@ -1010,6 +1106,7 @@ function DaqListGroup({
               odt={odt}
               color={odtColors[`${list.id}:${odt.id}`] ?? ODT_COLORS[0]}
               exiting={exitingOdts.has(odt.id)}
+              listExpandEpoch={expandEpoch}
               onColorChange={color => onOdtColorChange(odt.id, color)}
               onDelete={() => handleDeleteOdt(odt.id)}
               onSaveEntry={(entry, idx) => onSaveEntry(odt.id, entry, idx)}
@@ -1189,6 +1286,7 @@ export function Daq() {
   }
 
   async function handleStart() {
+    clearDaqLiveValues();
     try { await api.daqStart(); setDaqStatus('running'); }
     catch (e) { showToast((e as Error).message, 'error'); }
   }
