@@ -311,7 +311,7 @@ export function MemoryBar() {
                 </div>
               </div>
               <Button
-                variant="ghost"
+                variant="default"
                 className={`!text-[11px] !py-1 !px-2 ${mtaJiggling ? 'btn-jiggle' : ''}`}
                 disabled={autoMta}
                 onClick={handleSetMta}
