@@ -43,6 +43,7 @@ interface AppStore {
   txCount: number;
   rxCount: number;
   lastPacketId: number;
+  packetsClearedAt: number;
   autoScroll: boolean;
   activeCmd: string | null;
   byteValues: string[];
@@ -184,6 +185,7 @@ export const useAppStore = create<AppStore>((set) => ({
   txCount: 0,
   rxCount: 0,
   lastPacketId: 0,
+  packetsClearedAt: 0,
   autoScroll: true,
   activeCmd: null,
   byteValues: Array<string>(NUM_CELLS).fill(''),
@@ -262,7 +264,7 @@ export const useAppStore = create<AppStore>((set) => ({
 
   setAutoScroll: (autoScroll) => set({ autoScroll }),
 
-  clearPackets: () => set({ packets: [], txCount: 0, rxCount: 0, lastPacketId: 0 }),
+  clearPackets: () => set({ packets: [], txCount: 0, rxCount: 0, lastPacketId: 0, packetsClearedAt: Date.now() }),
 
   setActiveCmd: (activeCmd) =>
     set((s) => {

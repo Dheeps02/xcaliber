@@ -149,9 +149,16 @@ export function useSSE() {
       })
       .catch(() => {});
 
+    const unsubClear = useAppStore.subscribe((state, prev) => {
+      if (state.packetsClearedAt !== prev.packetsClearedAt) {
+        pendingPktsRef.current = [];
+      }
+    });
+
     return () => {
       esRef.current?.close();
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      unsubClear();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }

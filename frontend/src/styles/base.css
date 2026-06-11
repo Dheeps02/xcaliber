@@ -128,6 +128,7 @@ button:active:not(:disabled) { transform: scale(0.95); }
   opacity: 0;
   pointer-events: none;
   z-index: 0;
+  content-visibility: hidden;
 }
 
 /* ── Animated ambient gradient ────────────────────────────────────── */
