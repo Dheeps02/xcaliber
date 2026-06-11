@@ -37,6 +37,11 @@ button:active:not(:disabled) { transform: scale(0.95); }
 .xcb-led.on  { background: var(--status-ok);  box-shadow: 0 0 6px 2px color-mix(in srgb, var(--status-ok) 40%, transparent); }
 .xcb-led.off { background: var(--status-err); box-shadow: 0 0 6px 2px color-mix(in srgb, var(--status-err) 40%, transparent); }
 
+/* ── Data table rows ─────────────────────────────────────────────── */
+/* Hover background driven entirely by CSS vars (set per-row inline) so
+   hovering doesn't trigger a React re-render of the whole row list. */
+[data-xcbrow]:hover { background: var(--row-hover-bg) !important; }
+
 /* ── Vertical divider ────────────────────────────────────────────── */
 .xcb-vdiv { width: 0; border-left: 1px solid var(--border); flex-shrink: 0; align-self: stretch; margin: 6px 0; }
 .xcb-vdiv-fade { width: 0; border-left: 1px solid var(--border); flex-shrink: 0; align-self: stretch; margin: 2px 0; -webkit-mask-image: linear-gradient(to bottom, transparent, black 25%, black 75%, transparent); mask-image: linear-gradient(to bottom, transparent, black 25%, black 75%, transparent); }

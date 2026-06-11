@@ -1,5 +1,5 @@
 import {
-  useState, useRef, useEffect, useMemo, Fragment,
+  useState, useRef, useEffect, useMemo, useCallback, Fragment,
 } from 'react';
 import { Broom, PaperPlaneTilt, CheckCircle, XCircle, Timer } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
@@ -52,6 +52,11 @@ export function dirBgColor(dir: string): string {
   return 'color-mix(in srgb, var(--status-err) 5%, transparent)';
 }
 
+function effectiveDir(p: PacketEntry): string {
+  if (p.pid === 'TO') return 'timeout';
+  return p.pid === 'FE' || p.pid === 'ERR' ? 'err' : p.direction;
+}
+
 export function dirBgHover(dir: string): string {
   if (dir === 'tx') return 'color-mix(in srgb, var(--tx) 10%, transparent)';
   if (dir === 'rx') return 'color-mix(in srgb, var(--rx) 8%, transparent)';
@@ -64,13 +69,18 @@ export function dirBgHover(dir: string): string {
 export function ExpandPanel({ p, open }: { p: PacketEntry; open: boolean }) {
   const isErr  = p.pid === 'FE' || p.pid === 'ERR';
   const isTimeout = p.pid === 'TO';
-  const effectiveDir = isTimeout ? 'timeout' : isErr ? 'err' : p.direction;
-  const color  = dirColor(effectiveDir);
+  const dir    = effectiveDir(p);
+  const color  = dirColor(dir);
   const label  = p.direction === 'tx' ? 'TX' : isTimeout ? 'TIMEOUT' : isErr ? 'ERR' : 'RX';
-  const allFields = flattenDecoded(p.decoded);
-  const rows   = p.direction === 'tx'
-    ? allFields.filter(([k]) => k !== 'command')
-    : allFields;
+
+  // Skip flattening/rendering field rows entirely until the panel has been
+  // opened at least once — most rows in a 100+ packet trace are never expanded.
+  const [everOpened, setEverOpened] = useState(open);
+  if (open && !everOpened) setEverOpened(true);
+  const allFields = everOpened ? flattenDecoded(p.decoded) : [];
+  const rows = everOpened
+    ? (p.direction === 'tx' ? allFields.filter(([k]) => k !== 'command') : allFields)
+    : [];
 
   const [openKey, setOpenKey] = useState(0);
   const prevOpenRef = useRef(false);
@@ -91,29 +101,31 @@ export function ExpandPanel({ p, open }: { p: PacketEntry; open: boolean }) {
       }}
     >
       <div style={{ minHeight: 0, overflow: 'hidden' }}>
-        <div className="px-4 py-2.5">
-          <div
-            className="text-[10px] font-semibold uppercase tracking-[0.08em] mb-2"
-            style={{ color }}
-          >
-            {label}{p.pid === 'ERR' || p.pid === 'TO' ? '' : ` · PID 0x${p.pid}`}
+        {everOpened && (
+          <div className="px-4 py-2.5">
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.08em] mb-2"
+              style={{ color }}
+            >
+              {label}{p.pid === 'ERR' || p.pid === 'TO' ? '' : ` · PID 0x${p.pid}`}
+            </div>
+            <div
+              className="grid gap-y-1 text-[11px] font-mono"
+              style={{ gridTemplateColumns: '150px 1fr' }}
+            >
+              {rows.length > 0 ? rows.map(([k, v], idx) => (
+                <Fragment key={`${k}-${openKey}`}>
+                  <span className="field-fade" style={{ color: 'var(--text-muted)', animationDelay: `${idx * 45}ms` }}>{k}</span>
+                  <span className="field-fade" style={{ color, animationDelay: `${idx * 45 + 22}ms` }}>{formatValue(v)}</span>
+                </Fragment>
+              )) : (
+                <span className="col-span-2 italic" style={{ color: 'var(--text-muted)' }}>
+                  no field data
+                </span>
+              )}
+            </div>
           </div>
-          <div
-            className="grid gap-y-1 text-[11px] font-mono"
-            style={{ gridTemplateColumns: '150px 1fr' }}
-          >
-            {rows.length > 0 ? rows.map(([k, v], idx) => (
-              <Fragment key={`${k}-${openKey}`}>
-                <span className="field-fade" style={{ color: 'var(--text-muted)', animationDelay: `${idx * 45}ms` }}>{k}</span>
-                <span className="field-fade" style={{ color, animationDelay: `${idx * 45 + 22}ms` }}>{formatValue(v)}</span>
-              </Fragment>
-            )) : (
-              <span className="col-span-2 italic" style={{ color: 'var(--text-muted)' }}>
-                no field data
-              </span>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -220,7 +232,7 @@ export function PacketTrace() {
   const [isClearing, setIsClearing]   = useState(false);
   const [broomHovered, setBroomHovered]   = useState(false);
   const [broomSweeping, setBroomSweeping] = useState(false);
-  const [, setVersion] = useState(0);
+  const [version, setVersion] = useState(0);
 
   const cleanedUpIds    = useRef<Set<number>>(new Set());
   const staggerDelays   = useRef<Map<number, number>>(new Map());
@@ -254,13 +266,13 @@ export function PacketTrace() {
     [packets, dirFilter]
   );
 
-  function toggleRow(p: PacketEntry) {
+  const toggleRow = useCallback((p: PacketEntry) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
       return next;
     });
-  }
+  }, []);
 
   function handleClear() {
     if (packets.length === 0) return;
@@ -277,13 +289,11 @@ export function PacketTrace() {
   }
 
   // ── Row prop callbacks ───────────────────────────────────────────────────
+  // Stabilized with useCallback so the memoized DataTable Row can bail out
+  // of re-rendering when unrelated state (sort/filter/header-hover/resize)
+  // changes in DataTable.
 
-  function effectiveDir(p: PacketEntry) {
-    if (p.pid === 'TO') return 'timeout';
-    return p.pid === 'FE' || p.pid === 'ERR' ? 'err' : p.direction;
-  }
-
-  function rowStyle(p: PacketEntry): React.CSSProperties {
+  const rowStyle = useCallback((p: PacketEntry): React.CSSProperties => {
     const isNew = animationWatermark !== null && p.id > animationWatermark && !cleanedUpIds.current.has(p.id);
     if (isNew && !staggerDelays.current.has(p.id)) {
       staggerDelays.current.set(p.id, Math.min(staggerCounter.current * 60, 180));
@@ -300,24 +310,26 @@ export function PacketTrace() {
         '--anim-delay': `${delay}ms`,
       } : {}),
     } as React.CSSProperties;
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedIds, animationWatermark, version]);
 
-  function rowHoverStyle(p: PacketEntry): React.CSSProperties {
+  const rowHoverStyle = useCallback((p: PacketEntry): React.CSSProperties => {
     if (expandedIds.has(p.id)) return {};
     return { background: dirBgHover(effectiveDir(p)) };
-  }
+  }, [expandedIds]);
 
-  function rowClassName(p: PacketEntry): string {
+  const rowClassName = useCallback((p: PacketEntry): string => {
     const isNew = animationWatermark !== null && p.id > animationWatermark && !cleanedUpIds.current.has(p.id);
     if (!isNew) return '';
     return `packet-new packet-new-${effectiveDir(p)}`;
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animationWatermark, version]);
 
-  function wrapperClassName(): string {
+  const wrapperClassName = useCallback((): string => {
     return isClearing ? 'row-out' : '';
-  }
+  }, [isClearing]);
 
-  function rowDecoration(p: PacketEntry): React.ReactNode {
+  const rowDecoration = useCallback((p: PacketEntry): React.ReactNode => {
     const dir = effectiveDir(p);
     const color = dirColor(dir);
     return (
@@ -331,7 +343,11 @@ export function PacketTrace() {
         }}
       />
     );
-  }
+  }, []);
+
+  const isExpandedFn = useCallback((p: PacketEntry) => expandedIds.has(p.id), [expandedIds]);
+
+  const renderExpand = useCallback((p: PacketEntry, open: boolean) => <ExpandPanel p={p} open={open} />, []);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -378,8 +394,8 @@ export function PacketTrace() {
         rowKey={(p) => p.id}
         autoScroll={autoScroll}
         onRowClick={toggleRow}
-        renderExpand={(p, open) => <ExpandPanel p={p} open={open} />}
-        isExpanded={(p) => expandedIds.has(p.id)}
+        renderExpand={renderExpand}
+        isExpanded={isExpandedFn}
         rowStyle={rowStyle}
         rowHoverStyle={rowHoverStyle}
         rowClassName={rowClassName}

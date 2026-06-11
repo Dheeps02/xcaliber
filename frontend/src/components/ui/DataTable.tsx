@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUp, ArrowDown, Funnel, X } from '@phosphor-icons/react';
 
@@ -104,6 +104,64 @@ interface DataTableProps<T> {
   rowDecoration?: (row: T) => React.ReactNode;
 }
 
+// ── Row ───────────────────────────────────────────────────────────────────────
+
+interface RowProps<T> {
+  row: T;
+  columns: ColDef<T>[];
+  onRowClick?: (row: T) => void;
+  renderExpand?: (row: T, open: boolean) => React.ReactNode;
+  isExpanded?: (row: T) => boolean;
+  rowStyle?: (row: T) => React.CSSProperties;
+  rowHoverStyle?: (row: T) => React.CSSProperties;
+  rowClassName?: (row: T) => string;
+  wrapperClassName?: (row: T) => string;
+  rowDecoration?: (row: T) => React.ReactNode;
+}
+
+// Memoized so sort/filter/hover/resize state changes in DataTable don't
+// re-render every row — only rows whose own props actually changed do.
+function RowImpl<T>({
+  row, columns, onRowClick, renderExpand, isExpanded,
+  rowStyle, rowHoverStyle, rowClassName, wrapperClassName, rowDecoration,
+}: RowProps<T>) {
+  const expanded = isExpanded?.(row) ?? false;
+  const base    = rowStyle?.(row) ?? {};
+  const hover   = rowHoverStyle?.(row) ?? {};
+  const wrapCls = wrapperClassName?.(row) ?? '';
+  const rowCls  = rowClassName?.(row) ?? '';
+
+  return (
+    <div className={wrapCls}>
+      <div
+        data-xcbrow=""
+        className={rowCls}
+        style={{
+          display: 'grid', gridTemplateColumns: 'var(--xcb-grid-cols)',
+          position: 'relative',
+          cursor: onRowClick ? 'pointer' : 'default',
+          transition: 'background 70ms',
+          ...base,
+          background: 'var(--row-bg)',
+          '--row-bg': base.background ?? 'transparent',
+          '--row-hover-bg': hover.background ?? base.background ?? 'transparent',
+        } as React.CSSProperties}
+        onClick={() => onRowClick?.(row)}
+      >
+        {rowDecoration?.(row)}
+        {columns.map(col => (
+          <div key={col.key} style={{ minWidth: 0 }}>
+            {col.renderCell(row)}
+          </div>
+        ))}
+      </div>
+      {renderExpand?.(row, expanded)}
+    </div>
+  );
+}
+
+const Row = memo(RowImpl) as typeof RowImpl;
+
 // ── DataTable ─────────────────────────────────────────────────────────────────
 
 export function DataTable<T>({
@@ -111,18 +169,15 @@ export function DataTable<T>({
   onRowClick, renderExpand, isExpanded,
   rowStyle, rowHoverStyle, rowClassName, wrapperClassName, rowDecoration,
 }: DataTableProps<T>) {
-  const [colWidths]   = useState<number[]>(() => columns.map(c => c.width ?? 120));
   const [sort, setSort]       = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [filterOpen, setFilterOpen] = useState<string | null>(null);
   const [filterRect, setFilterRect] = useState<DOMRect | null>(null);
-  const [hoveredRow, setHoveredRow] = useState<string | number | null>(null);
   const [hoveredCol, setHoveredCol] = useState<string | null>(null);
 
-  const widthsRef = useRef(colWidths);
-  widthsRef.current = colWidths;
-  const [, forceWidth] = useState(0);
+  const widthsRef = useRef<number[]>(columns.map(c => c.width ?? 120));
 
+  const containerRef     = useRef<HTMLDivElement>(null);
   const bottomRef        = useRef<HTMLDivElement>(null);
   const rowsContainerRef = useRef<HTMLDivElement>(null);
   const isFirstRenderRef = useRef(true);
@@ -206,7 +261,10 @@ export function DataTable<T>({
 
     function onMove(me: MouseEvent) {
       widthsRef.current[colIdx] = Math.max(minW, startW + me.clientX - startX);
-      forceWidth(n => n + 1);
+      const newGridCols = columns.map((col, i) =>
+        col.flex ? '1fr' : `${widthsRef.current[i]}px`
+      ).join(' ');
+      containerRef.current?.style.setProperty('--xcb-grid-cols', newGridCols);
     }
     function onUp() {
       document.removeEventListener('mousemove', onMove);
@@ -237,12 +295,15 @@ export function DataTable<T>({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+    <div
+      ref={containerRef}
+      style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', '--xcb-grid-cols': gridCols } as React.CSSProperties}
+    >
 
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div
         style={{
-          display: 'grid', gridTemplateColumns: gridCols,
+          display: 'grid', gridTemplateColumns: 'var(--xcb-grid-cols)',
           position: 'sticky', top: 0, zIndex: 10,
           background: 'var(--surface-base)',
           borderBottom: '1px solid var(--border)',
@@ -330,42 +391,21 @@ export function DataTable<T>({
 
       {/* ── Rows ────────────────────────────────────────────────────── */}
       <div ref={rowsContainerRef} style={{ flex: 1, overflowY: 'auto' }}>
-        {displayRows.map((row) => {
-          const key     = rowKey(row);
-          const isHov   = hoveredRow === key;
-          const expanded = isExpanded?.(row) ?? false;
-          const base    = rowStyle?.(row);
-          const hover   = isHov && rowHoverStyle ? rowHoverStyle(row) : undefined;
-          const wrapCls = wrapperClassName?.(row) ?? '';
-          const rowCls  = rowClassName?.(row) ?? '';
-
-          return (
-            <div key={key} className={wrapCls}>
-              <div
-                data-xcbrow=""
-                className={rowCls}
-                style={{
-                  display: 'grid', gridTemplateColumns: gridCols,
-                  position: 'relative',
-                  cursor: onRowClick ? 'pointer' : 'default',
-                  transition: 'background 70ms',
-                  ...base, ...hover,
-                }}
-                onClick={() => onRowClick?.(row)}
-                onMouseEnter={() => setHoveredRow(key)}
-                onMouseLeave={() => setHoveredRow(null)}
-              >
-                {rowDecoration?.(row)}
-                {columns.map(col => (
-                  <div key={col.key} style={{ minWidth: 0 }}>
-                    {col.renderCell(row)}
-                  </div>
-                ))}
-              </div>
-              {renderExpand?.(row, expanded)}
-            </div>
-          );
-        })}
+        {displayRows.map((row) => (
+          <Row
+            key={rowKey(row)}
+            row={row}
+            columns={columns}
+            onRowClick={onRowClick}
+            renderExpand={renderExpand}
+            isExpanded={isExpanded}
+            rowStyle={rowStyle}
+            rowHoverStyle={rowHoverStyle}
+            rowClassName={rowClassName}
+            wrapperClassName={wrapperClassName}
+            rowDecoration={rowDecoration}
+          />
+        ))}
         <div ref={bottomRef} />
       </div>
 
