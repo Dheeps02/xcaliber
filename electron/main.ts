@@ -24,7 +24,13 @@ function spawnBackend() {
     : join(process.resourcesPath, `xcaliber${ext}`);
 
   try {
-    backend = spawn(bin, [], { stdio: 'inherit' });
+    // 'pipe' stdin + windowsHide avoids spawning a visible console window on
+    // Windows. Keeping the backend's stdin pipe open also ties its lifetime
+    // to ours: when this process dies (even via a forced kill), the OS
+    // closes our end of the pipe, the backend sees EOF on stdin, and exits.
+    backend = spawn(bin, [], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    backend.stdout?.on('data', (d) => { try { process.stdout.write(d); } catch {} });
+    backend.stderr?.on('data', (d) => { try { process.stderr.write(d); } catch {} });
     backend.on('error', (e) => console.warn('[backend] failed to start:', e.message));
     backend.on('exit', (code) => {
       // 0xC0000135 = STATUS_DLL_NOT_FOUND — Packet.dll / wpcap.dll not alongside exe

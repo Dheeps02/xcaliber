@@ -126,8 +126,26 @@ async fn run_server() {
     axum::serve(listener, router).await.expect("server error");
 }
 
+/// Exits the process once stdin is closed. The Electron host keeps a pipe
+/// open to our stdin for as long as it's alive; when it dies (gracefully or
+/// killed), the OS closes that pipe and the read below returns EOF, so the
+/// backend doesn't outlive the frontend.
+fn watch_parent_stdin() {
+    use std::io::Read;
+    std::thread::spawn(|| {
+        let mut buf = [0u8; 64];
+        loop {
+            match std::io::stdin().read(&mut buf) {
+                Ok(0) | Err(_) => std::process::exit(0),
+                Ok(_) => {}
+            }
+        }
+    });
+}
+
 #[cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 fn main() {
+    watch_parent_stdin();
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
