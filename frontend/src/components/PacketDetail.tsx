@@ -15,7 +15,7 @@ export function HexCell({ hex, dir }: { hex: string; dir: 'tx' | 'rx' }) {
 }
 
 export function dirBadgeCls(p: PacketEntry) {
-  const isErr = p.pid === 'FE';
+  const isErr = p.pid === 'FE' || p.pid === 'ERR';
   if (p.direction === 'tx') return 'dir-badge tx';
   if (isErr)                return 'dir-badge err';
   return 'dir-badge rx';
@@ -49,7 +49,7 @@ export function ExpandDetailFlat({ p, open, extraFields }: {
   open: boolean;
   extraFields?: [string, unknown][];
 }) {
-  const isErr = p.pid === 'FE';
+  const isErr = p.pid === 'FE' || p.pid === 'ERR';
   const valueColor = isErr
     ? 'var(--status-err)'
     : p.direction === 'tx' ? 'var(--tx)' : 'var(--rx)';
@@ -64,7 +64,7 @@ export function ExpandDetailFlat({ p, open, extraFields }: {
           {p.direction === 'tx'
             ? <><PaperPlaneTilt size={11} className="inline mr-1" />TX · PID 0x{p.pid}</>
             : isErr
-            ? <><WarningCircle size={11} className="inline mr-1" />ERR · PID 0x{p.pid}</>
+            ? <><WarningCircle size={11} className="inline mr-1" />ERR{p.pid === 'ERR' ? '' : ` · PID 0x${p.pid}`}</>
             : <><DownloadSimple size={11} className="inline mr-1" />RX · PID 0x{p.pid}</>
           }
         </div>

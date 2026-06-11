@@ -1,7 +1,7 @@
 import {
   useState, useRef, useEffect, useMemo, Fragment,
 } from 'react';
-import { Broom, PaperPlaneTilt, CheckCircle, XCircle } from '@phosphor-icons/react';
+import { Broom, PaperPlaneTilt, CheckCircle, XCircle, Timer } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { TOOLBAR_ICON_SIZE, TRACE_DIR_ICON_SIZE } from '../lib/constants';
 import { formatLabel, formatTime } from '../lib/utils';
@@ -21,6 +21,8 @@ type DirFilter = 'all' | 'tx' | 'rx';
 
 export function getCommandName(p: PacketEntry): string {
   const d = p.decoded as Record<string, unknown>;
+  if (p.pid === 'TO') return 'Timeout';
+  if (typeof d.error === 'string') return 'Local Error';
   if (typeof d.command === 'string') return formatLabel(d.command);
   if (p.direction === 'rx') {
     if (p.pid === 'FF') return 'Positive Response';
@@ -31,35 +33,40 @@ export function getCommandName(p: PacketEntry): string {
 
 export function CommandIcon({ p }: { p: PacketEntry }) {
   if (p.direction === 'tx') return <PaperPlaneTilt size={TRACE_DIR_ICON_SIZE} style={{ color: 'var(--tx)', flexShrink: 0 }} />;
-  if (p.pid === 'FE') return <XCircle size={TRACE_DIR_ICON_SIZE} style={{ color: 'var(--status-err)', flexShrink: 0 }} />;
+  if (p.pid === 'TO') return <Timer size={TRACE_DIR_ICON_SIZE} style={{ color: 'var(--status-warn)', flexShrink: 0 }} />;
+  if (p.pid === 'FE' || p.pid === 'ERR') return <XCircle size={TRACE_DIR_ICON_SIZE} style={{ color: 'var(--status-err)', flexShrink: 0 }} />;
   return <CheckCircle size={TRACE_DIR_ICON_SIZE} style={{ color: 'var(--rx)', flexShrink: 0 }} />;
 }
 
 export function dirColor(dir: string): string {
   if (dir === 'tx') return 'var(--tx)';
   if (dir === 'rx') return 'var(--rx)';
+  if (dir === 'timeout') return 'var(--status-warn)';
   return 'var(--status-err)';
 }
 
 export function dirBgColor(dir: string): string {
   if (dir === 'tx') return 'color-mix(in srgb, var(--tx) 5%, transparent)';
   if (dir === 'rx') return 'color-mix(in srgb, var(--rx) 4%, transparent)';
+  if (dir === 'timeout') return 'color-mix(in srgb, var(--status-warn) 5%, transparent)';
   return 'color-mix(in srgb, var(--status-err) 5%, transparent)';
 }
 
 export function dirBgHover(dir: string): string {
   if (dir === 'tx') return 'color-mix(in srgb, var(--tx) 10%, transparent)';
   if (dir === 'rx') return 'color-mix(in srgb, var(--rx) 8%, transparent)';
+  if (dir === 'timeout') return 'color-mix(in srgb, var(--status-warn) 10%, transparent)';
   return 'color-mix(in srgb, var(--status-err) 10%, transparent)';
 }
 
 // ── ExpandPanel ───────────────────────────────────────────────────────────────
 
 export function ExpandPanel({ p, open }: { p: PacketEntry; open: boolean }) {
-  const isErr  = p.pid === 'FE';
-  const effectiveDir = isErr ? 'err' : p.direction;
+  const isErr  = p.pid === 'FE' || p.pid === 'ERR';
+  const isTimeout = p.pid === 'TO';
+  const effectiveDir = isTimeout ? 'timeout' : isErr ? 'err' : p.direction;
   const color  = dirColor(effectiveDir);
-  const label  = p.direction === 'tx' ? 'TX' : isErr ? 'ERR' : 'RX';
+  const label  = p.direction === 'tx' ? 'TX' : isTimeout ? 'TIMEOUT' : isErr ? 'ERR' : 'RX';
   const allFields = flattenDecoded(p.decoded);
   const rows   = p.direction === 'tx'
     ? allFields.filter(([k]) => k !== 'command')
@@ -89,7 +96,7 @@ export function ExpandPanel({ p, open }: { p: PacketEntry; open: boolean }) {
             className="text-[10px] font-semibold uppercase tracking-[0.08em] mb-2"
             style={{ color }}
           >
-            {label} · PID 0x{p.pid}
+            {label}{p.pid === 'ERR' || p.pid === 'TO' ? '' : ` · PID 0x${p.pid}`}
           </div>
           <div
             className="grid gap-y-1 text-[11px] font-mono"
@@ -180,7 +187,7 @@ function makeColumns(): ColDef<PacketEntry>[] {
       filterMatch: (p, v) => p.hex.toUpperCase().includes(v.toUpperCase()),
       renderCell: (p) => {
         const isErr = p.pid === 'FE';
-        const effectiveDir = isErr ? 'err' : p.direction;
+        const effectiveDir = p.pid === 'TO' ? 'timeout' : isErr ? 'err' : p.direction;
         return (
           <div className="flex items-center gap-1 py-2 font-mono text-[11px] flex-wrap min-w-0">
             <HexCells hex={p.hex} dir={effectiveDir} />
@@ -272,7 +279,8 @@ export function PacketTrace() {
   // ── Row prop callbacks ───────────────────────────────────────────────────
 
   function effectiveDir(p: PacketEntry) {
-    return p.pid === 'FE' ? 'err' : p.direction;
+    if (p.pid === 'TO') return 'timeout';
+    return p.pid === 'FE' || p.pid === 'ERR' ? 'err' : p.direction;
   }
 
   function rowStyle(p: PacketEntry): React.CSSProperties {

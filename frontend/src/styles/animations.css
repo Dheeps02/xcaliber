@@ -54,6 +54,7 @@
 .packet-new-tx  { --sweep-color: color-mix(in srgb, var(--tx)         22%, transparent); }
 .packet-new-rx  { --sweep-color: color-mix(in srgb, var(--rx)         20%, transparent); }
 .packet-new-err { --sweep-color: color-mix(in srgb, var(--status-err) 22%, transparent); }
+.packet-new-timeout { --sweep-color: color-mix(in srgb, var(--status-warn) 22%, transparent); }
 
 @keyframes row-collapse-out {
   from { opacity: 1; }
