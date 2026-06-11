@@ -12,6 +12,8 @@ import { api } from '../lib/api';
 import type { NetworkInterface, EventDef } from '../lib/types';
 import { SpinInput } from './SpinInput';
 import { UserCmdTab } from './UserCmdTab';
+import { Button } from './ui/Button';
+import { Toggle } from './ui/Toggle';
 
 interface Props {
   onClose: () => void;
@@ -93,7 +95,7 @@ function AppearanceTab() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-[11px] text-gray-500 mb-4">Choose a colour theme. Changes apply instantly.</p>
+        <p className="text-[11px] text-[var(--text-muted)] mb-4">Choose a colour theme. Changes apply instantly.</p>
         <div className="grid grid-cols-2 gap-3">
         {THEMES.map((t) => {
           const active = theme === t.id;
@@ -103,7 +105,9 @@ function AppearanceTab() {
               key={t.id}
               onClick={() => handleSelect(t.id)}
               className={`rounded-lg overflow-hidden border-2 transition-all text-left active:scale-95 ${
-                active ? 'border-[var(--accent)]' : 'border-[var(--border-strong)] hover:border-[var(--text-muted)]'
+                active
+                  ? 'border-[var(--accent)]'
+                  : 'border-[var(--border-strong)] hover:border-[var(--text-muted)]'
               }`}
             >
               {/* Mini app preview */}
@@ -131,14 +135,28 @@ function AppearanceTab() {
                 </div>
               </div>
               {/* Swatches + label */}
-              <div className={`px-2.5 py-1.5 flex items-center gap-2 ${active ? 'bg-blue-600' : 'bg-gray-800'}`}>
+              <div
+                className="px-2.5 py-1.5 flex items-center gap-2"
+                style={{
+                  background: active
+                    ? 'color-mix(in srgb, var(--accent) 20%, var(--surface-overlay))'
+                    : 'var(--surface-overlay)',
+                }}
+              >
                 <div className="flex gap-1 shrink-0">
                   {([bg, sidebar, accent, text] as string[]).map((color, i) => (
                     <div key={i} className="w-2.5 h-2.5 rounded-full border border-black/20" style={{ background: color }} />
                   ))}
                 </div>
-                <span className={`text-[10px] font-medium flex-1 truncate ${active ? 'text-white' : 'text-gray-400'}`}>{t.label}</span>
-                {active && <span className="text-[8px] text-white shrink-0">✓</span>}
+                <span
+                  className="text-[10px] font-medium flex-1 truncate"
+                  style={{ color: active ? 'var(--accent)' : 'var(--text-muted)' }}
+                >
+                  {t.label}
+                </span>
+                {active && (
+                  <span style={{ color: 'var(--accent)', fontSize: 10 }}>✓</span>
+                )}
               </div>
             </button>
           );
@@ -149,8 +167,8 @@ function AppearanceTab() {
       {/* Zoom */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-[11px] text-gray-500 font-medium">UI Zoom</p>
-          <span className="text-[11px] font-mono text-gray-400">{Math.round(draftZoom * 100)}%</span>
+          <p className="text-[11px] text-[var(--text-muted)] font-medium">UI Zoom</p>
+          <span className="text-[11px] font-mono text-[var(--text-muted)]">{Math.round(draftZoom * 100)}%</span>
         </div>
         <input
           type="range"
@@ -160,9 +178,10 @@ function AppearanceTab() {
           value={draftZoom}
           onChange={(e) => setDraftZoom(Number(e.target.value))}
           onPointerUp={(e) => setUiZoom(Number((e.target as HTMLInputElement).value))}
-          className="w-full accent-blue-500"
+          className="w-full"
+          style={{ accentColor: 'var(--accent)' }}
         />
-        <div className="flex justify-between text-[10px] text-gray-700 mt-1">
+        <div className="flex justify-between text-[10px] text-[var(--text-muted)]/50 mt-1">
           <span>70%</span>
           <span>100%</span>
           <span>150%</span>
@@ -255,43 +274,55 @@ function ConnectionTab() {
   }
 
   const inputCls = (key: keyof ConnDraft) =>
-    `w-full px-2.5 py-1.5 rounded-md bg-gray-800 border text-xs font-mono text-gray-200 focus:outline-none transition-colors no-spinner ${
-      isDirty(key) ? 'border-amber-500/70 focus:border-amber-400' : 'border-gray-700 focus:border-blue-500'
-    }`;
+    `w-full px-2.5 py-1.5 rounded-md text-xs font-mono focus:outline-none transition-colors no-spinner ${
+      isDirty(key)
+        ? 'border border-[var(--status-warn)]/60 focus:border-[var(--status-warn)]'
+        : 'border border-[var(--input-border)] focus:border-[var(--accent)]'
+    }`
+    + ' bg-[var(--input-bg)] text-[var(--text-secondary)]';
 
   const ipRowCls = 'grid gap-3 items-center';
   const ipGridStyle = { gridTemplateColumns: '68px 1fr 1fr' };
 
   return (
     <div className="space-y-4">
-      <p className="text-[11px] text-gray-500">Restart the connection after saving for changes to take effect.</p>
+      <p className="text-[11px] text-[var(--text-muted)]">Restart the connection after saving for changes to take effect.</p>
 
       {/* ── IP ── */}
       <ConnSection label="IP" icon={Globe} />
       <div className="space-y-2">
-        {/* Column headers */}
         <div className={ipRowCls} style={ipGridStyle}>
           <div />
-          <span className="text-[10px] text-gray-500 font-medium">IP Address</span>
-          <span className="text-[10px] text-gray-500 font-medium">Port</span>
+          <span className="text-[10px] text-[var(--text-muted)] font-medium">IP Address</span>
+          <span className="text-[10px] text-[var(--text-muted)] font-medium">Port</span>
         </div>
-        {/* Source row */}
         <div className={ipRowCls} style={ipGridStyle}>
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-gray-400 font-medium">Source</span>
+            <span className="text-[10px] text-[var(--text-muted)] font-medium">Source</span>
             {(isDirty('bind_ip') || isDirty('source_port')) && (
-              <button onClick={() => { resetField('bind_ip'); resetField('source_port'); }} className="text-amber-500 hover:text-amber-300 transition-colors flex items-center" title="Reset row"><ArrowCounterClockwise size={20} /></button>
+              <button
+                onClick={() => { resetField('bind_ip'); resetField('source_port'); }}
+                className="text-[var(--status-warn)] hover:text-[var(--text-secondary)] transition-colors flex items-center"
+                title="Reset row"
+              >
+                <ArrowCounterClockwise size={14} />
+              </button>
             )}
           </div>
           <input type="text" placeholder="0.0.0.0 (any)" value={draft.bind_ip} onChange={(e) => set('bind_ip', e.target.value)} className={inputCls('bind_ip')} />
           <SpinInput value={draft.source_port} onChange={(v) => set('source_port', v)} min={1} max={65535} inputClassName={inputCls('source_port')} />
         </div>
-        {/* Destination row */}
         <div className={ipRowCls} style={ipGridStyle}>
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-gray-400 font-medium">Destination</span>
+            <span className="text-[10px] text-[var(--text-muted)] font-medium">Destination</span>
             {(isDirty('server_ip') || isDirty('server_port')) && (
-              <button onClick={() => { resetField('server_ip'); resetField('server_port'); }} className="text-amber-500 hover:text-amber-300 transition-colors flex items-center" title="Reset row"><ArrowCounterClockwise size={20} /></button>
+              <button
+                onClick={() => { resetField('server_ip'); resetField('server_port'); }}
+                className="text-[var(--status-warn)] hover:text-[var(--text-secondary)] transition-colors flex items-center"
+                title="Reset row"
+              >
+                <ArrowCounterClockwise size={14} />
+              </button>
             )}
           </div>
           <input type="text" placeholder="127.0.0.1" value={draft.server_ip} onChange={(e) => set('server_ip', e.target.value)} className={inputCls('server_ip')} />
@@ -302,13 +333,6 @@ function ConnectionTab() {
       {/* ── Protocol ── */}
       <ConnSection label="Protocol" icon={Stack} />
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Protocol" dirty={isDirty('protocol')} onReset={() => resetField('protocol')}>
-          <select value={draft.protocol} onChange={(e) => set('protocol', e.target.value)} className={inputCls('protocol')}>
-            <option value="udp">UDP</option>
-            <option value="tcp">TCP</option>
-            <option value="ethernet">Raw Ethernet</option>
-          </select>
-        </Field>
         <Field label="Timeout (ms)" dirty={isDirty('timeout_ms')} onReset={() => resetField('timeout_ms')}>
           <SpinInput value={draft.timeout_ms} onChange={(v) => set('timeout_ms', v)} min={100} step={100} inputClassName={inputCls('timeout_ms')} />
         </Field>
@@ -316,28 +340,25 @@ function ConnectionTab() {
 
       {/* ── Byte Order ── */}
       <ConnSection label="Byte Order" icon={ArrowsLeftRight} />
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {(['little', 'big'] as const).map((opt) => (
-          <button
+          <Button
             key={opt}
             onClick={() => set('endian', opt)}
-            className={`flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors ${
-              draft.endian === opt
-                ? 'bg-blue-600 border-blue-500 text-white'
-                : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'
-            }`}
+            variant={draft.endian === opt ? 'primary' : 'default'}
+            className="flex-1 justify-center"
           >
             {opt === 'little' ? 'Little Endian' : 'Big Endian'}
-          </button>
+          </Button>
         ))}
       </div>
-      <p className="text-[10px] text-gray-600 -mt-2">
+      <p className="text-[10px] text-[var(--text-muted)]/60 -mt-2">
         Byte order for SET_MTA addresses and multi-byte DOWNLOAD values. Match your target ECU.
       </p>
 
-      {/* ── Raw Ethernet ── */}
-      <ConnSection label="Raw Ethernet" icon={Circuitry} />
-      <div className={`grid grid-cols-3 gap-3 ${draft.protocol !== 'ethernet' ? 'opacity-40 pointer-events-none' : ''}`}>
+      {/* ── Ethernet ── */}
+      <ConnSection label="Ethernet" icon={Circuitry} />
+      <div className="grid grid-cols-3 gap-3">
         <Field label="Source MAC" dirty={isDirty('src_mac')} onReset={() => resetField('src_mac')}>
           <input type="text" placeholder="AA:BB:CC:DD:EE:FF" value={draft.src_mac} onChange={(e) => set('src_mac', e.target.value)} className={inputCls('src_mac')} />
         </Field>
@@ -348,9 +369,6 @@ function ConnectionTab() {
           <input type="number" min={1} max={4094} placeholder="none" value={draft.vlan_id} onChange={(e) => set('vlan_id', e.target.value)} className={inputCls('vlan_id')} />
         </Field>
       </div>
-      {draft.protocol !== 'ethernet' && (
-        <p className="text-[10px] text-gray-600 -mt-2">Select Raw Ethernet protocol to configure MAC addresses and VLAN tagging.</p>
-      )}
 
       {/* ── Network Interface ── */}
       <ConnSection label="Network Interface" icon={WifiHigh} />
@@ -374,14 +392,10 @@ function ConnectionTab() {
       </Field>
 
       <div className="flex items-center gap-2 pt-1">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="px-4 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors active:scale-95"
-        >
+        <Button variant="primary" onClick={save} disabled={saving}>
           {saving ? 'Saving…' : 'Save'}
-        </button>
-        {saved && <span className="text-[10px] text-green-400">✓ Saved</span>}
+        </Button>
+        {saved && <span className="text-[11px] text-[var(--status-ok)]">✓ Saved</span>}
       </div>
     </div>
   );
@@ -390,10 +404,10 @@ function ConnectionTab() {
 function ConnSection({ label, icon: Icon }: { label: string; icon?: React.ElementType }) {
   return (
     <div className="flex items-center gap-2.5 pt-1">
-      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest whitespace-nowrap flex items-center gap-1.5">
-        {Icon && <Icon size={20} />}{label}
+      <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-widest whitespace-nowrap flex items-center gap-1.5">
+        {Icon && <Icon size={13} />}{label}
       </span>
-      <div className="flex-1 h-px bg-gray-800" />
+      <div className="flex-1 h-px bg-[var(--border)]" />
     </div>
   );
 }
@@ -402,10 +416,14 @@ function Field({ label, dirty, onReset, children }: { label: string; dirty: bool
   return (
     <div>
       <div className="flex items-center gap-2 mb-1">
-        <label className="text-[10px] text-gray-400 font-medium">{label}</label>
+        <label className="text-[10px] text-[var(--text-muted)] font-medium">{label}</label>
         {dirty && (
-          <button onClick={onReset} title="Reset to default" className="text-[10px] text-amber-500 hover:text-amber-300 transition-colors flex items-center gap-0.5">
-            <ArrowCounterClockwise size={20} /> <span>reset</span>
+          <button
+            onClick={onReset}
+            title="Reset to default"
+            className="text-[10px] text-[var(--status-warn)] hover:text-[var(--text-secondary)] transition-colors flex items-center gap-0.5"
+          >
+            <ArrowCounterClockwise size={11} /> <span>reset</span>
           </button>
         )}
       </div>
@@ -420,36 +438,19 @@ function TraceTab() {
 
   return (
     <div className="space-y-4">
-      <p className="text-[11px] text-gray-500">Configure packet trace display behaviour.</p>
+      <p className="text-[11px] text-[var(--text-muted)]">Configure packet trace display behaviour.</p>
       <div>
-        <label className="text-[10px] text-gray-400 font-medium block mb-1">Response Timeout (ms)</label>
-        <p className="text-[10px] text-gray-600 mb-2">Show a timeout indicator if no response arrives within this threshold.</p>
+        <label className="text-[10px] text-[var(--text-muted)] font-medium block mb-1">Response Timeout (ms)</label>
+        <p className="text-[10px] text-[var(--text-muted)]/60 mb-2">Show a timeout indicator if no response arrives within this threshold.</p>
         <SpinInput
           value={displayTimeoutMs}
           onChange={(v) => setDisplayTimeoutMs(Math.max(100, v))}
           min={100}
           step={100}
-          inputClassName="w-32 px-2.5 py-1.5 rounded-md bg-gray-800 border border-gray-700 text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500"
+          inputClassName="w-32 px-2.5 py-1.5 rounded-md bg-[var(--input-bg)] border border-[var(--input-border)] text-xs font-mono text-[var(--text-secondary)] focus:outline-none focus:border-[var(--accent)]"
         />
       </div>
     </div>
-  );
-}
-
-function Toggle({ checked, onChange, label, description }: { checked: boolean; onChange: (v: boolean) => void; label: string; description?: string }) {
-  return (
-    <label className="flex items-start gap-3 cursor-pointer select-none group">
-      <div
-        className={`w-8 h-4.5 rounded-full relative shrink-0 mt-0.5 transition-colors ${checked ? 'bg-blue-600' : 'bg-gray-700'}`}
-        onClick={() => onChange(!checked)}
-      >
-        <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-transform ${checked ? 'translate-x-4' : 'translate-x-0.5'}`} />
-      </div>
-      <div>
-        <p className="text-xs text-gray-300 font-medium">{label}</p>
-        {description && <p className="text-[10px] text-gray-600 mt-0.5">{description}</p>}
-      </div>
-    </label>
   );
 }
 
@@ -459,13 +460,19 @@ function AccessibilityTab() {
 
   return (
     <div className="space-y-5">
-      <p className="text-[11px] text-gray-500">Adjust the interface to better suit your needs.</p>
-      <Toggle
-        checked={animationsEnabled}
-        onChange={setAnimationsEnabled}
-        label="Enable animations"
-        description="Packet fade-in, counter ticks, expand transitions, and theme transitions. Disable for reduced motion."
-      />
+      <p className="text-[11px] text-[var(--text-muted)]">Adjust the interface to better suit your needs.</p>
+      <label className="flex items-start gap-3 cursor-pointer select-none">
+        <Toggle
+          checked={animationsEnabled}
+          onChange={() => setAnimationsEnabled(!animationsEnabled)}
+        />
+        <div>
+          <p className="text-xs text-[var(--text-primary)] font-medium">Enable animations</p>
+          <p className="text-[10px] text-[var(--text-muted)] mt-0.5">
+            Packet fade-in, counter ticks, expand transitions, and theme transitions. Disable for reduced motion.
+          </p>
+        </div>
+      </label>
     </div>
   );
 }
@@ -525,17 +532,20 @@ function EventsTab() {
     }
   }
 
-  const inputCls = 'px-2 py-1 rounded bg-gray-800 border border-gray-700 text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500';
+  const inputCls = 'px-2 py-1 rounded bg-[var(--input-bg)] border border-[var(--input-border)] text-xs font-mono text-[var(--text-secondary)] focus:outline-none focus:border-[var(--accent)]';
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] text-gray-500">
+      <p className="text-[11px] text-[var(--text-muted)]">
         Define XCP event channels shown in the DAQ list dropdown. Changes are saved to config.toml.
       </p>
-      <div className="border border-gray-800 rounded-lg overflow-hidden">
+      <div className="border border-[var(--border)] rounded-lg overflow-hidden">
         <table className="w-full text-xs">
           <thead>
-            <tr className="bg-gray-800/60 text-left text-[10px] text-gray-500 uppercase tracking-wider">
+            <tr
+              className="text-left text-[10px] uppercase tracking-wider"
+              style={{ background: 'var(--surface-overlay)', color: 'var(--text-muted)' }}
+            >
               <th className="px-3 py-2 w-16">ID</th>
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2 w-8" />
@@ -544,11 +554,13 @@ function EventsTab() {
           <tbody>
             {draft.length === 0 && (
               <tr>
-                <td colSpan={3} className="px-3 py-4 text-center text-gray-700 text-[11px]">No events. Click + Add Event.</td>
+                <td colSpan={3} className="px-3 py-4 text-center text-[var(--text-muted)]/50 text-[11px]">
+                  No events. Click + Add Event.
+                </td>
               </tr>
             )}
             {draft.map((ev, i) => (
-              <tr key={i} className="border-t border-gray-800">
+              <tr key={i} className="border-t border-[var(--border)]">
                 <td className="px-3 py-1.5">
                   <input
                     type="number"
@@ -569,9 +581,11 @@ function EventsTab() {
                 <td className="px-3 py-1.5 text-center">
                   <button
                     onClick={() => removeEvent(i)}
-                    className="text-gray-600 hover:text-red-400 transition-colors flex items-center justify-center"
+                    className="text-[var(--text-muted)]/40 hover:text-[var(--status-err)] transition-colors flex items-center justify-center"
                     title="Remove"
-                  ><X size={20} /></button>
+                  >
+                    <X size={14} />
+                  </button>
                 </td>
               </tr>
             ))}
@@ -580,19 +594,15 @@ function EventsTab() {
       </div>
       <button
         onClick={addEvent}
-        className="text-[11px] text-gray-500 hover:text-blue-400 transition-colors flex items-center gap-1"
+        className="text-[11px] text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors flex items-center gap-1"
       >
-        <Plus size={20} /> Add Event
+        <Plus size={13} /> Add Event
       </button>
       <div className="flex items-center gap-2 pt-1">
-        <button
-          onClick={save}
-          disabled={saving || !dirty}
-          className="px-4 py-1.5 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors active:scale-95"
-        >
+        <Button variant="primary" onClick={save} disabled={saving || !dirty}>
           {saving ? 'Saving…' : 'Save'}
-        </button>
-        {saved && <span className="text-[10px] text-green-400">✓ Saved</span>}
+        </Button>
+        {saved && <span className="text-[11px] text-[var(--status-ok)]">✓ Saved</span>}
       </div>
     </div>
   );
@@ -630,26 +640,32 @@ function AboutTab() {
     <div className="flex flex-col gap-6">
       {/* Branding block */}
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-          <span className="text-blue-400 font-bold text-lg font-mono tracking-tight">X</span>
+        <div
+          className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+          style={{
+            background: 'color-mix(in srgb, var(--accent) 10%, var(--surface-overlay))',
+            border: '1px solid color-mix(in srgb, var(--accent) 25%, var(--border))',
+          }}
+        >
+          <span className="font-bold text-lg font-mono tracking-tight" style={{ color: 'var(--accent)' }}>X</span>
         </div>
         <div>
-          <p className="text-base font-semibold text-gray-100 tracking-tight">XCaliber</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">XCP measurement and calibration client</p>
+          <p className="text-base font-semibold text-[var(--text-primary)] tracking-tight">XCaliber</p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-0.5">XCP measurement and calibration client</p>
         </div>
       </div>
 
       {/* Meta */}
       <div className="space-y-2.5">
         <Row label="Version">
-          <span className="text-[11px] text-gray-300 font-mono">{__APP_VERSION__}</span>
+          <span className="text-[11px] text-[var(--text-secondary)] font-mono">{__APP_VERSION__}</span>
         </Row>
         <Row label="Source">
           <button
             onClick={() => window.open(GITHUB_URL, '_blank')}
-            className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors font-mono flex items-center gap-1"
+            className="text-[11px] text-[var(--accent)] hover:brightness-110 transition-all font-mono flex items-center gap-1"
           >
-            github.com/Dheeps02/xcaliber <ArrowSquareOut size={20} />
+            github.com/Dheeps02/xcaliber <ArrowSquareOut size={12} />
           </button>
         </Row>
       </div>
@@ -657,33 +673,32 @@ function AboutTab() {
       {/* Update check */}
       <div>
         <div className="flex items-center gap-3 flex-wrap">
-          <button
+          <Button
             onClick={checkForUpdates}
             disabled={status === 'checking'}
-            className="px-3 py-1.5 rounded-md text-xs font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-50 border border-gray-700 text-gray-300 transition-colors active:scale-95 flex items-center gap-1.5"
           >
-            <ArrowsClockwise size={20} className={status === 'checking' ? 'animate-spin' : ''} />
+            <ArrowsClockwise size={13} className={status === 'checking' ? 'animate-spin' : ''} />
             {status === 'checking' ? 'Checking…' : 'Check for Updates'}
-          </button>
+          </Button>
           {status === 'up-to-date' && (
-            <span className="text-[11px] text-green-400">✓ Up to date</span>
+            <span className="text-[11px] text-[var(--status-ok)]">✓ Up to date</span>
           )}
           {status === 'available' && latestVersion && (
-            <span className="text-[11px] text-amber-400 flex items-center gap-1.5">
+            <span className="text-[11px] text-[var(--status-warn)] flex items-center gap-1.5">
               v{latestVersion} available —
               <button
                 onClick={() => window.open(RELEASES_URL, '_blank')}
-                className="text-blue-400 hover:text-blue-300 transition-colors underline"
+                className="text-[var(--accent)] hover:brightness-110 transition-all underline"
               >
                 Download ↗
               </button>
             </span>
           )}
           {status === 'no-releases' && (
-            <span className="text-[11px] text-gray-500">No releases published yet</span>
+            <span className="text-[11px] text-[var(--text-muted)]">No releases published yet</span>
           )}
           {status === 'error' && (
-            <span className="text-[11px] text-red-400">Could not reach GitHub</span>
+            <span className="text-[11px] text-[var(--status-err)]">Could not reach GitHub</span>
           )}
         </div>
       </div>
@@ -694,7 +709,7 @@ function AboutTab() {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-[10px] text-gray-500 font-medium w-14 shrink-0">{label}</span>
+      <span className="text-[10px] text-[var(--text-muted)] font-medium w-14 shrink-0">{label}</span>
       {children}
     </div>
   );
@@ -742,54 +757,78 @@ export function Settings({ onClose, initialTab }: Props) {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-      <div className={`absolute inset-0 bg-black/60 ${closing ? 'modal-backdrop-out' : 'modal-backdrop-in'}`} onClick={handleClose} />
+      {/* Backdrop */}
       <div
-        className={`relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl flex overflow-hidden w-[90vw] max-w-5xl h-[85vh] max-h-[800px] ${closing ? 'modal-out' : 'modal-in'}`}
+        className={`absolute inset-0 bg-black/50 ${closing ? 'modal-backdrop-out' : 'modal-backdrop-in'}`}
+        onClick={handleClose}
+      />
+
+      {/* Modal panel — frosted glass */}
+      <div
+        className={`relative flex overflow-hidden w-[90vw] max-w-5xl h-[85vh] max-h-[800px] rounded-xl ${closing ? 'modal-out' : 'modal-in'}`}
+        style={{
+          background: 'rgba(9,13,11, 0.84)',
+          backdropFilter: 'blur(24px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(24px) saturate(1.4)',
+          border: '1px solid var(--border-strong)',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.6), 0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)',
+        }}
       >
         {/* Left nav */}
-        <div className="w-48 bg-gray-950 border-r border-gray-800 flex flex-col shrink-0">
-          <div className="px-4 py-3.5 border-b border-gray-800">
-            <span className="font-semibold text-sm text-gray-100">Settings</span>
+        <div
+          className="w-48 flex flex-col shrink-0"
+          style={{
+            background: 'rgba(6,9,7, 0.55)',
+            borderRight: '1px solid var(--border)',
+          }}
+        >
+          <div
+            className="px-4 py-3.5"
+            style={{ borderBottom: '1px solid var(--border)' }}
+          >
+            <span className="font-semibold text-sm text-[var(--text-primary)]">Settings</span>
           </div>
-          <nav className="flex-1 p-2 space-y-0.5">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => switchTab(t.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-left transition-colors active:scale-95 ${
-                  tab === t.id
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
-                }`}
-              >
-                <span className="relative inline-flex shrink-0" style={{ width: 20, height: 20 }}>
-                  <span
-                    className={tab === t.id ? 'text-gray-700' : ''}
-                    style={{ transition: 'color 320ms ease' }}
-                  >
-                    <t.icon size={20} weight="regular" />
+          <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+            {TABS.map((t) => {
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => switchTab(t.id)}
+                  className={`settings-nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-left transition-colors active:scale-95 ${active ? 'active' : ''}`}
+                  style={active ? {
+                    background: 'color-mix(in srgb, var(--accent) 15%, var(--surface-overlay))',
+                    color: 'var(--accent)',
+                    border: '1px solid color-mix(in srgb, var(--accent) 25%, var(--border))',
+                  } : {
+                    color: 'var(--text-muted)',
+                    border: '1px solid transparent',
+                  }}
+                >
+                  <span className="relative inline-flex shrink-0" style={{ width: 16, height: 16 }}>
+                    <span style={{ opacity: active ? 0 : 1, transition: 'opacity 200ms ease' }}>
+                      <t.icon size={16} weight="regular" />
+                    </span>
+                    <span
+                      className="absolute inset-0"
+                      style={{ opacity: active ? 1 : 0, transition: 'opacity 200ms ease' }}
+                    >
+                      <t.icon size={16} weight="fill" />
+                    </span>
                   </span>
-                  <span
-                    className="absolute inset-0"
-                    style={{
-                      clipPath: tab === t.id ? 'inset(0% 0 0 0)' : 'inset(100% 0 0 0)',
-                      transition: 'clip-path 320ms ease',
-                    }}
-                  >
-                    <t.icon size={20} weight="fill" />
-                  </span>
-                </span>
-                {t.label}
-              </button>
-            ))}
+                  {t.label}
+                </button>
+              );
+            })}
           </nav>
-          <div className="p-2 border-t border-gray-800">
-            <button
+          <div className="p-2" style={{ borderTop: '1px solid var(--border)' }}>
+            <Button
+              variant="ghost"
               onClick={handleClose}
-              className="w-full px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors text-left active:scale-95 flex items-center gap-1.5"
+              className="w-full justify-start gap-1.5 px-3"
             >
-              <X size={20} /> Close
-            </button>
+              <X size={13} /> Close
+            </Button>
           </div>
         </div>
 
