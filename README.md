@@ -1,6 +1,6 @@
 # Xcaliber
 
-A modern, open-source XCP client for automotive ECU calibration and measurement. Built with Rust, Tauri, and React.
+A modern, open-source XCP client for automotive ECU calibration and measurement. Built with Rust, Electron, and React.
 
 > **XCP** (Universal Measurement and Calibration Protocol) is an ASAM standard used to read, write, and stream data from automotive ECUs during development and calibration.
 
@@ -23,15 +23,16 @@ A modern, open-source XCP client for automotive ECU calibration and measurement.
 ## Architecture
 
 ```
-Tauri Process
-├── Axum :8080         HTTP + SSE server
-│   ├── /api/*         REST endpoints (commands, DAQ, config)
-│   └── /events        Server-Sent Events (live packet + DTO push)
-└── WebView
+Electron Process
+├── xcaliber (Rust binary)
+│   └── Axum :8080         HTTP + SSE server
+│       ├── /api/*         REST endpoints (commands, DAQ, config)
+│       └── /events        Server-Sent Events (live packet + DTO push)
+└── BrowserWindow
     └── React frontend (Vite + Tailwind + Zustand)
 ```
 
-Single binary. The Axum server runs inside the Tauri process — no separate backend to manage. A Python mock slave is included for development and testing without real hardware.
+Electron spawns the Rust backend as a sidecar process. The Axum server runs independently — no separate backend to manage. A Python mock slave is included for development and testing without real hardware.
 
 ## Getting Started
 
@@ -39,22 +40,22 @@ Single binary. The Axum server runs inside the Tauri process — no separate bac
 
 - [Rust](https://rustup.rs/) (2024 edition)
 - [Node.js](https://nodejs.org/) (v18+)
-- [Tauri CLI](https://v2.tauri.app/start/prerequisites/)
 
 ### Development
 
 ```bash
-# Install frontend dependencies
+# Install root and frontend dependencies
+npm install
 cd frontend && npm install && cd ..
 
-# Run in development mode (hot-reload frontend + Rust backend)
-cargo tauri dev
+# Run in development mode (hot-reload frontend + Rust backend + Electron)
+npm run dev
 ```
 
 ### Build
 
 ```bash
-cargo tauri build
+npm run build
 ```
 
 ### Mock Slave (for testing without hardware)
@@ -118,7 +119,7 @@ The HTTP server at `:8080` is fully usable outside the GUI — scripts, CLI tool
 
 | Layer | Technology |
 |-------|-----------|
-| Desktop shell | Tauri v2 |
+| Desktop shell | Electron |
 | Backend | Rust, Axum, tokio, rusqlite |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS, Zustand |
 | Protocol | XCP on Ethernet (UDP/TCP), ASAM standard |

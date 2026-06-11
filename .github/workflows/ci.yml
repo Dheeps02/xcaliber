@@ -27,19 +27,11 @@ jobs:
       - run: cd frontend && npm ci
       - run: cd frontend && npx tsc --noEmit
 
-  tauri-build:
-    name: Tauri build
+  electron-build:
+    name: Electron build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Linux system deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
@@ -49,4 +41,4 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: cd frontend && npm ci
       - run: cd frontend && npm run build
-      - run: cargo tauri build --no-bundle
+      - run: cargo build

@@ -1,14 +1,18 @@
 {
   "name": "xcaliber",
   "version": "0.1.0",
+  "description": "XCP measurement and calibration client",
+  "author": "Dheepan",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
     "predev": "cargo build && npm run electron:compile",
-    "dev": "concurrently -k \"npm run frontend:dev\" \"wait-on tcp:5173 && npx electron . 2>&1 | grep -v Fontconfig\"",
+    "dev": "concurrently -k \"npm run frontend:dev\" \"wait-on tcp:5173 && npx electron .\"",
+    "dev:linux": "concurrently -k \"npm run frontend:dev\" \"wait-on tcp:5173 && npx electron . 2>&1 | grep -v Fontconfig\"",
     "frontend:dev": "npm run dev --prefix frontend",
     "electron:compile": "tsc --project electron/tsconfig.json",
     "build": "cargo build --release && npm run frontend:build && npm run electron:compile",
+    "dist": "npm run build && npx electron-builder",
     "frontend:build": "npm run build --prefix frontend"
   },
   "devDependencies": {
@@ -22,5 +26,35 @@
   "allowScripts": {
     "electron@36.9.5": true,
     "electron-winstaller@5.4.0": true
+  },
+  "build": {
+    "appId": "com.xcaliber.app",
+    "productName": "Xcaliber",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "frontend/dist/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "extraResources": [
+        { "from": "target/release/xcaliber", "to": "." }
+      ]
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "icons/icon.ico",
+      "extraResources": [
+        { "from": "target/release/xcaliber.exe", "to": "." }
+      ]
+    },
+    "linux": {
+      "target": "AppImage",
+      "extraResources": [
+        { "from": "target/release/xcaliber", "to": "." }
+      ]
+    }
   }
 }

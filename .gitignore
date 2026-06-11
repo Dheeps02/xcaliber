@@ -47,5 +47,6 @@ dev/
 __pycache__/
 gen/
 dist-electron/
-wry-patch/
+release/
+*.pfx
 .claude/

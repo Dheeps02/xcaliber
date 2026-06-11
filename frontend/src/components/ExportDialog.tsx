@@ -95,7 +95,7 @@ export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: P
           </div>
         </div>
 
-        {/* Folder — Tauri only */}
+        {/* Folder — Electron only */}
         {inElectron && (
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Folder</label>

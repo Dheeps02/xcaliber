@@ -15,24 +15,16 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
+            rust_target: x86_64-unknown-linux-gnu
           - os: windows-latest
+            rust_target: x86_64-pc-windows-msvc
           - os: macos-latest
-            args: --target universal-apple-darwin
+            rust_target: universal-apple-darwin
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Linux system deps
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -44,16 +36,29 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
 
       - run: cd frontend && npm ci
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build Rust backend (non-macOS)
+        if: matrix.os != 'macos-latest'
+        run: cargo build --release
+
+      - name: Build macOS universal binary
+        if: matrix.os == 'macos-latest'
+        run: |
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          lipo -create -output target/release/xcaliber \
+            target/aarch64-apple-darwin/release/xcaliber \
+            target/x86_64-apple-darwin/release/xcaliber
+
+      - run: npm run frontend:build
+
+      - run: npm run electron:compile
+
+      - name: Package with electron-builder
+        run: npx electron-builder --publish always
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: XCaliber ${{ github.ref_name }}
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args || '' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

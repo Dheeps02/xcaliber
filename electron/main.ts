@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
 import { writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 
@@ -17,13 +18,28 @@ let mainWindow: BrowserWindow | null = null;
 let backend: ChildProcess | null = null;
 
 function spawnBackend() {
+  const ext = process.platform === 'win32' ? '.exe' : '';
   const bin = isDev
-    ? join(__dirname, '../target/debug/xcp-client')
-    : join(process.resourcesPath, 'xcp-client');
+    ? join(__dirname, `../target/debug/xcaliber${ext}`)
+    : join(process.resourcesPath, `xcaliber${ext}`);
 
   try {
-    backend = spawn(bin, ['--server-only'], { stdio: 'inherit' });
+    backend = spawn(bin, [], { stdio: 'inherit' });
     backend.on('error', (e) => console.warn('[backend] failed to start:', e.message));
+    backend.on('exit', (code) => {
+      // 0xC0000135 = STATUS_DLL_NOT_FOUND — Packet.dll / wpcap.dll not alongside exe
+      if (code === 3221225781) {
+        dialog.showMessageBoxSync({
+          type: 'error',
+          title: 'Missing DLLs — Npcap required',
+          message: 'Packet.dll or wpcap.dll could not be found.',
+          detail:
+            'Install Npcap from https://npcap.com and relaunch Xcaliber, or place Packet.dll and wpcap.dll in the same folder as the executable.',
+          buttons: ['OK'],
+        });
+        app.quit();
+      }
+    });
   } catch (e) {
     console.warn('[backend] not found — run `cargo run -- --server-only` manually');
   }
@@ -56,6 +72,22 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  if (
+    process.platform === 'win32' &&
+    !existsSync('C:\\Windows\\System32\\Npcap\\Packet.dll') &&
+    !existsSync('C:\\Windows\\System32\\Packet.dll')
+  ) {
+    dialog.showMessageBoxSync({
+      type: 'error',
+      title: 'Npcap not found',
+      message: 'Npcap is required for Ethernet transport on Windows.',
+      detail: 'Download and install it from https://npcap.com, then relaunch Xcaliber.',
+      buttons: ['OK'],
+    });
+    app.quit();
+    return;
+  }
+
   spawnBackend();
   createWindow();
   app.on('activate', () => {

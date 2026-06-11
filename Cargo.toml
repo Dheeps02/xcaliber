@@ -1,14 +1,9 @@
 [package]
-name = "xcp-client"
+name = "xcaliber"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# ---- Tauri (window shell) ----
-tauri = { version = "2", features = ["devtools"] }
-tauri-plugin-opener = "2"
-tauri-plugin-dialog = "2"
-
 # ---- HTTP server ----
 axum = { version = "0.8", features = ["macros"] }
 tower-http = { version = "0.6", features = ["cors"] }
@@ -36,6 +31,3 @@ pnet = "0.35"
 
 # ---- Error handling ----
 thiserror = "2"
-
-[build-dependencies]
-tauri-build = { version = "2", features = [] }

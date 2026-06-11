@@ -1,4 +1,5 @@
 mod config;
+mod debug_log;
 mod http;
 mod session;
 mod xcp;
@@ -112,12 +113,12 @@ async fn run_server() {
 
     let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await {
         Ok(l) => {
-            eprintln!("[xcp-client] Axum listening on 0.0.0.0:{port}");
+            eprintln!("[xcaliber] Axum listening on 0.0.0.0:{port}");
             l
         }
         Err(e) => {
-            eprintln!("[xcp-client] ERROR: failed to bind port {port}: {e}");
-            eprintln!("[xcp-client] Is another process using port {port}?");
+            eprintln!("[xcaliber] ERROR: failed to bind port {port}: {e}");
+            eprintln!("[xcaliber] Is another process using port {port}?");
             return;
         }
     };
@@ -127,37 +128,9 @@ async fn run_server() {
 
 #[cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 fn main() {
-    // Standalone server mode: `cargo run -- --server-only`
-    // Use this when developing with `npm run dev` in a browser without the Tauri window.
-    if std::env::args().any(|a| a == "--server-only") {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("failed to build tokio runtime")
-            .block_on(run_server());
-        return;
-    }
-
-    #[tauri::command]
-    fn save_file(path: String, content: String) -> Result<(), String> {
-        std::fs::write(&path, content).map_err(|e| e.to_string())
-    }
-
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![save_file])
-        .setup(|app| {
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                match tokio::task::spawn(run_server()).await {
-                    Ok(()) => eprintln!("[xcp-client] Backend exited unexpectedly"),
-                    Err(e) => eprintln!("[xcp-client] Backend crashed: {e}"),
-                }
-                handle.exit(1);
-            });
-            Ok(())
-        })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime")
+        .block_on(run_server());
 }

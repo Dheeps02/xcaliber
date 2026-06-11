@@ -2,7 +2,7 @@
 """
 XCP-on-Ethernet mock slave (UDP).
 
-Supports all XCP commands implemented in xcp-client, including full DAQ with
+Supports all XCP commands implemented in xcaliber, including full DAQ with
 50 simulated test variables grouped by category.
 
   ── Powertrain ────────────────────────────────────────────────────
