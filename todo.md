@@ -1,16 +1,15 @@
 # XCaliber — Feature Backlog / TODOs
 
-## Backend: Raw Ethernet transport + MAC address support
+## TCP over raw Ethernet transport
 
-`src_mac` and `dst_mac` are now stored in the frontend config and sent to the
-backend via `POST /api/config`, but the backend does not yet read or use them.
+Currently the only supported inner protocol for raw Ethernet frames is UDP.
+TCP requires a stateful implementation at the raw frame level:
 
-Work needed on the backend side:
-- Parse `src_mac` / `dst_mac` from the config TOML and the `/api/config` POST body
-- Add a Raw Ethernet transport implementation (raw socket, layer-2 frame construction)
-- When `protocol = "ethernet"`, construct XCP frames inside an Ethernet II frame using
-  the configured src/dst MACs instead of using a UDP/TCP socket
-- Validate MAC address format (`XX:XX:XX:XX:XX:XX`) on both ingest and outgoing frames
+- TCP handshake (SYN, SYN-ACK, ACK) before XCP traffic
+- Sequence number and ACK number tracking
+- Retransmit logic
+- Connection teardown (FIN/RST)
+- Add `"tcp"` back to the protocol dropdown in Settings once implemented
 
 ## Multi-byte field support in response decoders
 

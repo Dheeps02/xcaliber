@@ -8,6 +8,7 @@ use std::{
 };
 
 use super::XcpTransport;
+use crate::debug_log::log as debug_log;
 use crate::xcp::{error::XcpError, packet::XcpPacket};
 
 const ETHERTYPE_IPV4: u16 = 0x0800;
@@ -35,10 +36,12 @@ pub struct EthernetTransport {
     src_port: u16,
     dst_port: u16,
     vlan_id: Option<u16>,
+    iface_info: String,
 }
 
 impl EthernetTransport {
     pub async fn connect(cfg: EthernetConfig) -> Result<Self, XcpError> {
+        debug_log("EthernetTransport::connect: start".to_string());
         let dst_ip = parse_ipv4(&cfg.server_ip, "server_ip")?;
         let bind_ip = cfg.bind_ip.as_deref().filter(|s| !s.is_empty());
         let src_ip = match bind_ip {
@@ -51,7 +54,21 @@ impl EthernetTransport {
         };
         let vlan_id = cfg.vlan_id.map(validate_vlan_id).transpose()?;
         let dst_mac = parse_mac(&cfg.dst_mac)?;
+        debug_log("EthernetTransport::connect: resolving interface".to_string());
         let interface = find_interface(src_ip)?;
+        debug_log(format!(
+            "EthernetTransport::connect: interface resolved -> {} [{}]",
+            interface.name, interface.description
+        ));
+        let iface_info = format!(
+            "{} [{}] mac={}",
+            interface.name,
+            interface.description,
+            interface
+                .mac
+                .map(|m| m.to_string())
+                .unwrap_or_else(|| "unknown".into())
+        );
         let src_mac = match cfg.src_mac.as_deref().filter(|s| !s.is_empty()) {
             Some(mac) => parse_mac(mac)?,
             None => interface.mac.ok_or_else(|| {
@@ -62,12 +79,21 @@ impl EthernetTransport {
 
         let mut datalink_cfg = datalink::Config::default();
         datalink_cfg.read_timeout = Some(Duration::from_millis(50));
+        datalink_cfg.promiscuous = true;
+        debug_log("EthernetTransport::connect: opening datalink channel (PacketOpenAdapter + promiscuous mode set)".to_string());
         let (tx, rx) = match datalink::channel(&interface, datalink_cfg)
             .map_err(|e| XcpError::Transport(e.to_string()))?
         {
             Ethernet(tx, rx) => (tx, rx),
             _ => return Err(XcpError::Transport("Unsupported datalink channel".into())),
         };
+        debug_log("EthernetTransport::connect: datalink channel opened".to_string());
+
+        debug_log(format!(
+            "connect: iface={iface_info} src_mac={src_mac} dst_mac={dst_mac} \
+             src={src_ip}:{src_port} dst={dst_ip}:{} vlan={vlan_id:?}",
+            cfg.server_port
+        ));
 
         Ok(Self {
             tx: Mutex::new(tx),
@@ -79,7 +105,16 @@ impl EthernetTransport {
             src_port,
             dst_port: cfg.server_port,
             vlan_id,
+            iface_info,
         })
+    }
+
+    /// Human-readable description of the network interface this transport is
+    /// bound to (name, description, MAC), for surfacing in error messages so
+    /// users can verify it matches the adapter they expect (e.g. against a
+    /// Wireshark capture).
+    pub fn iface_info(&self) -> &str {
+        &self.iface_info
     }
 }
 
@@ -96,21 +131,48 @@ impl XcpTransport for EthernetTransport {
             self.dst_port,
             self.vlan_id,
         );
+        debug_log(format!(
+            "send: {} bytes {}:{} -> {}:{} frame[0..14]={:02X?}",
+            frame.len(),
+            self.src_ip,
+            self.src_port,
+            self.dst_ip,
+            self.dst_port,
+            &frame[..14.min(frame.len())]
+        ));
         let mut tx = self
             .tx
             .lock()
             .map_err(|_| XcpError::Transport("Ethernet sender lock poisoned".into()))?;
-        tx.send_to(&frame, None)
+        let result = tx
+            .send_to(&frame, None)
             .ok_or_else(|| XcpError::Transport("Ethernet sender unavailable".into()))?
-            .map_err(|e| XcpError::Transport(e.to_string()))
+            .map_err(|e| XcpError::Transport(e.to_string()));
+        if let Err(e) = &result {
+            debug_log(format!("send: error {e}"));
+        }
+        result
     }
 
     async fn recv(&self, timeout_ms: u64) -> Result<XcpPacket, XcpError> {
         let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+        let mut frames_seen = 0u32;
+        let mut logged_err = false;
         loop {
             if Instant::now() >= deadline {
+                debug_log(format!(
+                    "recv: timed out after {timeout_ms}ms, frames_seen={frames_seen}"
+                ));
                 return Err(XcpError::Timeout);
             }
+
+            // `rx.next()` below is a blocking call (Npcap read with a fixed
+            // read_timeout), so this async fn never naturally yields. Without
+            // an explicit yield here, this task's poll() never returns
+            // Pending, which starves other tasks woken via the broadcast
+            // channel (e.g. execute_packet) that get parked in this worker's
+            // LIFO slot and are never serviced.
+            tokio::task::yield_now().await;
 
             let frame = {
                 let mut rx = self
@@ -119,21 +181,34 @@ impl XcpTransport for EthernetTransport {
                     .map_err(|_| XcpError::Transport("Ethernet receiver lock poisoned".into()))?;
                 match rx.next() {
                     Ok(frame) => frame.to_vec(),
-                    Err(_) => continue,
+                    Err(e) => {
+                        if !logged_err {
+                            debug_log(format!("recv: rx.next() error: {e}"));
+                            logged_err = true;
+                        }
+                        continue;
+                    }
                 }
             };
 
-            if let Some(payload) = parse_matching_payload(
+            frames_seen += 1;
+            let matched = parse_matching_payload(
                 &frame,
-                self.src_mac,
-                self.dst_mac,
                 self.src_ip,
                 self.dst_ip,
                 self.src_port,
                 self.dst_port,
                 self.vlan_id,
-            ) {
-                return XcpPacket::decode(payload);
+            );
+
+            if let Some(payload) = matched {
+                match XcpPacket::decode(payload) {
+                    Ok(packet) => return Ok(packet),
+                    Err(e) => {
+                        debug_log(format!("recv: failed to decode UDP payload {payload:02X?}: {e}"));
+                        continue;
+                    }
+                }
             }
         }
     }
@@ -179,16 +254,108 @@ fn validate_vlan_id(id: u16) -> Result<u16, XcpError> {
     }
 }
 
+/// Resolve the configured `bind_ip` to the matching `pnet` datalink interface.
+///
+/// `pnet::datalink::interfaces()` is unreliable on Windows: adapters can have
+/// empty/stale `ips`, and multiple virtual adapters often share overlapping
+/// link-local (169.254.x.x) addresses, so matching on IP alone can select the
+/// wrong adapter. Instead, resolve `bind_ip` to a MAC address using the
+/// `network-interface` crate (the same source that populates the interface
+/// dropdown in Settings, so it reflects the adapter the user actually
+/// selected), then find the `pnet` interface with that MAC. Fall back to the
+/// IP-based match if MAC resolution doesn't find anything.
 fn find_interface(src_ip: Ipv4Addr) -> Result<NetworkInterface, XcpError> {
-    datalink::interfaces()
+    use network_interface::{Addr, NetworkInterface as NiInterface, NetworkInterfaceConfig};
+
+    debug_log(format!("find_interface: resolving bind_ip={src_ip}"));
+
+    let ni_interfaces = NiInterface::show().unwrap_or_default();
+    debug_log("find_interface: NiInterface::show() done".to_string());
+    for iface in &ni_interfaces {
+        let ips: Vec<String> = iface
+            .addr
+            .iter()
+            .map(|a| match a {
+                Addr::V4(v4) => v4.ip.to_string(),
+                Addr::V6(v6) => v6.ip.to_string(),
+            })
+            .collect();
+        debug_log(format!(
+            "  network-interface: {} mac={} ips=[{}]",
+            iface.name,
+            iface.mac_addr.as_deref().unwrap_or("unknown"),
+            ips.join(", ")
+        ));
+    }
+
+    let target_mac = ni_interfaces
         .into_iter()
         .find(|iface| {
-            iface.ips.iter().any(|net| match net.ip() {
-                std::net::IpAddr::V4(ip) => ip == src_ip,
-                std::net::IpAddr::V6(_) => false,
+            iface.addr.iter().any(|addr| match addr {
+                Addr::V4(v4) => v4.ip == src_ip,
+                Addr::V6(_) => false,
             })
         })
-        .ok_or_else(|| XcpError::Transport(format!("No network interface found for {src_ip}")))
+        .and_then(|iface| iface.mac_addr)
+        .and_then(|mac| mac.parse::<MacAddr>().ok());
+    debug_log(format!("find_interface: target_mac={target_mac:?}"));
+
+    let interfaces = datalink::interfaces();
+    debug_log("find_interface: datalink::interfaces() done".to_string());
+    for iface in &interfaces {
+        let ips: Vec<String> = iface.ips.iter().map(|n| n.ip().to_string()).collect();
+        debug_log(format!(
+            "  pnet: {} [{}] mac={:?} ips=[{}]",
+            iface.name,
+            iface.description,
+            iface.mac,
+            ips.join(", ")
+        ));
+    }
+
+    if let Some(mac) = target_mac {
+        if let Some(iface) = interfaces.iter().find(|iface| iface.mac == Some(mac)) {
+            debug_log(format!(
+                "find_interface: matched by MAC -> {} [{}]",
+                iface.name, iface.description
+            ));
+            return Ok(iface.clone());
+        }
+    }
+
+    let by_ip = interfaces.iter().find(|iface| {
+        iface.ips.iter().any(|net| match net.ip() {
+            std::net::IpAddr::V4(ip) => ip == src_ip,
+            std::net::IpAddr::V6(_) => false,
+        })
+    });
+    if let Some(iface) = by_ip {
+        debug_log(format!(
+            "find_interface: matched by IP -> {} [{}]",
+            iface.name, iface.description
+        ));
+        return Ok(iface.clone());
+    }
+
+    let available = interfaces
+        .iter()
+        .map(|iface| {
+            format!(
+                "{} [{}] mac={}",
+                iface.name,
+                iface.description,
+                iface
+                    .mac
+                    .map(|m| m.to_string())
+                    .unwrap_or_else(|| "unknown".into())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    debug_log("find_interface: no match found".to_string());
+    Err(XcpError::Transport(format!(
+        "No network interface found for {src_ip}. pnet sees: [{available}]"
+    )))
 }
 
 fn build_frame(
@@ -243,21 +410,22 @@ fn build_frame(
 
 fn parse_matching_payload<'a>(
     frame: &'a [u8],
-    local_mac: MacAddr,
-    remote_mac: MacAddr,
     local_ip: Ipv4Addr,
     remote_ip: Ipv4Addr,
     local_port: u16,
-    remote_port: u16,
+    // Some ECUs answer from a dynamically assigned source port even when the
+    // command was sent to the configured XCP UDP port, so the response's
+    // source port is intentionally not checked against this. The
+    // destination IP/port and source IP are the stable tuple for receiving.
+    _remote_port: u16,
     vlan_id: Option<u16>,
 ) -> Option<&'a [u8]> {
     if frame.len() < 14 {
         return None;
     }
-    if frame[0..6] != mac_bytes(local_mac) || frame[6..12] != mac_bytes(remote_mac) {
-        return None;
-    }
-
+    // RX intentionally ignores Ethernet source/destination MAC addresses.
+    // Some ECU/switch setups reply with an L2 destination that differs from
+    // the configured transmit source MAC; IP/UDP identify the XCP response.
     let mut offset = 12;
     let ethertype = u16::from_be_bytes([frame[offset], frame[offset + 1]]);
     offset += 2;
@@ -266,7 +434,8 @@ fn parse_matching_payload<'a>(
             return None;
         }
         let tci = u16::from_be_bytes([frame[offset], frame[offset + 1]]);
-        if Some(tci & 0x0FFF) != vlan_id {
+        let frame_vlan_id = tci & 0x0FFF;
+        if vlan_id.map_or(frame_vlan_id != 0, |id| frame_vlan_id != id) {
             return None;
         }
         offset += 2;
@@ -310,10 +479,12 @@ fn parse_matching_payload<'a>(
     if frame.len() < udp_start + UDP_HEADER_LEN {
         return None;
     }
-    let src_port = u16::from_be_bytes([frame[udp_start], frame[udp_start + 1]]);
     let dst_port = u16::from_be_bytes([frame[udp_start + 2], frame[udp_start + 3]]);
     let udp_len = u16::from_be_bytes([frame[udp_start + 4], frame[udp_start + 5]]) as usize;
-    if src_port != remote_port || dst_port != local_port || udp_len < UDP_HEADER_LEN {
+    if dst_port != local_port || udp_len < UDP_HEADER_LEN {
+        return None;
+    }
+    if udp_start + udp_len > offset + total_len {
         return None;
     }
     let payload_start = udp_start + UDP_HEADER_LEN;
@@ -361,4 +532,117 @@ fn ones_complement_sum(bytes: &[u8]) -> u32 {
         sum += (last as u32) << 8;
     }
     sum
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mac(value: &str) -> MacAddr {
+        parse_mac(value).unwrap()
+    }
+
+    #[test]
+    fn parses_real_captured_connect_response() {
+        // Captured response frame (60 bytes incl. padding) from a real ECU,
+        // dst MAC differs from configured src_mac (08:be:ac:35:c0:62 vs 02:f0:52:44:00:06).
+        let frame: Vec<u8> = vec![
+            0x08, 0xbe, 0xac, 0x35, 0xc0, 0x62, // eth dst
+            0x02, 0xf0, 0x52, 0x44, 0x00, 0x22, // eth src
+            0x08, 0x00, // ethertype IPv4
+            0x45, 0x00, 0x00, 0x28, 0xe6, 0x1c, 0x40, 0x00, 0xff, 0x11, 0x81, 0x95,
+            10, 2, 0, 3, // src ip
+            10, 2, 0, 12, // dst ip
+            0xc7, 0x42, 0xc7, 0x42, 0x00, 0x14, 0x42, 0x8f, // udp header
+            0x08, 0x00, 0x02, 0x00, 0xff, 0x05, 0x80, 0x96, 0x90, 0x01, 0x01, 0x01, // xcp payload
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // padding
+        ];
+
+        let local_ip = Ipv4Addr::new(10, 2, 0, 12);
+        let remote_ip = Ipv4Addr::new(10, 2, 0, 3);
+
+        let payload = parse_matching_payload(&frame, local_ip, remote_ip, 51010, 51010, None)
+            .expect("frame should match");
+
+        let packet = XcpPacket::decode(payload).unwrap();
+        assert_eq!(packet.counter, 2);
+        assert_eq!(packet.payload, vec![0xff, 0x05, 0x80, 0x96, 0x90, 0x01, 0x01, 0x01]);
+    }
+
+    #[test]
+    fn parses_response_for_configured_tuple() {
+        let local_mac = mac("02:F0:52:44:00:06");
+        let remote_mac = mac("02:F0:52:44:00:22");
+        let local_ip = Ipv4Addr::new(10, 2, 0, 12);
+        let remote_ip = Ipv4Addr::new(10, 2, 0, 3);
+        let packet = XcpPacket::new(0, vec![0xFF, 0x01, 0x00, 0x00, 0xFF, 0xFF, 0x05, 0x01]);
+        let frame = build_frame(
+            &packet, remote_mac, local_mac, remote_ip, local_ip, 51010, 51010, None,
+        );
+
+        let payload = parse_matching_payload(
+            &frame, local_ip, remote_ip, 51010, 51010, None,
+        )
+        .unwrap();
+
+        assert_eq!(XcpPacket::decode(payload).unwrap(), packet);
+    }
+
+    #[test]
+    fn accepts_response_to_different_destination_mac_when_ip_udp_match() {
+        let configured_local_mac = mac("02:F0:52:44:00:06");
+        let actual_destination_mac = mac("02:F0:52:44:99:99");
+        let remote_mac = mac("02:F0:52:44:00:22");
+        let local_ip = Ipv4Addr::new(10, 2, 0, 12);
+        let remote_ip = Ipv4Addr::new(10, 2, 0, 3);
+        let packet = XcpPacket::new(0, vec![0xFF, 0x00, 0x00, 0x00]);
+        let frame = build_frame(
+            &packet,
+            remote_mac,
+            actual_destination_mac,
+            remote_ip,
+            local_ip,
+            51010,
+            51010,
+            None,
+        );
+
+        assert!(
+            parse_matching_payload(
+                &frame,
+                local_ip,
+                remote_ip,
+                51010,
+                51010,
+                None,
+            )
+            .is_some()
+        );
+    }
+
+    #[test]
+    fn accepts_priority_tagged_vlan_zero_when_vlan_is_not_configured() {
+        let local_mac = mac("02:F0:52:44:00:06");
+        let remote_mac = mac("02:F0:52:44:00:22");
+        let local_ip = Ipv4Addr::new(10, 2, 0, 12);
+        let remote_ip = Ipv4Addr::new(10, 2, 0, 3);
+        let packet = XcpPacket::new(0, vec![0xFF]);
+        let frame = build_frame(
+            &packet,
+            remote_mac,
+            local_mac,
+            remote_ip,
+            local_ip,
+            51010,
+            51010,
+            Some(0),
+        );
+
+        assert!(
+            parse_matching_payload(
+                &frame, local_ip, remote_ip, 51010, 51010, None,
+            )
+            .is_some()
+        );
+    }
 }

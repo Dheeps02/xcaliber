@@ -9,16 +9,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
+    debug_log::log as debug_log,
     http::state::{AppState, DaqEntryDef, DaqListDef, DaqOdtDef, DaqStatus, PacketEntry},
     session::XcpSession,
     xcp::{
         command::XcpCommand,
         response::XcpResponse,
-        transport::{
-            ethernet::{EthernetConfig, EthernetTransport},
-            tcp::TcpTransport,
-            udp::UdpTransport,
-        },
+        transport::ethernet::{EthernetConfig, EthernetTransport},
     },
 };
 
@@ -244,13 +241,18 @@ fn log_rx_ok(state: &AppState, resp: &XcpResponse, ctr: u16) -> PacketEntry {
 }
 
 fn log_rx_err(state: &AppState, e: &crate::xcp::error::XcpError) {
+    let pid = if matches!(e, crate::xcp::error::XcpError::Timeout) {
+        "TO"
+    } else {
+        "ERR"
+    };
     let entry = PacketEntry {
         id: 0,
         direction: "rx".into(),
         counter: 0,
         timestamp_ms: now_ms(),
-        hex: bytes_to_hex(&[0xFE]),
-        pid: "FE".into(),
+        hex: String::new(),
+        pid: pid.into(),
         decoded: json!({ "error": e.to_string() }),
     };
     let id = state.insert_packet(&entry);
@@ -273,28 +275,31 @@ async fn run_cmd(
         let session = guard
             .as_mut()
             .ok_or(crate::xcp::error::XcpError::NotConnected)?;
-        session.execute(&cmd).await
+        session.execute_packet(&cmd).await
     };
 
     match &response {
-        Ok(resp) => {
-            log_rx_ok(state, resp, ctr);
+        Ok((resp, pkt)) => {
+            log_rx_ok(state, resp, pkt.counter);
         }
         Err(e) => {
             log_rx_err(state, e);
         }
     }
 
-    response
+    response.map(|(resp, _)| resp)
 }
 
 // ── routes ───────────────────────────────────────────────────────
 
 pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let cfg = state.config.lock().unwrap().connection.clone();
-    let bind_ip = cfg.bind_ip.as_deref();
-    let transport: Box<dyn crate::xcp::transport::XcpTransport> = match cfg.protocol.as_str() {
-        "ethernet" => match EthernetTransport::connect(EthernetConfig {
+    debug_log(format!(
+        "http connect: handler entry server={}:{} bind_ip={:?} source_port={:?} timeout_ms={}",
+        cfg.server_ip, cfg.server_port, cfg.bind_ip, cfg.source_port, cfg.timeout_ms
+    ));
+    let (transport, iface_info): (Box<dyn crate::xcp::transport::XcpTransport>, String) =
+        match EthernetTransport::connect(EthernetConfig {
             server_ip: cfg.server_ip.clone(),
             server_port: cfg.server_port,
             bind_ip: cfg.bind_ip.clone(),
@@ -305,53 +310,41 @@ pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         })
         .await
         {
-            Ok(t) => Box::new(t),
-            Err(e) => return Json(
-                json!({ "ok": false, "error": connect_error(&cfg.server_ip, cfg.server_port, &e) }),
-            )
-            .into_response(),
-        },
-        "tcp" => match TcpTransport::connect(&cfg.server_ip, cfg.server_port, bind_ip).await {
-            Ok(t) => Box::new(t),
-            Err(e) => return Json(
-                json!({ "ok": false, "error": connect_error(&cfg.server_ip, cfg.server_port, &e) }),
-            )
-            .into_response(),
-        },
-        _ => match UdpTransport::connect(&cfg.server_ip, cfg.server_port, bind_ip).await {
-            Ok(t) => Box::new(t),
-            Err(e) => return Json(
-                json!({ "ok": false, "error": connect_error(&cfg.server_ip, cfg.server_port, &e) }),
-            )
-            .into_response(),
-        },
-    };
+            Ok(t) => {
+                let info = t.iface_info().to_string();
+                debug_log(format!("http connect: transport opened on {info}"));
+                (Box::new(t), info)
+            }
+            Err(e) => {
+                debug_log(format!("http connect: EthernetTransport::connect failed: {e}"));
+                return Json(
+                    json!({ "ok": false, "error": connect_error(&cfg.server_ip, cfg.server_port, &e) }),
+                )
+                .into_response();
+            }
+        };
 
     log_tx(&state, &XcpCommand::Connect { mode: 0 }, 0);
 
     let mut session = XcpSession::new(transport, cfg.timeout_ms);
-    match session.connect().await {
-        Ok(info) => {
+    debug_log("http connect: awaiting execute_packet(Connect)".to_string());
+    let exec_result = session
+        .execute_packet(&XcpCommand::Connect { mode: 0 })
+        .await;
+    debug_log(format!(
+        "http connect: execute_packet returned {}",
+        match &exec_result {
+            Ok((resp, _)) => format!("Ok({resp:?})"),
+            Err(e) => format!("Err({e})"),
+        }
+    ));
+    match exec_result {
+        Ok((XcpResponse::Connect(info), pkt)) => {
             let info = info.clone();
             let connect_resp = XcpResponse::Connect(info.clone());
-            let rx_entry = PacketEntry {
-                id: 0,
-                direction: "rx".into(),
-                counter: 0,
-                timestamp_ms: now_ms(),
-                hex: bytes_to_hex(&connect_resp.encode()),
-                pid: "FF".into(),
-                decoded: serde_json::to_value(&info).unwrap_or(serde_json::Value::Null),
-            };
-            let rx_id = state.insert_packet(&rx_entry);
-            broadcast_packet(
-                &state,
-                "packet_rx",
-                &PacketEntry {
-                    id: rx_id,
-                    ..rx_entry
-                },
-            );
+            log_rx_ok(&state, &connect_resp, pkt.counter);
+            session.slave_info = Some(info.clone());
+            session.state = crate::session::SessionState::Connected;
 
             *state.session.lock().await = Some(session);
             let _ = state.tx.send(
@@ -392,14 +385,36 @@ pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             });
             *state.monitor_task.lock().unwrap() = Some(monitor);
 
+            debug_log("http connect: returning ok:true (Connected)".to_string());
             Json(json!({ "ok": true, "slave": info })).into_response()
+        }
+        Ok((XcpResponse::Error(e), pkt)) => {
+            let resp = XcpResponse::Error(e.clone());
+            log_rx_ok(&state, &resp, pkt.counter);
+            let err = crate::xcp::error::XcpError::ErrorResponse(
+                crate::xcp::error::XcpErrorCode::from_byte(e.code),
+            );
+            let msg = connect_error(&cfg.server_ip, cfg.server_port, &err);
+            debug_log(format!("http connect: returning ok:false (XCP error response): {msg}"));
+            Json(json!({ "ok": false, "error": format!("{msg} (interface: {iface_info})") }))
+                .into_response()
+        }
+        Ok((resp, pkt)) => {
+            log_rx_ok(&state, &resp, pkt.counter);
+            let err = crate::xcp::error::XcpError::UnexpectedPid(
+                resp.encode().first().copied().unwrap_or(0),
+            );
+            let msg = connect_error(&cfg.server_ip, cfg.server_port, &err);
+            debug_log(format!("http connect: returning ok:false (unexpected pid): {msg}"));
+            Json(json!({ "ok": false, "error": format!("{msg} (interface: {iface_info})") }))
+                .into_response()
         }
         Err(e) => {
             log_rx_err(&state, &e);
-            Json(
-                json!({ "ok": false, "error": connect_error(&cfg.server_ip, cfg.server_port, &e) }),
-            )
-            .into_response()
+            let msg = connect_error(&cfg.server_ip, cfg.server_port, &e);
+            debug_log(format!("http connect: returning ok:false (transport error): {msg}"));
+            Json(json!({ "ok": false, "error": format!("{msg} (interface: {iface_info})") }))
+                .into_response()
         }
     }
 }
@@ -417,7 +432,12 @@ pub async fn disconnect(State(state): State<Arc<AppState>>) -> impl IntoResponse
 
     let session = state.session.lock().await.take();
     if let Some(mut session) = session {
-        let _ = session.disconnect().await;
+        match session.disconnect().await {
+            Ok((resp, pkt)) => {
+                log_rx_ok(&state, &resp, pkt.counter);
+            }
+            Err(e) => log_rx_err(&state, &e),
+        }
     }
     let _ = state.tx.send(
         serde_json::to_string(&json!({
@@ -569,13 +589,13 @@ pub async fn cmd_user(
                 log_rx_err(&state, &e);
                 return Json(json!({ "ok": false, "error": user_error(&e) })).into_response();
             }
-            Some(session) => session.execute(&XcpCommand::Raw { bytes }).await,
+            Some(session) => session.execute_packet(&XcpCommand::Raw { bytes }).await,
         }
     };
 
     match &response {
-        Ok(resp) => {
-            log_rx_ok(&state, resp, ctr);
+        Ok((resp, pkt)) => {
+            log_rx_ok(&state, resp, pkt.counter);
             Json(json!({ "ok": true, "response": resp })).into_response()
         }
         Err(e) => {
@@ -621,11 +641,8 @@ pub async fn update_config(
     State(state): State<Arc<AppState>>,
     Json(body): Json<UpdateConfigBody>,
 ) -> impl IntoResponse {
-    if body.protocol != "udp" && body.protocol != "tcp" && body.protocol != "ethernet" {
-        return Json(
-            json!({ "ok": false, "error": "protocol must be \"udp\", \"tcp\", or \"ethernet\"" }),
-        )
-        .into_response();
+    if body.protocol != "udp" {
+        return Json(json!({ "ok": false, "error": "protocol must be \"udp\"" })).into_response();
     }
     if body.server_ip.parse::<std::net::IpAddr>().is_err() {
         return Json(json!({ "ok": false, "error": "server_ip is not a valid IP address" }))

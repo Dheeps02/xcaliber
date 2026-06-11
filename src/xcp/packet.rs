@@ -29,19 +29,74 @@ impl XcpPacket {
 
     /// Decode from a flat byte slice (header + payload).
     pub fn decode(buf: &[u8]) -> Result<Self, crate::xcp::error::XcpError> {
+        if matches!(buf.first(), Some(0xFF | 0xFE | 0xFD | 0xFC)) {
+            return Ok(Self {
+                counter: 0,
+                payload: buf.to_vec(),
+            });
+        }
         if buf.len() < 4 {
             return Err(crate::xcp::error::XcpError::FrameTooShort(buf.len()));
         }
-        let len = u16::from_le_bytes([buf[0], buf[1]]) as usize;
-        let counter = u16::from_le_bytes([buf[2], buf[3]]);
-        if buf.len() < 4 + len {
-            return Err(crate::xcp::error::XcpError::FrameTooShort(buf.len()));
+
+        if let Some(packet) = decode_with_header(buf, Endian::Little, HeaderOrder::LenCtr) {
+            return Ok(packet);
         }
-        Ok(Self {
-            counter,
-            payload: buf[4..4 + len].to_vec(),
-        })
+        if let Some(packet) = decode_with_header(buf, Endian::Big, HeaderOrder::LenCtr) {
+            return Ok(packet);
+        }
+        if let Some(packet) = decode_with_header(buf, Endian::Little, HeaderOrder::CtrLen) {
+            return Ok(packet);
+        }
+        if let Some(packet) = decode_with_header(buf, Endian::Big, HeaderOrder::CtrLen) {
+            return Ok(packet);
+        }
+
+        Err(crate::xcp::error::XcpError::FrameTooShort(buf.len()))
     }
+}
+
+#[derive(Clone, Copy)]
+enum Endian {
+    Little,
+    Big,
+}
+
+#[derive(Clone, Copy)]
+enum HeaderOrder {
+    LenCtr,
+    CtrLen,
+}
+
+fn read_u16(bytes: [u8; 2], endian: Endian) -> u16 {
+    match endian {
+        Endian::Little => u16::from_le_bytes(bytes),
+        Endian::Big => u16::from_be_bytes(bytes),
+    }
+}
+
+fn decode_with_header(buf: &[u8], endian: Endian, order: HeaderOrder) -> Option<XcpPacket> {
+    let first = read_u16([buf[0], buf[1]], endian);
+    let second = read_u16([buf[2], buf[3]], endian);
+    let (len, counter) = match order {
+        HeaderOrder::LenCtr => (first as usize, second),
+        HeaderOrder::CtrLen => (second as usize, first),
+    };
+
+    if len == 0 || buf.len() < 4 + len {
+        return None;
+    }
+    let payload = &buf[4..4 + len];
+    if !matches!(
+        payload.first(),
+        Some(0xFF | 0xFE | 0xFD | 0xFC | 0x00..=0xFB)
+    ) {
+        return None;
+    }
+    Some(XcpPacket {
+        counter,
+        payload: payload.to_vec(),
+    })
 }
 
 #[cfg(test)]
@@ -59,5 +114,23 @@ mod tests {
     #[test]
     fn decode_too_short() {
         assert!(XcpPacket::decode(&[0x02, 0x00]).is_err());
+    }
+
+    #[test]
+    fn decode_big_endian_header() {
+        let decoded = XcpPacket::decode(&[0x00, 0x02, 0x00, 0x07, 0xFF, 0x00]).unwrap();
+        assert_eq!(decoded, XcpPacket::new(7, vec![0xFF, 0x00]));
+    }
+
+    #[test]
+    fn decode_counter_then_length_header() {
+        let decoded = XcpPacket::decode(&[0x07, 0x00, 0x02, 0x00, 0xFF, 0x00]).unwrap();
+        assert_eq!(decoded, XcpPacket::new(7, vec![0xFF, 0x00]));
+    }
+
+    #[test]
+    fn decode_raw_payload_without_transport_header() {
+        let decoded = XcpPacket::decode(&[0xFF, 0x00]).unwrap();
+        assert_eq!(decoded, XcpPacket::new(0, vec![0xFF, 0x00]));
     }
 }

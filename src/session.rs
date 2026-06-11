@@ -43,6 +43,13 @@ impl XcpSession {
         self.transport.execute(cmd).await
     }
 
+    pub async fn execute_packet(
+        &self,
+        cmd: &XcpCommand,
+    ) -> Result<(XcpResponse, Arc<XcpPacket>), XcpError> {
+        self.transport.execute_packet(cmd).await
+    }
+
     /// Subscribe to the raw packet broadcast (PID-unfiltered).
     pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<Arc<XcpPacket>> {
         self.transport.subscribe()
@@ -50,7 +57,9 @@ impl XcpSession {
 
     /// CONNECT handshake — updates session state and slave_info.
     pub async fn connect(&mut self) -> Result<&ConnectResponse, XcpError> {
-        let resp = self.execute(&XcpCommand::Connect { mode: 0 }).await?;
+        let (resp, _) = self
+            .execute_packet(&XcpCommand::Connect { mode: 0 })
+            .await?;
         match resp {
             XcpResponse::Connect(info) => {
                 self.slave_info = Some(info);
@@ -64,13 +73,14 @@ impl XcpSession {
         }
     }
 
-    /// DISCONNECT — resets session state.
-    pub async fn disconnect(&mut self) -> Result<(), XcpError> {
-        let _ = self.execute(&XcpCommand::Disconnect).await;
+    /// DISCONNECT — resets session state and returns the slave's response
+    /// (if any) for the caller to log.
+    pub async fn disconnect(&mut self) -> Result<(XcpResponse, Arc<XcpPacket>), XcpError> {
+        let result = self.execute_packet(&XcpCommand::Disconnect).await;
         self.transport.close().await;
         self.state = SessionState::Disconnected;
         self.slave_info = None;
-        Ok(())
+        result
     }
 
     pub fn is_connected(&self) -> bool {
