@@ -358,7 +358,7 @@ function DaqToolbar({
           {/* ghost: block layout sizes the container, monospace width matches live digits */}
           <span aria-hidden style={{
             display: 'block', textAlign: 'right',
-            fontFamily: 'monospace', fontSize: 13, lineHeight: 1,
+            fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1,
             color: 'var(--status-ok)',
             opacity: daqStatus === 'running' && daqDtoRate > 0 ? 0 : 0.18,
             transition: 'opacity 400ms ease',
