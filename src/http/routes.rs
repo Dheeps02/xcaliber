@@ -16,6 +16,7 @@ use crate::{
         command::XcpCommand,
         response::XcpResponse,
         transport::ethernet::{EthernetConfig, EthernetTransport},
+        transport::udp::UdpTransport,
     },
 };
 
@@ -299,28 +300,52 @@ pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         cfg.server_ip, cfg.server_port, cfg.bind_ip, cfg.source_port, cfg.timeout_ms
     ));
     let (transport, iface_info): (Box<dyn crate::xcp::transport::XcpTransport>, String) =
-        match EthernetTransport::connect(EthernetConfig {
-            server_ip: cfg.server_ip.clone(),
-            server_port: cfg.server_port,
-            bind_ip: cfg.bind_ip.clone(),
-            source_port: cfg.source_port,
-            src_mac: cfg.src_mac.clone(),
-            dst_mac: cfg.dst_mac.clone().unwrap_or_default(),
-            vlan_id: cfg.vlan_id,
-        })
-        .await
-        {
-            Ok(t) => {
-                let info = t.iface_info().to_string();
-                debug_log(format!("http connect: transport opened on {info}"));
-                (Box::new(t), info)
+        if cfg.protocol == "ethernet" {
+            match EthernetTransport::connect(EthernetConfig {
+                server_ip: cfg.server_ip.clone(),
+                server_port: cfg.server_port,
+                bind_ip: cfg.bind_ip.clone(),
+                source_port: cfg.source_port,
+                src_mac: cfg.src_mac.clone(),
+                dst_mac: cfg.dst_mac.clone().unwrap_or_default(),
+                vlan_id: cfg.vlan_id,
+            })
+            .await
+            {
+                Ok(t) => {
+                    let info = t.iface_info().to_string();
+                    debug_log(format!("http connect: transport opened on {info}"));
+                    (Box::new(t), info)
+                }
+                Err(e) => {
+                    debug_log(format!("http connect: EthernetTransport::connect failed: {e}"));
+                    return Json(
+                        json!({ "ok": false, "error": connect_error(&cfg.server_ip, cfg.server_port, &e) }),
+                    )
+                    .into_response();
+                }
             }
-            Err(e) => {
-                debug_log(format!("http connect: EthernetTransport::connect failed: {e}"));
-                return Json(
-                    json!({ "ok": false, "error": connect_error(&cfg.server_ip, cfg.server_port, &e) }),
-                )
-                .into_response();
+        } else {
+            match UdpTransport::connect(
+                &cfg.server_ip,
+                cfg.server_port,
+                cfg.bind_ip.as_deref(),
+                cfg.source_port,
+            )
+            .await
+            {
+                Ok(t) => {
+                    let info = format!("UDP {}:{}", cfg.server_ip, cfg.server_port);
+                    debug_log(format!("http connect: transport opened ({info})"));
+                    (Box::new(t), info)
+                }
+                Err(e) => {
+                    debug_log(format!("http connect: UdpTransport::connect failed: {e}"));
+                    return Json(
+                        json!({ "ok": false, "error": connect_error(&cfg.server_ip, cfg.server_port, &e) }),
+                    )
+                    .into_response();
+                }
             }
         };
 
@@ -641,8 +666,9 @@ pub async fn update_config(
     State(state): State<Arc<AppState>>,
     Json(body): Json<UpdateConfigBody>,
 ) -> impl IntoResponse {
-    if body.protocol != "udp" {
-        return Json(json!({ "ok": false, "error": "protocol must be \"udp\"" })).into_response();
+    if body.protocol != "udp" && body.protocol != "ethernet" {
+        return Json(json!({ "ok": false, "error": "protocol must be \"udp\" or \"ethernet\"" }))
+            .into_response();
     }
     if body.server_ip.parse::<std::net::IpAddr>().is_err() {
         return Json(json!({ "ok": false, "error": "server_ip is not a valid IP address" }))

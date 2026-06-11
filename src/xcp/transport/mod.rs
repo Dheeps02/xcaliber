@@ -3,6 +3,7 @@ use async_trait::async_trait;
 
 pub mod dispatched;
 pub mod ethernet;
+pub mod udp;
 
 #[async_trait]
 pub trait XcpTransport: Send + Sync {

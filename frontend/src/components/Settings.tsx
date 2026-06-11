@@ -211,6 +211,7 @@ function ConnectionTab() {
   const [draft, setDraft] = useState<ConnDraft>({ ...initial });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [ifaces, setIfaces] = useState<NetworkInterface[]>([]);
 
   useEffect(() => {
@@ -225,16 +226,19 @@ function ConnectionTab() {
 
   function resetField(key: keyof ConnDraft) {
     setSaved(false);
+    setError(null);
     setDraft((d) => ({ ...d, [key]: CONN_DEFAULTS[key] }));
   }
 
   function set(key: keyof ConnDraft, value: string | number) {
     setSaved(false);
+    setError(null);
     setDraft((d) => ({ ...d, [key]: value }));
   }
 
   async function save() {
     setSaving(true);
+    setError(null);
     try {
       await api.updateConfig({
         ...draft,
@@ -266,8 +270,8 @@ function ConnectionTab() {
       }
       setInitial({ ...draft });
       setSaved(true);
-    } catch {
-      // keep form editable
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save');
     } finally {
       setSaving(false);
     }
@@ -332,6 +336,25 @@ function ConnectionTab() {
 
       {/* ── Protocol ── */}
       <ConnSection label="Protocol" icon={Stack} />
+      <div className="flex items-center gap-2">
+        {([
+          { id: 'udp', label: 'UDP Socket' },
+          { id: 'ethernet', label: 'Raw Ethernet' },
+        ] as const).map((opt) => (
+          <Button
+            key={opt.id}
+            onClick={() => set('protocol', opt.id)}
+            variant={draft.protocol === opt.id ? 'primary' : 'default'}
+            className="flex-1 justify-center"
+          >
+            {opt.label}
+          </Button>
+        ))}
+      </div>
+      <p className="text-[10px] text-[var(--text-muted)]/60 -mt-2">
+        UDP Socket works with any standard XCP-on-UDP slave. Raw Ethernet is for ECUs that
+        need a specific source/destination MAC or VLAN tag.
+      </p>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Timeout (ms)" dirty={isDirty('timeout_ms')} onReset={() => resetField('timeout_ms')}>
           <SpinInput value={draft.timeout_ms} onChange={(v) => set('timeout_ms', v)} min={100} step={100} inputClassName={inputCls('timeout_ms')} />
@@ -357,18 +380,22 @@ function ConnectionTab() {
       </p>
 
       {/* ── Ethernet ── */}
-      <ConnSection label="Ethernet" icon={Circuitry} />
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Source MAC" dirty={isDirty('src_mac')} onReset={() => resetField('src_mac')}>
-          <input type="text" placeholder="AA:BB:CC:DD:EE:FF" value={draft.src_mac} onChange={(e) => set('src_mac', e.target.value)} className={inputCls('src_mac')} />
-        </Field>
-        <Field label="Destination MAC" dirty={isDirty('dst_mac')} onReset={() => resetField('dst_mac')}>
-          <input type="text" placeholder="AA:BB:CC:DD:EE:FF" value={draft.dst_mac} onChange={(e) => set('dst_mac', e.target.value)} className={inputCls('dst_mac')} />
-        </Field>
-        <Field label="VLAN ID" dirty={isDirty('vlan_id')} onReset={() => resetField('vlan_id')}>
-          <input type="number" min={1} max={4094} placeholder="none" value={draft.vlan_id} onChange={(e) => set('vlan_id', e.target.value)} className={inputCls('vlan_id')} />
-        </Field>
-      </div>
+      {draft.protocol === 'ethernet' && (
+        <>
+          <ConnSection label="Ethernet" icon={Circuitry} />
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Source MAC" dirty={isDirty('src_mac')} onReset={() => resetField('src_mac')}>
+              <input type="text" placeholder="AA:BB:CC:DD:EE:FF" value={draft.src_mac} onChange={(e) => set('src_mac', e.target.value)} className={inputCls('src_mac')} />
+            </Field>
+            <Field label="Destination MAC" dirty={isDirty('dst_mac')} onReset={() => resetField('dst_mac')}>
+              <input type="text" placeholder="AA:BB:CC:DD:EE:FF" value={draft.dst_mac} onChange={(e) => set('dst_mac', e.target.value)} className={inputCls('dst_mac')} />
+            </Field>
+            <Field label="VLAN ID" dirty={isDirty('vlan_id')} onReset={() => resetField('vlan_id')}>
+              <input type="number" min={1} max={4094} placeholder="none" value={draft.vlan_id} onChange={(e) => set('vlan_id', e.target.value)} className={inputCls('vlan_id')} />
+            </Field>
+          </div>
+        </>
+      )}
 
       {/* ── Network Interface ── */}
       <ConnSection label="Network Interface" icon={WifiHigh} />
@@ -396,6 +423,7 @@ function ConnectionTab() {
           {saving ? 'Saving…' : 'Save'}
         </Button>
         {saved && <span className="text-[11px] text-[var(--status-ok)]">✓ Saved</span>}
+        {error && <span className="text-[11px] text-[var(--status-err)]">{error}</span>}
       </div>
     </div>
   );
