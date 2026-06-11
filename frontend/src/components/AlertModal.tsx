@@ -24,6 +24,8 @@ export function AlertModal() {
     try {
       await alertAction.fn();
     } catch {
+      // swallow - alertMsg/alertAction remain so the user can retry
+    } finally {
       setPending(false);
     }
   }

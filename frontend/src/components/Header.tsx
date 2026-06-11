@@ -61,6 +61,7 @@ export function Header() {
   const [syncSpinning, setSyncSpinning] = useState(false);
   const [gearKey, setGearKey] = useState(0);
   const [gearReverse, setGearReverse] = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
   // ── Tab icon animKeys ─────────────────────────────────────────────
   const [traceAnimKey, setTraceAnimKey] = useState(0);
@@ -98,16 +99,20 @@ export function Header() {
   ];
 
   async function handleToggle() {
+    if (connecting) return;
     if (connected) {
       setSlaveDropped(false);
       setConnected(false);
       await api.disconnect().catch(() => {});
     } else {
+      setConnecting(true);
       try {
         const r = await api.connect();
         setConnected(true, r.slave);
       } catch (e) {
         showToast(e instanceof Error ? e.message : 'Connection failed', 'error');
+      } finally {
+        setConnecting(false);
       }
     }
   }
@@ -159,7 +164,7 @@ export function Header() {
       />
 
       <header
-        data-tauri-drag-region
+        data-drag-region
         className="xcb-glass flex items-center h-11 px-3.5 gap-3 shrink-0"
         style={{ borderBottom: '1px solid var(--border)' }}
       >
@@ -172,7 +177,7 @@ export function Header() {
             xcaliber
           </span>
 
-          <ConnectToggle checked={connected} onChange={handleToggle} />
+          <ConnectToggle checked={connected} onChange={handleToggle} disabled={connecting} />
 
           <div className="xcb-vdiv" />
 

@@ -107,9 +107,7 @@ interface AppStore {
   openSettings: (tab?: string) => void;
   closeSettings: () => void;
 
-  daqListsFromFile: boolean;
   slaveDropped: boolean;
-  setDaqListsFromFile: (v: boolean) => void;
   setSlaveDropped: (v: boolean) => void;
   resetSession: () => void;
 
@@ -206,7 +204,6 @@ export const useAppStore = create<AppStore>((set) => ({
   a2lVariables: [],
   userCmds: [],
   userCmdDefs: {},
-  daqListsFromFile: false,
   slaveDropped: false,
   sequences: [],
   activeSequenceId: null,
@@ -315,26 +312,22 @@ export const useAppStore = create<AppStore>((set) => ({
   showAlert: (msg, action) => set({ alertMsg: msg, alertAction: action ?? null }),
   clearAlert: () => set({ alertMsg: null, alertAction: null }),
 
-  setDaqListsFromFile: (daqListsFromFile) => set({ daqListsFromFile }),
   setSlaveDropped: (slaveDropped) => set({ slaveDropped }),
   resetSession: () =>
     set((s) => ({
-      packets: [],
-      txCount: 0,
-      rxCount: 0,
-      lastPacketId: 0,
       connected: false,
       slaveInfo: null,
-      daqStatus: 'idle' as DaqStatus,
+      // Lists/entries stay intact; if DAQ was configured/running before the
+      // drop, mark it as needing re-init (Configure disabled, Free All
+      // enabled) since the slave's DAQ tables won't have survived.
+      daqStatus: (s.daqStatus === 'idle' ? 'idle' : 'configured') as DaqStatus,
       daqLiveValues: new Map(),
       daqDtoRate: 0,
-      animationWatermark: null,
       activeCmd: null,
       byteValues: Array<string>(NUM_CELLS).fill(''),
       toasts: [],
       alertMsg: null,
       alertAction: null,
-      ...(s.daqListsFromFile ? {} : { daqLists: [] }),
     })),
 
   settingsOpen: false,

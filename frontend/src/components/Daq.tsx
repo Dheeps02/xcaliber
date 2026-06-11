@@ -1127,7 +1127,6 @@ export function Daq() {
   const setDaqStatus       = useAppStore(s => s.setDaqStatus);
   const clearDaqLiveValues = useAppStore(s => s.clearDaqLiveValues);
   const showToast          = useAppStore(s => s.showToast);
-  const setDaqListsFromFile = useAppStore(s => s.setDaqListsFromFile);
 
   const [configuring,   setConfiguring]   = useState(false);
   const [exportContent, setExportContent] = useState<string | null>(null);
@@ -1267,7 +1266,6 @@ export function Daq() {
         odts: (l.odts ?? []).map((o: DaqOdt, oi: number) => ({ ...o, id: oi })),
       }));
       setDaqLists(reIndexed);
-      setDaqListsFromFile(true);
       if (data.colors) setOdtColors(data.colors);
       showToast(`Loaded ${reIndexed.length} DAQ list(s)`, 'success');
     } catch { showToast('Failed to parse .daq file', 'error'); }
