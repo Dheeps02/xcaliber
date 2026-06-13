@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
-import type { PacketEntry, ConnectResponse, DaqDtoEvent, DaqStatus, SeqStepResult, SeqRunResult } from '../lib/types';
+import type { PacketEntry, ConnectResponse, DaqDtoEvent, DaqStatus, DaqList, SeqStepResult, SeqRunResult } from '../lib/types';
 
 export function useSSE() {
   const batchAddPackets          = useAppStore((s) => s.batchAddPackets);
@@ -106,6 +106,14 @@ export function useSSE() {
         } else if (msg.event === 'daq_state_changed') {
           const d = msg.data as { state: DaqStatus };
           setDaqStatus(d.state);
+
+        } else if (msg.event === 'daq_lists_changed') {
+          const d = msg.data as { lists: DaqList[] };
+          setDaqLists(d.lists);
+
+        } else if (msg.event === 'daq_sync_warning') {
+          const d = msg.data as { message: string };
+          useAppStore.getState().showToast(d.message, 'error');
 
         } else if (msg.event === 'seq_step_done') {
           useAppStore.getState().updateSeqStepResult(msg.data as SeqStepResult);

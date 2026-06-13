@@ -523,37 +523,247 @@ pub struct RawBody {
     pub bytes: Vec<u8>,
 }
 
-// Inspect a raw command/response pair and emit a daq_state_changed SSE event
-// if the command affects DAQ run state. Called after every raw XCP send so that
-// manual commands and sequence steps both keep the DAQ tab in sync.
-fn maybe_emit_daq_event(state: &AppState, cmd: u8, mode: u8, resp_bytes: &[u8]) {
-    if resp_bytes.first() != Some(&0xFF) {
-        return; // negative response — no state change
+// ── DAQ frame sync ───────────────────────────────────────────────
+//
+// Mirrors raw DAQ-configuration commands (ALLOC_*, SET_DAQ_PTR, WRITE_DAQ,
+// SET_DAQ_LIST_MODE, CLEAR_DAQ_LIST, START_STOP_DAQ_LIST, START_STOP_SYNCH,
+// FREE_DAQ) into `daq_lists`/`daq_status`, so manual raw commands and
+// sequence steps build up the DAQ tab the same way the Configure button
+// does. Called after every raw XCP send with a positive response.
+
+fn u16_le(b: &[u8], i: usize) -> Option<u16> {
+    Some(u16::from_le_bytes([*b.get(i)?, *b.get(i + 1)?]))
+}
+
+fn read_addr(b: &[u8], i: usize, big_endian: bool) -> Option<u32> {
+    let arr: [u8; 4] = b.get(i..i + 4)?.try_into().ok()?;
+    Some(if big_endian {
+        u32::from_be_bytes(arr)
+    } else {
+        u32::from_le_bytes(arr)
+    })
+}
+
+fn daq_entry_type_for_size(size: u8) -> &'static str {
+    match size {
+        1 => "u8",
+        2 => "u16",
+        8 => "f64",
+        _ => "u32",
     }
-    let new_status = match cmd {
-        0xD6 => Some(DaqStatus::Idle), // FREE_DAQ
-        0xDD => match mode {
-            // START_STOP_SYNCH
-            0x01 => Some(DaqStatus::Running),
-            0x00 | 0x02 => Some(DaqStatus::Configured),
-            _ => None,
-        },
-        _ => None,
+}
+
+fn emit_sse(state: &AppState, event: &str, data: serde_json::Value) {
+    let _ = state
+        .tx
+        .send(serde_json::to_string(&json!({ "event": event, "data": data })).unwrap_or_default());
+}
+
+fn emit_daq_lists(state: &AppState) {
+    let lists = state.daq_lists.lock().unwrap().clone();
+    *state.daq_dto_map.lock().unwrap() = build_dto_map(&lists);
+    emit_sse(state, "daq_lists_changed", json!({ "lists": lists }));
+}
+
+fn emit_daq_status(state: &AppState, status: &DaqStatus) {
+    let state_str = match status {
+        DaqStatus::Idle => "idle",
+        DaqStatus::Configured => "configured",
+        DaqStatus::Running => "running",
     };
-    if let Some(status) = new_status {
-        let state_str = match &status {
-            DaqStatus::Idle => "idle",
-            DaqStatus::Configured => "configured",
-            DaqStatus::Running => "running",
-        };
-        *state.daq_status.lock().unwrap() = status;
-        let _ = state.tx.send(
-            serde_json::to_string(&json!({
-                "event": "daq_state_changed",
-                "data": { "state": state_str }
-            }))
-            .unwrap_or_default(),
-        );
+    emit_sse(state, "daq_state_changed", json!({ "state": state_str }));
+}
+
+fn warn_daq_sync(state: &AppState, message: impl Into<String>) {
+    emit_sse(state, "daq_sync_warning", json!({ "message": message.into() }));
+}
+
+/// Bump daq_status Idle → Configured. Returns true if it actually changed.
+fn bump_configured(state: &AppState) -> bool {
+    let mut status = state.daq_status.lock().unwrap();
+    if *status == DaqStatus::Idle {
+        *status = DaqStatus::Configured;
+        true
+    } else {
+        false
+    }
+}
+
+fn observe_daq_frame(state: &AppState, cmd: &[u8], resp: &[u8]) {
+    if resp.first() != Some(&0xFF) {
+        return; // negative response — nothing changed on the slave
+    }
+    let Some(&pid) = cmd.first() else { return };
+
+    match pid {
+        0xD6 => {
+            // FREE_DAQ
+            state.daq_lists.lock().unwrap().clear();
+            state.daq_dto_map.lock().unwrap().clear();
+            *state.daq_ptr.lock().unwrap() = None;
+            *state.daq_status.lock().unwrap() = DaqStatus::Idle;
+            emit_daq_lists(state);
+            emit_daq_status(state, &DaqStatus::Idle);
+        }
+        0xD5 => {
+            // ALLOC_DAQ
+            let Some(count) = u16_le(cmd, 2) else { return };
+            *state.daq_lists.lock().unwrap() = (0..count as u32)
+                .map(|id| DaqListDef { id, name: None, event_channel: 0, odts: vec![] })
+                .collect();
+            *state.daq_ptr.lock().unwrap() = None;
+            emit_daq_lists(state);
+            if bump_configured(state) {
+                emit_daq_status(state, &DaqStatus::Configured);
+            }
+        }
+        0xD4 => {
+            // ALLOC_ODT
+            let (Some(daq_list_num), Some(&odt_count)) = (u16_le(cmd, 2), cmd.get(4)) else { return };
+            let mut lists = state.daq_lists.lock().unwrap();
+            let Some(list) = lists.iter_mut().find(|l| l.id == daq_list_num as u32) else {
+                drop(lists);
+                warn_daq_sync(state, format!("ALLOC_ODT referenced DAQ list {daq_list_num}, which hasn't been allocated — DAQ view not updated"));
+                return;
+            };
+            list.odts = (0..odt_count as u32)
+                .map(|id| DaqOdtDef { id, name: None, entries: vec![] })
+                .collect();
+            drop(lists);
+            emit_daq_lists(state);
+            if bump_configured(state) {
+                emit_daq_status(state, &DaqStatus::Configured);
+            }
+        }
+        0xD3 => {
+            // ALLOC_ODT_ENTRY
+            let (Some(daq_list_num), Some(&odt_num), Some(&entry_count)) =
+                (u16_le(cmd, 2), cmd.get(4), cmd.get(5))
+            else {
+                return;
+            };
+            let mut lists = state.daq_lists.lock().unwrap();
+            let Some(list) = lists.iter_mut().find(|l| l.id == daq_list_num as u32) else {
+                drop(lists);
+                warn_daq_sync(state, format!("ALLOC_ODT_ENTRY referenced DAQ list {daq_list_num}, which hasn't been allocated — DAQ view not updated"));
+                return;
+            };
+            let Some(odt) = list.odts.iter_mut().find(|o| o.id == odt_num as u32) else {
+                drop(lists);
+                warn_daq_sync(state, format!("ALLOC_ODT_ENTRY referenced ODT {odt_num} in DAQ list {daq_list_num}, which hasn't been allocated — DAQ view not updated"));
+                return;
+            };
+            odt.entries = (0..entry_count)
+                .map(|i| DaqEntryDef {
+                    name: format!("entry_{i}"),
+                    addr: 0,
+                    addr_ext: 0,
+                    size: 1,
+                    type_name: "u8".into(),
+                })
+                .collect();
+            drop(lists);
+            emit_daq_lists(state);
+            if bump_configured(state) {
+                emit_daq_status(state, &DaqStatus::Configured);
+            }
+        }
+        0xE3 => {
+            // CLEAR_DAQ_LIST
+            let Some(daq_list_num) = u16_le(cmd, 2) else { return };
+            let mut lists = state.daq_lists.lock().unwrap();
+            let Some(list) = lists.iter_mut().find(|l| l.id == daq_list_num as u32) else {
+                drop(lists);
+                warn_daq_sync(state, format!("CLEAR_DAQ_LIST referenced DAQ list {daq_list_num}, which doesn't exist — DAQ view not updated"));
+                return;
+            };
+            list.odts.clear();
+            drop(lists);
+            emit_daq_lists(state);
+        }
+        0xE2 => {
+            // SET_DAQ_PTR
+            let (Some(daq_list_num), Some(&odt_num), Some(&odt_entry_num)) =
+                (u16_le(cmd, 2), cmd.get(4), cmd.get(5))
+            else {
+                return;
+            };
+            *state.daq_ptr.lock().unwrap() = Some((daq_list_num, odt_num, odt_entry_num));
+        }
+        0xE1 => {
+            // WRITE_DAQ
+            let (Some(&size), Some(&addr_ext)) = (cmd.get(2), cmd.get(3)) else { return };
+            let big_endian = state.config.lock().unwrap().endian == "big";
+            let Some(addr) = read_addr(cmd, 4, big_endian) else { return };
+
+            let ptr = *state.daq_ptr.lock().unwrap();
+            let Some((daq_list_num, odt_num, odt_entry_num)) = ptr else {
+                warn_daq_sync(state, "WRITE_DAQ received before SET_DAQ_PTR — DAQ view not updated");
+                return;
+            };
+
+            let mut lists = state.daq_lists.lock().unwrap();
+            let Some(list) = lists.iter_mut().find(|l| l.id == daq_list_num as u32) else {
+                drop(lists);
+                warn_daq_sync(state, format!("WRITE_DAQ referenced DAQ list {daq_list_num}, which doesn't exist — DAQ view not updated"));
+                return;
+            };
+            let Some(odt) = list.odts.iter_mut().find(|o| o.id == odt_num as u32) else {
+                drop(lists);
+                warn_daq_sync(state, format!("WRITE_DAQ referenced ODT {odt_num} in DAQ list {daq_list_num}, which doesn't exist — DAQ view not updated"));
+                return;
+            };
+            let Some(entry) = odt.entries.get_mut(odt_entry_num as usize) else {
+                drop(lists);
+                warn_daq_sync(state, format!("WRITE_DAQ referenced ODT entry {odt_entry_num} in DAQ list {daq_list_num}/ODT {odt_num}, which doesn't exist — DAQ view not updated"));
+                return;
+            };
+            entry.addr = addr;
+            entry.addr_ext = addr_ext;
+            entry.size = size;
+            entry.type_name = daq_entry_type_for_size(size).into();
+            entry.name = format!("addr_0x{addr:X}");
+            drop(lists);
+
+            *state.daq_ptr.lock().unwrap() = Some((daq_list_num, odt_num, odt_entry_num + 1));
+            emit_daq_lists(state);
+            if bump_configured(state) {
+                emit_daq_status(state, &DaqStatus::Configured);
+            }
+        }
+        0xE0 => {
+            // SET_DAQ_LIST_MODE
+            let (Some(daq_list_num), Some(event_channel)) = (u16_le(cmd, 2), u16_le(cmd, 4)) else { return };
+            let mut lists = state.daq_lists.lock().unwrap();
+            let Some(list) = lists.iter_mut().find(|l| l.id == daq_list_num as u32) else {
+                drop(lists);
+                warn_daq_sync(state, format!("SET_DAQ_LIST_MODE referenced DAQ list {daq_list_num}, which doesn't exist — DAQ view not updated"));
+                return;
+            };
+            list.event_channel = event_channel;
+            drop(lists);
+            emit_daq_lists(state);
+            if bump_configured(state) {
+                emit_daq_status(state, &DaqStatus::Configured);
+            }
+        }
+        0xDE => {
+            // START_STOP_DAQ_LIST
+            if bump_configured(state) {
+                emit_daq_status(state, &DaqStatus::Configured);
+            }
+        }
+        0xDD => {
+            // START_STOP_SYNCH
+            let new_status = match cmd.get(1).copied().unwrap_or(0) {
+                0x01 => DaqStatus::Running,
+                0x00 | 0x02 => DaqStatus::Configured,
+                _ => return,
+            };
+            *state.daq_status.lock().unwrap() = new_status.clone();
+            emit_daq_status(state, &new_status);
+        }
+        _ => {}
     }
 }
 
@@ -561,11 +771,10 @@ pub async fn cmd_raw(
     State(state): State<Arc<AppState>>,
     Json(body): Json<RawBody>,
 ) -> impl IntoResponse {
-    let cmd = body.bytes.first().copied().unwrap_or(0);
-    let mode = body.bytes.get(1).copied().unwrap_or(0);
+    let cmd_bytes = body.bytes.clone();
     match run_cmd(&state, XcpCommand::Raw { bytes: body.bytes }).await {
         Ok(r) => {
-            maybe_emit_daq_event(&state, cmd, mode, &r.encode());
+            observe_daq_frame(&state, &cmd_bytes, &r.encode());
             Json(json!({ "ok": true, "response": r })).into_response()
         }
         Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
@@ -1390,8 +1599,7 @@ pub async fn seq_run(
             continue;
         }
 
-        let cmd = bytes.first().copied().unwrap_or(0);
-        let mode = bytes.get(1).copied().unwrap_or(0);
+        let cmd_bytes = bytes.clone();
         let tx_hex = bytes_to_hex(&bytes);
         match run_cmd(&state, XcpCommand::Raw { bytes }).await {
             Err(e) => {
@@ -1415,7 +1623,7 @@ pub async fn seq_run(
             Ok(resp) => {
                 done += 1;
                 let rx_bytes = resp.encode();
-                maybe_emit_daq_event(&state, cmd, mode, &rx_bytes);
+                observe_daq_frame(&state, &cmd_bytes, &rx_bytes);
                 let rx_hex = bytes_to_hex(&rx_bytes);
                 let passed = check_resp(&rx_bytes, &step.resp);
                 let outcome = if passed { "pass" } else { "fail" };

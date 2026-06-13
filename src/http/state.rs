@@ -56,6 +56,9 @@ pub struct AppState {
     pub daq_lists: Mutex<Vec<DaqListDef>>,
     /// PID → (list_id, odt_id, entries) map, built at configure time.
     pub daq_dto_map: Mutex<HashMap<u8, (u32, u32, Vec<DaqEntryDef>)>>,
+    /// (daq_list_num, odt_num, odt_entry_num) cursor set by the last raw
+    /// SET_DAQ_PTR, consumed by the next raw WRITE_DAQ.
+    pub daq_ptr: Mutex<Option<(u16, u8, u8)>>,
     /// Handle to the running DTO receive task (Some while DAQ is running).
     pub daq_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Handle to the slave drop monitor task — aborted on manual disconnect.
@@ -100,6 +103,7 @@ impl AppState {
             daq_status: Mutex::new(DaqStatus::Idle),
             daq_lists: Mutex::new(Vec::new()),
             daq_dto_map: Mutex::new(HashMap::new()),
+            daq_ptr: Mutex::new(None),
             daq_task: Mutex::new(None),
             monitor_task: Mutex::new(None),
         }
