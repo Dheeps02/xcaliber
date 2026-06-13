@@ -523,12 +523,51 @@ pub struct RawBody {
     pub bytes: Vec<u8>,
 }
 
+// Inspect a raw command/response pair and emit a daq_state_changed SSE event
+// if the command affects DAQ run state. Called after every raw XCP send so that
+// manual commands and sequence steps both keep the DAQ tab in sync.
+fn maybe_emit_daq_event(state: &AppState, cmd: u8, mode: u8, resp_bytes: &[u8]) {
+    if resp_bytes.first() != Some(&0xFF) {
+        return; // negative response — no state change
+    }
+    let new_status = match cmd {
+        0xD6 => Some(DaqStatus::Idle), // FREE_DAQ
+        0xDD => match mode {
+            // START_STOP_SYNCH
+            0x01 => Some(DaqStatus::Running),
+            0x00 | 0x02 => Some(DaqStatus::Configured),
+            _ => None,
+        },
+        _ => None,
+    };
+    if let Some(status) = new_status {
+        let state_str = match &status {
+            DaqStatus::Idle => "idle",
+            DaqStatus::Configured => "configured",
+            DaqStatus::Running => "running",
+        };
+        *state.daq_status.lock().unwrap() = status;
+        let _ = state.tx.send(
+            serde_json::to_string(&json!({
+                "event": "daq_state_changed",
+                "data": { "state": state_str }
+            }))
+            .unwrap_or_default(),
+        );
+    }
+}
+
 pub async fn cmd_raw(
     State(state): State<Arc<AppState>>,
     Json(body): Json<RawBody>,
 ) -> impl IntoResponse {
+    let cmd = body.bytes.first().copied().unwrap_or(0);
+    let mode = body.bytes.get(1).copied().unwrap_or(0);
     match run_cmd(&state, XcpCommand::Raw { bytes: body.bytes }).await {
-        Ok(r) => Json(json!({ "ok": true, "response": r })).into_response(),
+        Ok(r) => {
+            maybe_emit_daq_event(&state, cmd, mode, &r.encode());
+            Json(json!({ "ok": true, "response": r })).into_response()
+        }
         Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
     }
 }
@@ -1351,6 +1390,8 @@ pub async fn seq_run(
             continue;
         }
 
+        let cmd = bytes.first().copied().unwrap_or(0);
+        let mode = bytes.get(1).copied().unwrap_or(0);
         let tx_hex = bytes_to_hex(&bytes);
         match run_cmd(&state, XcpCommand::Raw { bytes }).await {
             Err(e) => {
@@ -1374,6 +1415,7 @@ pub async fn seq_run(
             Ok(resp) => {
                 done += 1;
                 let rx_bytes = resp.encode();
+                maybe_emit_daq_event(&state, cmd, mode, &rx_bytes);
                 let rx_hex = bytes_to_hex(&rx_bytes);
                 let passed = check_resp(&rx_bytes, &step.resp);
                 let outcome = if passed { "pass" } else { "fail" };
