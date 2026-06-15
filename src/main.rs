@@ -90,6 +90,10 @@ async fn run_server() {
             axum::routing::post(http::routes::daq_set_event),
         )
         .route(
+            "/api/daq/lists/{id}/run-mode",
+            axum::routing::post(http::routes::daq_set_run_mode),
+        )
+        .route(
             "/api/daq/lists/replace",
             axum::routing::post(http::routes::daq_replace_lists),
         )

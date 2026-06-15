@@ -30,6 +30,29 @@ pub struct DaqListDef {
     pub name: Option<String>,
     pub event_channel: u16,
     pub odts: Vec<DaqOdtDef>,
+    /// START_STOP_DAQ_LIST mode last applied to this list (0x00 STOP,
+    /// 0x01 START, 0x03 SELECT/prepare for synchronized start).
+    #[serde(default = "default_run_mode")]
+    pub run_mode: u8,
+    /// SET_DAQ_LIST_MODE mode bitfield (alternating ODTs, direction,
+    /// timestamp, PID off, resume).
+    #[serde(default = "default_daq_list_mode")]
+    pub daq_list_mode: u8,
+    /// SET_DAQ_LIST_MODE transmission rate prescaler.
+    #[serde(default = "default_prescaler")]
+    pub prescaler: u8,
+}
+
+pub(crate) fn default_run_mode() -> u8 {
+    0x03
+}
+
+pub(crate) fn default_daq_list_mode() -> u8 {
+    0x10
+}
+
+pub(crate) fn default_prescaler() -> u8 {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -10,7 +10,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     debug_log::log as debug_log,
-    http::state::{AppState, DaqEntryDef, DaqListDef, DaqOdtDef, DaqStatus, PacketEntry},
+    http::state::{
+        AppState, DaqEntryDef, DaqListDef, DaqOdtDef, DaqStatus, PacketEntry,
+        default_daq_list_mode, default_prescaler, default_run_mode,
+    },
     session::XcpSession,
     xcp::{
         command::XcpCommand,
@@ -609,7 +612,15 @@ fn observe_daq_frame(state: &AppState, cmd: &[u8], resp: &[u8]) {
             // ALLOC_DAQ
             let Some(count) = u16_le(cmd, 2) else { return };
             *state.daq_lists.lock().unwrap() = (0..count as u32)
-                .map(|id| DaqListDef { id, name: None, event_channel: 0, odts: vec![] })
+                .map(|id| DaqListDef {
+                    id,
+                    name: None,
+                    event_channel: 0,
+                    odts: vec![],
+                    run_mode: default_run_mode(),
+                    daq_list_mode: default_daq_list_mode(),
+                    prescaler: default_prescaler(),
+                })
                 .collect();
             *state.daq_ptr.lock().unwrap() = None;
             emit_daq_lists(state);
@@ -733,7 +744,11 @@ fn observe_daq_frame(state: &AppState, cmd: &[u8], resp: &[u8]) {
         }
         0xE0 => {
             // SET_DAQ_LIST_MODE
-            let (Some(daq_list_num), Some(event_channel)) = (u16_le(cmd, 2), u16_le(cmd, 4)) else { return };
+            let (Some(&mode), Some(daq_list_num), Some(event_channel), Some(&prescaler)) =
+                (cmd.get(1), u16_le(cmd, 2), u16_le(cmd, 4), cmd.get(6))
+            else {
+                return;
+            };
             let mut lists = state.daq_lists.lock().unwrap();
             let Some(list) = lists.iter_mut().find(|l| l.id == daq_list_num as u32) else {
                 drop(lists);
@@ -741,6 +756,8 @@ fn observe_daq_frame(state: &AppState, cmd: &[u8], resp: &[u8]) {
                 return;
             };
             list.event_channel = event_channel;
+            list.daq_list_mode = mode;
+            list.prescaler = prescaler;
             drop(lists);
             emit_daq_lists(state);
             if bump_configured(state) {
@@ -749,6 +766,16 @@ fn observe_daq_frame(state: &AppState, cmd: &[u8], resp: &[u8]) {
         }
         0xDE => {
             // START_STOP_DAQ_LIST
+            let (Some(&mode), Some(daq_list_num)) = (cmd.get(1), u16_le(cmd, 2)) else { return };
+            let mut lists = state.daq_lists.lock().unwrap();
+            let Some(list) = lists.iter_mut().find(|l| l.id == daq_list_num as u32) else {
+                drop(lists);
+                warn_daq_sync(state, format!("START_STOP_DAQ_LIST referenced DAQ list {daq_list_num}, which doesn't exist — DAQ view not updated"));
+                return;
+            };
+            list.run_mode = mode;
+            drop(lists);
+            emit_daq_lists(state);
             if bump_configured(state) {
                 emit_daq_status(state, &DaqStatus::Configured);
             }
@@ -1238,6 +1265,9 @@ pub async fn daq_add_list(
             name: None,
             entries: vec![],
         }],
+        run_mode: default_run_mode(),
+        daq_list_mode: default_daq_list_mode(),
+        prescaler: default_prescaler(),
     };
     lists.push(list.clone());
     Json(json!({ "list": list }))
@@ -1350,6 +1380,44 @@ pub async fn daq_set_event(
 }
 
 #[derive(Deserialize)]
+pub struct SetRunModeBody {
+    pub mode: u8,
+}
+
+/// Live per-list START_STOP_DAQ_LIST — sends immediately and, on a positive
+/// response, updates `daq_lists` so the DAQ view reflects the new run state.
+pub async fn daq_set_run_mode(
+    State(state): State<Arc<AppState>>,
+    Path(list_id): Path<u32>,
+    Json(body): Json<SetRunModeBody>,
+) -> impl IntoResponse {
+    match run_cmd(
+        &state,
+        XcpCommand::StartStopDaqList {
+            mode: body.mode,
+            daq_list_num: list_id as u16,
+        },
+    )
+    .await
+    {
+        Ok(_) => {
+            let mut lists = state.daq_lists.lock().unwrap();
+            let found = lists
+                .iter_mut()
+                .find(|l| l.id == list_id)
+                .map(|list| list.run_mode = body.mode)
+                .is_some();
+            drop(lists);
+            if found {
+                emit_daq_lists(&state);
+            }
+            Json(json!({ "ok": true })).into_response()
+        }
+        Err(e) => Json(json!({ "ok": false, "error": user_error(&e) })).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
 pub struct ReplaceListsBody {
     pub lists: Vec<DaqListDef>,
 }
@@ -1429,22 +1497,22 @@ async fn daq_configure_inner(state: &Arc<AppState>) -> Result<(), crate::xcp::er
         run_cmd(
             state,
             XcpCommand::SetDaqListMode {
-                mode: 0x10,
+                mode: list.daq_list_mode,
                 daq_list_num: list.id as u16,
                 event_channel: list.event_channel,
-                prescaler: 1,
+                prescaler: list.prescaler,
                 priority: 0,
             },
         )
         .await?;
     }
 
-    // SELECT each list for synchronized start
+    // Apply each list's configured run mode (Stop / Start / Select)
     for list in &lists {
         run_cmd(
             state,
             XcpCommand::StartStopDaqList {
-                mode: 0x03,
+                mode: list.run_mode,
                 daq_list_num: list.id as u16,
             },
         )
