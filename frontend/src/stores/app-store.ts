@@ -10,18 +10,29 @@ export const SPARK_ZOOM_DEFAULT_MS =  8_000;
 
 const HISTORY_WINDOW_MS  = SPARK_ZOOM_MAX_MS + 2_000; // always enough for max zoom
 const HISTORY_MAX_POINTS = 10_000; // safety cap for very fast event channels
+const HISTORY_TRIM_SLACK = 200;    // batch the O(n) trim instead of doing it every push
 
-function trimHistory(
-  existing: { value: number; ts: number }[],
+// Appends in place and returns the same array — at DAQ rates this runs once
+// per signal per render frame, so an O(n) copy here (the previous
+// [...base, newEntry] approach) becomes the dominant cost across the whole
+// page. Trimming is batched every HISTORY_TRIM_SLACK pushes so the O(n)
+// splice is amortized to ~O(1) per update.
+function appendHistory(
+  history: { value: number; ts: number }[],
   newEntry: { value: number; ts: number },
 ): { value: number; ts: number }[] {
+  history.push(newEntry);
+
+  const overCap = history.length - HISTORY_MAX_POINTS;
+  if (overCap < HISTORY_TRIM_SLACK && history.length % HISTORY_TRIM_SLACK !== 0) {
+    return history;
+  }
+
   const cutoff = newEntry.ts - HISTORY_WINDOW_MS;
-  let start = 0;
-  // history is oldest-first, so walk from the front until we reach the cutoff
-  while (start < existing.length - 1 && existing[start].ts < cutoff) start++;
-  const base = start > 0 ? existing.slice(start) : existing;
-  const next = [...base, newEntry];
-  return next.length > HISTORY_MAX_POINTS ? next.slice(-HISTORY_MAX_POINTS) : next;
+  let start = Math.max(0, overCap);
+  while (start < history.length - 1 && history[start].ts < cutoff) start++;
+  if (start > 0) history.splice(0, start);
+  return history;
 }
 
 export interface Toast {
@@ -341,9 +352,13 @@ export const useAppStore = create<AppStore>((set) => ({
       const key = `${listId}:${odtId}:${name}`;
       const existing = s.daqLiveValues.get(key);
       const entry = { value, ts };
-      const history = existing ? trimHistory(existing.history, entry) : [entry];
+      const history = existing ? appendHistory(existing.history, entry) : [entry];
+      const min = value === null ? existing?.min ?? null : Math.min(existing?.min ?? value, value);
+      const max = value === null ? existing?.max ?? null : Math.max(existing?.max ?? value, value);
+      const sum = (existing?.sum ?? 0) + (value ?? 0);
+      const count = (existing?.count ?? 0) + (value === null ? 0 : 1);
       const next = new Map(s.daqLiveValues);
-      next.set(key, { listId, odtId, entryName: name, addr, typeName: type, value, history });
+      next.set(key, { listId, odtId, entryName: name, addr, typeName: type, value, min, max, sum, count, history });
       return { daqLiveValues: next };
     }),
 
@@ -354,8 +369,12 @@ export const useAppStore = create<AppStore>((set) => ({
         const key = `${listId}:${odtId}:${name}`;
         const existing = next.get(key);
         const entry = { value, ts };
-        const history = existing ? trimHistory(existing.history, entry) : [entry];
-        next.set(key, { listId, odtId, entryName: name, addr, typeName: type, value, history });
+        const history = existing ? appendHistory(existing.history, entry) : [entry];
+        const min = value === null ? existing?.min ?? null : Math.min(existing?.min ?? value, value);
+        const max = value === null ? existing?.max ?? null : Math.max(existing?.max ?? value, value);
+        const sum = (existing?.sum ?? 0) + (value ?? 0);
+        const count = (existing?.count ?? 0) + (value === null ? 0 : 1);
+        next.set(key, { listId, odtId, entryName: name, addr, typeName: type, value, min, max, sum, count, history });
       }
       return { daqLiveValues: next };
     }),

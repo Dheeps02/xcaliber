@@ -14,14 +14,43 @@ import type { DaqList, DaqOdt, DaqEntry, DaqEntryType, A2lVariable } from '../li
 import { ExportDialog } from './ExportDialog';
 import { Button } from './ui/Button';
 import { RunStopButton } from './ui/RunStopButton';
+import { DialInput } from './ui/DialInput';
+import { Toggle } from './ui/Toggle';
+import { FieldLabel } from './ui/FieldLabel';
 
 // ── constants ────────────────────────────────────────────────────
 const TYPE_SIZES: Record<DaqEntryType, number> = {
   u8: 1, i8: 1, u16: 2, i16: 2, u32: 4, i32: 4, f32: 4, f64: 8,
 };
 const ODT_COLORS = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#ec4899','#84cc16'];
+// Stagger between each DAQ entry's enter animation within an ODT. ODT-to-ODT
+// stagger derives from this: an ODT's entries finish staggering in after
+// entries.length * ENTRY_STAGGER_MS, at which point the next ODT begins.
+const ENTRY_STAGGER_MS = 40;
 const SPARK_H = 22;
+const SPARK_REVEAL_MS = 380;
 const LIVE_THRESHOLD_MS = 3000;
+
+// ── DAQ list run mode (START_STOP_DAQ_LIST) ────────────────────────
+const RUN_MODES: { value: number; label: string }[] = [
+  { value: 0x00, label: 'Stop' },
+  { value: 0x01, label: 'Start' },
+  { value: 0x03, label: 'Select' },
+];
+const RUN_MODE_COLORS: Record<number, string> = {
+  0x00: 'var(--text-muted)',
+  0x01: 'var(--status-ok)',
+  0x03: 'var(--accent)',
+};
+
+// ── SET_DAQ_LIST_MODE bitfield ──────────────────────────────────────
+const DAQ_LIST_MODE_BITS: { bit: number; label: string }[] = [
+  { bit: 0x01, label: 'Alternating ODTs' },
+  { bit: 0x02, label: 'STIM direction' },
+  { bit: 0x10, label: 'Timestamp' },
+  { bit: 0x20, label: 'PID off' },
+  { bit: 0x80, label: 'Resume' },
+];
 
 // ── zoom helpers ──────────────────────────────────────────────────
 const LOG_MIN = Math.log2(SPARK_ZOOM_MIN_MS);
@@ -36,10 +65,12 @@ function fmtZoom(ms: number): string {
 
 // ── Sparkline ────────────────────────────────────────────────────
 const Sparkline = memo(function Sparkline({
-  liveKey, color,
+  liveKey, color, revealDelayMs, revealEpoch,
 }: {
   liveKey: string;
   color: string;
+  revealDelayMs: number;
+  revealEpoch: number;
 }) {
   const canvasRef  = useRef<HTMLCanvasElement>(null);
   const rafRef     = useRef<number>(0);
@@ -66,8 +97,15 @@ const Sparkline = memo(function Sparkline({
 
   useEffect(() => {
     yRangeRef.current = null;
+    const mountTime = performance.now();
+    // Paused while the canvas has no visible area — collapsed ODT/list
+    // sections and off-screen rows would otherwise keep redrawing (and
+    // forcing a layout read via offsetWidth) at 60fps for nothing.
+    let visible = true;
 
     function render() {
+      if (!visible) return;
+
       const canvas = canvasRef.current;
       if (!canvas) { rafRef.current = requestAnimationFrame(render); return; }
 
@@ -88,6 +126,17 @@ const Sparkline = memo(function Sparkline({
       ctx.save();
       ctx.scale(dpr, dpr);
 
+      // Entrance wipe — draw only up to a progressively widening edge instead
+      // of animating CSS clip-path, so the reveal stays perfectly in sync
+      // with the canvas's own render loop (no separate compositor layer or
+      // per-frame clip-region cost).
+      let revealW = W;
+      if (useAppStore.getState().animationsEnabled) {
+        const revealElapsed = performance.now() - mountTime - revealDelayMs;
+        const t = Math.max(0, Math.min(1, revealElapsed / SPARK_REVEAL_MS));
+        if (t < 1) revealW = (1 - (1 - t) * (1 - t)) * W;
+      }
+
       const col = colorRef.current;
       const r   = parseInt(col.slice(1, 3), 16);
       const g   = parseInt(col.slice(3, 5), 16);
@@ -100,27 +149,33 @@ const Sparkline = memo(function Sparkline({
         ? Math.max(hist[0].ts, now - sparkWindowMs)
         : now - sparkWindowMs;
 
-      function flatLine(y: number, muted: boolean) {
+      function flatLine(y: number, muted: boolean, toX: number) {
         ctx.beginPath();
         ctx.moveTo(0, y);
-        ctx.lineTo(W, y);
+        ctx.lineTo(toX, y);
         ctx.strokeStyle = muted ? 'rgba(255,255,255,0.12)' : col;
         ctx.lineWidth   = 1;
         ctx.stroke();
       }
 
       if (hist.length === 0) {
-        flatLine(H / 2, true);
+        flatLine(H / 2, true, revealW);
         ctx.restore();
         rafRef.current = requestAnimationFrame(render);
         return;
       }
 
-      // Y-scale: expand immediately on new extremes, shrink slowly when they leave
+      // Single pass over the full history: track min/max for Y-scaling and
+      // split into the visible window — `hist` can be thousands of points,
+      // so this used to be two separate O(n) passes per sparkline per frame.
       let mn = hist[0].value, mx = hist[0].value;
+      const inWindow: { value: number; ts: number }[] = [];
+      let lastBefore: { value: number; ts: number } | undefined;
       for (const p of hist) {
         if (p.value < mn) mn = p.value;
         if (p.value > mx) mx = p.value;
+        if (p.ts < winStart) lastBefore = p;
+        else                 inWindow.push(p);
       }
       if (!yRangeRef.current) {
         yRangeRef.current = { mn, mx };
@@ -137,14 +192,6 @@ const Sparkline = memo(function Sparkline({
       const range  = Math.max(dispMx - dispMn, 1);
       const norm   = (v: number) => Math.max(1, Math.min(H - 1, (H - 4) - ((v - dispMn) / range) * (H - 8) + 2));
 
-      // Split history at winStart
-      const inWindow: { value: number; ts: number }[] = [];
-      let lastBefore: { value: number; ts: number } | undefined;
-      for (const p of hist) {
-        if (p.ts < winStart) lastBefore = p;
-        else                 inWindow.push(p);
-      }
-
       // Left-edge interpolation for smooth entry
       if (lastBefore !== undefined) {
         if (inWindow.length > 0) {
@@ -158,7 +205,7 @@ const Sparkline = memo(function Sparkline({
       }
 
       if (inWindow.length < 2) {
-        flatLine(norm(hist[hist.length - 1].value), false);
+        flatLine(norm(hist[hist.length - 1].value), false, revealW);
         ctx.restore();
         rafRef.current = requestAnimationFrame(render);
         return;
@@ -169,10 +216,24 @@ const Sparkline = memo(function Sparkline({
         y: norm(p.value),
       }));
 
-      // Pin right edge only when window is full to prevent jitter
+      // Right edge tracks "now" every frame so the line advances smoothly at
+      // render rate rather than jumping only when new samples arrive (pinned
+      // to W once the window is full), additionally capped by the entrance
+      // wipe's reveal width so the line is only drawn up to that point.
       const windowFull = hist[0].ts <= now - sparkWindowMs;
-      const last = pts[pts.length - 1];
-      if (windowFull && last.x < W) pts.push({ x: W, y: last.y });
+      const nowX = windowFull ? W : ((now - winStart) / sparkWindowMs) * W;
+      const cap  = Math.min(nowX, revealW);
+
+      let cutIdx = pts.length - 1;
+      while (cutIdx > 0 && pts[cutIdx].x > cap) cutIdx--;
+      if (cutIdx < pts.length - 1) {
+        const a = pts[cutIdx], b = pts[cutIdx + 1];
+        const segT = b.x > a.x ? (cap - a.x) / (b.x - a.x) : 0;
+        pts.length = cutIdx + 1;
+        pts.push({ x: cap, y: a.y + segT * (b.y - a.y) });
+      } else if (pts[cutIdx].x < cap) {
+        pts.push({ x: cap, y: pts[cutIdx].y });
+      }
 
       const first = pts[0];
       const tail  = pts[pts.length - 1];
@@ -204,9 +265,23 @@ const Sparkline = memo(function Sparkline({
       rafRef.current = requestAnimationFrame(render);
     }
 
+    const canvasEl = canvasRef.current;
+    const observer = new IntersectionObserver(([e]) => {
+      const justBecameVisible = e.isIntersecting && !visible;
+      visible = e.isIntersecting;
+      if (justBecameVisible) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = requestAnimationFrame(render);
+      }
+    }, { threshold: 0 });
+    if (canvasEl) observer.observe(canvasEl);
+
     rafRef.current = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [liveKey]);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      observer.disconnect();
+    };
+  }, [liveKey, revealEpoch]);
 
   return (
     <canvas
@@ -641,6 +716,8 @@ interface EntryRowProps {
   exiting: boolean;
   recentlyMoved: boolean;
   entryIndex: number;
+  enterDelayMs: number;
+  revealEpoch: number;
   onDelete: () => void;
   onPointerDown: (e: React.PointerEvent) => void;
   entryRef: (el: HTMLElement | null) => void;
@@ -649,25 +726,65 @@ interface EntryRowProps {
 
 function DaqEntryRow({
   entry, color, liveKey,
-  exiting, recentlyMoved, entryIndex, onDelete, onPointerDown, entryRef, dataAttrs,
+  exiting, recentlyMoved, entryIndex, enterDelayMs, revealEpoch, onDelete, onPointerDown, entryRef, dataAttrs,
 }: EntryRowProps) {
-  // Per-signal subscriptions — only this row re-renders when its value changes
-  const value     = useAppStore(s => s.daqLiveValues.get(liveKey)?.value ?? null);
-  const lastTs    = useAppStore(s => s.daqLiveValues.get(liveKey)?.history.at(-1)?.ts);
   const daqRunning = useAppStore(s => s.daqStatus === 'running');
-  const isLive    = daqRunning && lastTs !== undefined && (Date.now() - lastTs) < LIVE_THRESHOLD_MS;
+  const [isLive, setIsLive] = useState(false);
+  const valueRef    = useRef<HTMLSpanElement>(null);
+  const minRef      = useRef<HTMLSpanElement>(null);
+  const maxRef      = useRef<HTMLSpanElement>(null);
+  const avgRef      = useRef<HTMLSpanElement>(null);
+  const waveIconRef = useRef<HTMLSpanElement>(null);
 
-  function fmt(v: number | null): string {
-    if (v === null) return '—';
-    if (entry.type_name === 'f32' || entry.type_name === 'f64') return v.toFixed(4);
-    return String(v);
-  }
+  // Drives the live value text + waveform color directly via the DOM,
+  // bypassing React re-renders — at DAQ rates this would otherwise
+  // re-render the whole row (and its WaveformBars SVG) up to 60x/sec
+  // per signal.
+  useEffect(() => {
+    const typeName = entry.type_name;
+    let raf = 0;
+    const isFloat = typeName === 'f32' || typeName === 'f64';
+
+    function fmt(v: number | null): string {
+      if (v === null) return '—';
+      return isFloat ? v.toFixed(4) : String(v);
+    }
+
+    function fmtAvg(sum: number, count: number): string {
+      if (count === 0) return '—';
+      return (sum / count).toFixed(isFloat ? 4 : 2);
+    }
+
+    function tick() {
+      const dv     = useAppStore.getState().daqLiveValues.get(liveKey);
+      const value  = dv?.value ?? null;
+      const lastTs = dv?.history.at(-1)?.ts;
+      const live   = daqRunning && lastTs !== undefined && (Date.now() - lastTs) < LIVE_THRESHOLD_MS;
+
+      if (valueRef.current) {
+        valueRef.current.textContent = fmt(value);
+        valueRef.current.style.color = value !== null ? 'var(--status-ok)' : 'var(--text-muted)';
+      }
+      if (minRef.current) minRef.current.textContent = fmt(dv?.min ?? null);
+      if (maxRef.current) maxRef.current.textContent = fmt(dv?.max ?? null);
+      if (avgRef.current) avgRef.current.textContent = fmtAvg(dv?.sum ?? 0, dv?.count ?? 0);
+      if (waveIconRef.current) {
+        waveIconRef.current.style.color = live ? color : 'var(--text-muted)';
+      }
+      setIsLive(prev => prev === live ? prev : live);
+
+      if (daqRunning) raf = requestAnimationFrame(tick);
+    }
+
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, [liveKey, daqRunning, color, entry.type_name]);
 
   return (
     <div
       ref={entryRef}
       className={`group flex items-center h-[30px] transition-colors daq-row-enter${exiting ? ' daq-exiting' : ''}${recentlyMoved ? ' daq-moved' : ''}`}
-      style={{ borderBottom: '1px solid var(--border)', paddingLeft: 36, paddingRight: 12, position: 'relative', animationDelay: `${60 + entryIndex * 40}ms` }}
+      style={{ borderBottom: '1px solid var(--border)', paddingLeft: 36, paddingRight: 12, position: 'relative', animationDelay: `${enterDelayMs + 60 + entryIndex * ENTRY_STAGGER_MS}ms` }}
       onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-raised)')}
       onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = '')}
       {...dataAttrs}
@@ -683,8 +800,9 @@ function DaqEntryRow({
 
       {/* waveform icon */}
       <span
+        ref={waveIconRef}
         className="shrink-0 mr-2"
-        style={{ color: isLive ? color : 'var(--text-muted)', lineHeight: 0, transition: 'color 280ms ease' }}
+        style={{ color: 'var(--text-muted)', lineHeight: 0, transition: 'color 280ms ease' }}
       >
         <WaveformBars size={12} active={isLive} />
       </span>
@@ -696,11 +814,34 @@ function DaqEntryRow({
 
       {/* value */}
       <span
+        ref={valueRef}
         className="font-mono text-[12px] tabular-nums"
-        style={{ width: 90, flexShrink: 0, color: value !== null ? 'var(--status-ok)' : 'var(--text-muted)' }}
-      >
-        {fmt(value)}
-      </span>
+        style={{ width: 90, flexShrink: 0, color: 'var(--text-muted)' }}
+      />
+
+      {/* min */}
+      <span
+        ref={minRef}
+        title="Min"
+        className="font-mono text-[10px] tabular-nums truncate"
+        style={{ width: 64, flexShrink: 0, color: 'var(--text-muted)' }}
+      />
+
+      {/* max */}
+      <span
+        ref={maxRef}
+        title="Max"
+        className="font-mono text-[10px] tabular-nums truncate"
+        style={{ width: 64, flexShrink: 0, color: 'var(--text-muted)' }}
+      />
+
+      {/* avg */}
+      <span
+        ref={avgRef}
+        title="Average"
+        className="font-mono text-[10px] tabular-nums truncate"
+        style={{ width: 64, flexShrink: 0, color: 'var(--text-muted)' }}
+      />
 
       {/* type */}
       <span className="font-mono text-[10px]" style={{ width: 48, flexShrink: 0, color: 'var(--text-muted)' }}>
@@ -713,8 +854,8 @@ function DaqEntryRow({
       </span>
 
       {/* sparkline */}
-      <div className="spark-reveal" style={{ flex: 1, minWidth: 0, padding: '0 4px', animationDelay: `${60 + entryIndex * 40 + 280}ms` }}>
-        <Sparkline liveKey={liveKey} color={color} />
+      <div style={{ flex: 1, minWidth: 0, padding: '0 4px' }}>
+        <Sparkline liveKey={liveKey} color={color} revealDelayMs={enterDelayMs + 60 + entryIndex * ENTRY_STAGGER_MS + 280} revealEpoch={revealEpoch} />
       </div>
 
       {/* delete */}
@@ -735,6 +876,7 @@ function DaqEntryRow({
 interface OdtSectionProps {
   list: DaqList;
   odt: DaqOdt;
+  enterDelayMs: number;
   color: string;
   exiting: boolean;
   listExpandEpoch: number;
@@ -746,13 +888,13 @@ interface OdtSectionProps {
 }
 
 function DaqOdtSection({
-  list, odt, color, exiting, listExpandEpoch,
+  list, odt, enterDelayMs, color, exiting, listExpandEpoch,
   onColorChange, onDelete, onSaveEntry, onDeleteEntry, onMoveEntry,
 }: OdtSectionProps) {
   const [collapsed,      setCollapsed]      = useState(false);
-  const [entryExpandKey, setEntryExpandKey] = useState(0);
-  const prevCollapsedRef   = useRef(false);
-  const prevListEpochRef   = useRef(listExpandEpoch);
+  const [revealEpoch,    setRevealEpoch]    = useState(0);
+  const prevCollapsedRef = useRef(false);
+  const prevListEpochRef = useRef(listExpandEpoch);
   const [addingEntry,    setAddingEntry]    = useState(false);
   const [colorPickerPos, setColorPickerPos] = useState<{ x: number; y: number } | null>(null);
   const [exitingEntries, setExitingEntries] = useState<Set<number>>(new Set());
@@ -763,17 +905,18 @@ function DaqOdtSection({
   const entryElsRef = useRef<Map<string, HTMLElement>>(new Map());
   const snapshotRef = useRef<Map<string, number>>(new Map());
 
-  // Re-animate entries when this ODT section is expanded
+  // Replay each sparkline's entrance wipe when this section (re-)expands —
+  // restarts only the canvas render-loop effect (cheap), not the row itself.
   useEffect(() => {
-    if (prevCollapsedRef.current && !collapsed) setEntryExpandKey(k => k + 1);
+    if (prevCollapsedRef.current && !collapsed) setRevealEpoch(k => k + 1);
     prevCollapsedRef.current = collapsed;
   }, [collapsed]);
 
-  // Re-animate entries when the parent list group is expanded
+  // Same, when the parent list group (re-)expands.
   useEffect(() => {
     if (prevListEpochRef.current !== listExpandEpoch) {
       prevListEpochRef.current = listExpandEpoch;
-      if (!collapsed) setEntryExpandKey(k => k + 1);
+      if (!collapsed) setRevealEpoch(k => k + 1);
     }
   }, [listExpandEpoch, collapsed]);
 
@@ -867,7 +1010,7 @@ function DaqOdtSection({
   }
 
   return (
-    <div className={exiting ? 'daq-exiting' : ''} style={{ animation: exiting ? undefined : 'daq-enter 160ms ease-out' }}>
+    <div className={exiting ? 'daq-exiting' : ''} style={{ animation: exiting ? undefined : `daq-enter 160ms ease-out ${enterDelayMs}ms both` }}>
       {/* ODT header */}
       <div
         className="group flex items-center gap-2 h-[26px] cursor-pointer select-none"
@@ -908,13 +1051,15 @@ function DaqOdtSection({
 
             return (
               <DaqEntryRow
-                key={`${entry.name}-${entryExpandKey}`}
+                key={entry.name}
                 entry={entry}
                 color={color}
                 liveKey={liveKey}
                 exiting={exitingEntries.has(ei)}
                 recentlyMoved={recentlyMoved === `${odt.id}:${entry.name}`}
                 entryIndex={ei}
+                enterDelayMs={enterDelayMs}
+                revealEpoch={revealEpoch}
                 onDelete={() => handleDeleteEntry(ei)}
                 onPointerDown={e => {
                   if (e.button !== 0) return;
@@ -992,6 +1137,61 @@ function DaqOdtSection({
   );
 }
 
+// ── DaqModeButton ────────────────────────────────────────────────
+// Dropdown for the SET_DAQ_LIST_MODE bitfield — a button showing the
+// current mode byte that opens a popover of per-bit toggle sliders.
+function DaqModeButton({ mode, onChange }: { mode: number; onChange: (mode: number) => void }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!pos) return;
+    function onDown(e: MouseEvent) {
+      if (!(e.target as Element).closest('#daq-mode-popover')) setPos(null);
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [pos]);
+
+  return (
+    <>
+      <button
+        data-no-collapse=""
+        className="xcb-select"
+        style={{ width: 'auto', fontSize: 9, fontFamily: 'monospace', color: 'var(--text-muted)', flexShrink: 0, cursor: 'pointer' }}
+        title="SET_DAQ_LIST_MODE bitfield"
+        onClick={e => { e.stopPropagation(); setPos(p => p ? null : { x: e.clientX, y: e.clientY + 6 }); }}
+      >
+        Mode 0x{mode.toString(16).padStart(2, '0').toUpperCase()}
+      </button>
+      {pos && createPortal(
+        <div
+          id="daq-mode-popover"
+          style={{
+            position: 'fixed', top: pos.y, left: pos.x,
+            background: 'var(--surface-raised)', border: '1px solid var(--border-strong)',
+            borderRadius: 8, padding: 10, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', zIndex: 9999,
+            minWidth: 170,
+          }}
+        >
+          <p style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            DAQ List Mode
+          </p>
+          {DAQ_LIST_MODE_BITS.map(({ bit, label }) => (
+            <div key={bit} className="flex items-center justify-between gap-3" style={{ padding: '3px 0' }}>
+              <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+              <Toggle checked={(mode & bit) !== 0} onChange={() => onChange(mode ^ bit)} />
+            </div>
+          ))}
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 6, paddingTop: 6, textAlign: 'right', fontFamily: 'monospace', fontSize: 11, color: 'var(--text-primary)' }}>
+            0x{mode.toString(16).padStart(2, '0').toUpperCase()}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 // ── DaqListGroup ──────────────────────────────────────────────────
 interface ListGroupProps {
   list: DaqList;
@@ -1002,6 +1202,9 @@ interface ListGroupProps {
   onAddOdt: () => void;
   onDeleteOdt: (odtId: number) => void;
   onSetEvent: (ch: number) => void;
+  onSetRunMode: (mode: number) => void;
+  onSetListMode: (mode: number) => void;
+  onSetPrescaler: (prescaler: number) => void;
   onSaveEntry: (odtId: number, entry: DaqEntry, idx: number | null) => void;
   onDeleteEntry: (odtId: number, idx: number) => void;
   onMoveEntry: (fromOdtId: number, fromIdx: number, toListId: number, toOdtId: number, toIdx: number) => void;
@@ -1010,6 +1213,7 @@ interface ListGroupProps {
 function DaqListGroup({
   list, odtColors, exiting,
   onOdtColorChange, onDeleteList, onAddOdt, onDeleteOdt, onSetEvent,
+  onSetRunMode, onSetListMode, onSetPrescaler,
   onSaveEntry, onDeleteEntry, onMoveEntry,
 }: ListGroupProps) {
   const storeEvents = useAppStore(s => s.events);
@@ -1039,6 +1243,14 @@ function DaqListGroup({
   const eventHex = `0x${list.event_channel.toString(16).padStart(2, '0').toUpperCase()}`;
   const eventName = events.find(e => e.id === list.event_channel)?.name ?? '';
 
+  // Each ODT's entrance begins once the previous ODT's entries have finished
+  // staggering in (entries.length * ENTRY_STAGGER_MS).
+  const odtEnterDelays: number[] = [];
+  list.odts.reduce((delay, odt) => {
+    odtEnterDelays.push(delay);
+    return delay + odt.entries.length * ENTRY_STAGGER_MS;
+  }, 0);
+
   return (
     <div
       className={exiting ? 'daq-exiting' : ''}
@@ -1046,44 +1258,69 @@ function DaqListGroup({
     >
       {/* list header */}
       <div
-        className="group flex items-center gap-2 h-8 cursor-pointer select-none"
-        style={{ padding: '0 12px', background: 'var(--surface-raised)', borderBottom: '1px solid var(--border)' }}
+        className="group flex items-center gap-2 cursor-pointer select-none"
+        style={{ padding: '4px 12px', background: 'var(--surface-raised)', borderBottom: '1px solid var(--border)' }}
         onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-overlay)')}
         onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = 'var(--surface-raised)')}
         onClick={e => { if (!(e.target as Element).closest('[data-no-collapse]')) setCollapsed(c => !c); }}
       >
         <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{collapsed ? '▸' : '▾'}</span>
-        <span className="text-[11px] font-semibold flex-1" style={{ color: 'var(--text-secondary)' }}>
+        <span className="text-[12px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
           {list.name ?? `List ${list.id}`}
         </span>
-        {/* event channel */}
-        <select
+        <Button
           data-no-collapse=""
-          value={list.event_channel}
-          onClick={e => e.stopPropagation()}
-          onChange={e => { e.stopPropagation(); onSetEvent(Number(e.target.value)); }}
-          className="xcb-select"
-          style={{ width: 'auto', fontSize: 9, fontFamily: 'monospace', color: 'var(--text-muted)', flexShrink: 0 }}
-        >
-          {events.map(ev => (
-            <option key={ev.id} value={ev.id}>
-              0x{ev.id.toString(16).padStart(2,'0').toUpperCase()} — {ev.name}
-            </option>
-          ))}
-        </select>
-        <span className="text-[9px] shrink-0" style={{ color: 'var(--text-muted)' }}>
-          {eventHex} · {eventName} · {totalSignals} sig
-        </span>
-        <button
-          data-no-collapse=""
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] flex items-center gap-1 shrink-0"
-          style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
-          onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--accent)')}
-          onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
+          variant="ghost"
+          className="!px-2 !py-0.5 !text-[10px] !gap-1 shrink-0"
           onClick={e => { e.stopPropagation(); onAddOdt(); }}
         >
           <Plus size={11} />ODT
-        </button>
+        </Button>
+        <div style={{ flex: 1 }} />
+        {/* per-list run mode (START_STOP_DAQ_LIST) */}
+        <div data-no-collapse="" className="flex flex-col gap-0.5" onClick={e => e.stopPropagation()}>
+          <FieldLabel>Run</FieldLabel>
+          <select
+            value={list.run_mode}
+            onChange={e => onSetRunMode(Number(e.target.value))}
+            className="xcb-select"
+            title="START_STOP_DAQ_LIST — per-list run state"
+            style={{ width: 'auto', fontSize: 9, fontFamily: 'monospace', flexShrink: 0, color: RUN_MODE_COLORS[list.run_mode] ?? 'var(--text-muted)' }}
+          >
+            {RUN_MODES.map(m => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+        {/* event channel */}
+        <div data-no-collapse="" className="flex flex-col gap-0.5" onClick={e => e.stopPropagation()}>
+          <FieldLabel>Event</FieldLabel>
+          <select
+            value={list.event_channel}
+            onChange={e => onSetEvent(Number(e.target.value))}
+            className="xcb-select"
+            style={{ width: 'auto', fontSize: 9, fontFamily: 'monospace', color: 'var(--text-muted)', flexShrink: 0 }}
+          >
+            {events.map(ev => (
+              <option key={ev.id} value={ev.id}>
+                0x{ev.id.toString(16).padStart(2,'0').toUpperCase()} — {ev.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {/* prescaler */}
+        <div data-no-collapse="" className="flex flex-col gap-0.5" onClick={e => e.stopPropagation()} title="SET_DAQ_LIST_MODE — prescaler">
+          <FieldLabel>Presc</FieldLabel>
+          <DialInput value={list.prescaler} onChange={onSetPrescaler} min={1} max={255} digits={3} style={{ height: 24 }} />
+        </div>
+        {/* SET_DAQ_LIST_MODE bitfield */}
+        <div data-no-collapse="" className="flex flex-col gap-0.5">
+          <FieldLabel>Mode</FieldLabel>
+          <DaqModeButton mode={list.daq_list_mode} onChange={onSetListMode} />
+        </div>
+        <span className="text-[9px] shrink-0" style={{ color: 'var(--text-muted)' }}>
+          {eventHex} · {eventName} · {totalSignals} sig
+        </span>
         <button
           data-no-collapse=""
           className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0"
@@ -1099,11 +1336,12 @@ function DaqListGroup({
       {/* ODT sections */}
       <div style={{ display: 'grid', gridTemplateRows: collapsed ? '0fr' : '1fr', transition: 'grid-template-rows 200ms ease' }}>
         <div style={{ minHeight: 0, overflow: 'hidden' }}>
-          {list.odts.map(odt => (
+          {list.odts.map((odt, index) => (
             <DaqOdtSection
               key={odt.id}
               list={list}
               odt={odt}
+              enterDelayMs={odtEnterDelays[index]}
               color={odtColors[`${list.id}:${odt.id}`] ?? ODT_COLORS[0]}
               exiting={exitingOdts.has(odt.id)}
               listExpandEpoch={expandEpoch}
@@ -1158,7 +1396,10 @@ export function Daq() {
 
   function handleAddList() {
     const id = daqLists.length > 0 ? Math.max(...daqLists.map(l => l.id)) + 1 : 0;
-    setDaqLists([...daqLists, { id, event_channel: 1, odts: [{ id: 0, entries: [] }] }]);
+    setDaqLists([...daqLists, {
+      id, event_channel: 1, odts: [{ id: 0, entries: [] }],
+      run_mode: 0x03, daq_list_mode: 0x10, prescaler: 1,
+    }]);
   }
 
   function handleDeleteList(listId: number) {
@@ -1171,6 +1412,21 @@ export function Daq() {
 
   function handleSetEvent(listId: number, ch: number) {
     setDaqLists(daqLists.map(l => l.id === listId ? { ...l, event_channel: ch } : l));
+  }
+
+  function handleSetListMode(listId: number, mode: number) {
+    setDaqLists(daqLists.map(l => l.id === listId ? { ...l, daq_list_mode: mode } : l));
+  }
+
+  function handleSetPrescaler(listId: number, prescaler: number) {
+    setDaqLists(daqLists.map(l => l.id === listId ? { ...l, prescaler } : l));
+  }
+
+  async function handleSetRunMode(listId: number, mode: number) {
+    try {
+      await api.daqSetRunMode(listId, mode);
+      setDaqLists(daqLists.map(l => l.id === listId ? { ...l, run_mode: mode } : l));
+    } catch (e) { showToast((e as Error).message, 'error'); }
   }
 
   function handleAddOdt(listId: number) {
@@ -1264,6 +1520,9 @@ export function Daq() {
       const reIndexed: DaqList[] = data.lists.map((l: DaqList, li: number) => ({
         ...l, id: li,
         odts: (l.odts ?? []).map((o: DaqOdt, oi: number) => ({ ...o, id: oi })),
+        run_mode: l.run_mode ?? 0x03,
+        daq_list_mode: l.daq_list_mode ?? 0x10,
+        prescaler: l.prescaler ?? 1,
       }));
       setDaqLists(reIndexed);
       if (data.colors) setOdtColors(data.colors);
@@ -1317,7 +1576,7 @@ export function Daq() {
         className="flex items-center h-[26px] shrink-0 sticky top-0 z-10"
         style={{ paddingLeft: 36, paddingRight: 12, background: 'var(--surface-base)', borderBottom: '1px solid var(--border-strong)' }}
       >
-        {[['Signal', 148 + 12 + 12], ['Value', 90], ['Type', 48], ['Address', 96]].map(([label, w]) => (
+        {[['Signal', 148 + 12 + 12], ['Value', 90], ['Min', 64], ['Max', 64], ['Avg', 64], ['Type', 48], ['Address', 96]].map(([label, w]) => (
           <span key={label as string} className="text-[9px] font-semibold uppercase tracking-wider" style={{ width: w as number, flexShrink: 0, color: 'var(--text-muted)' }}>
             {label}
           </span>
@@ -1338,6 +1597,9 @@ export function Daq() {
             onAddOdt={() => handleAddOdt(list.id)}
             onDeleteOdt={odtId => handleDeleteOdt(list.id, odtId)}
             onSetEvent={ch => handleSetEvent(list.id, ch)}
+            onSetRunMode={mode => handleSetRunMode(list.id, mode)}
+            onSetListMode={mode => handleSetListMode(list.id, mode)}
+            onSetPrescaler={prescaler => handleSetPrescaler(list.id, prescaler)}
             onSaveEntry={(odtId, entry, idx) => handleSaveEntry(list.id, odtId, entry, idx)}
             onDeleteEntry={(odtId, idx) => handleDeleteEntry(list.id, odtId, idx)}
             onMoveEntry={(fromOdtId, fromIdx, toListId, toOdtId, toIdx) =>

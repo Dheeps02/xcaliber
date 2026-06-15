@@ -478,15 +478,6 @@ select {
 }
 .daq-moved { animation: daq-moved-flash 450ms var(--ease-out); }
 
-@keyframes spark-reveal {
-  from { clip-path: inset(0 100% 0 0); }
-  to   { clip-path: inset(0 0%   0 0); }
-}
-.spark-reveal {
-  animation: spark-reveal 380ms var(--ease-out) both;
-}
-.no-animations .spark-reveal { animation: none; }
-
 /* ── Waveform live pulse ─────────────────────────────────────────── */
 @keyframes waveform-enter {
   from { transform: scaleY(0);    }

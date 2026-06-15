@@ -151,6 +151,9 @@ export interface DaqList {
   name?: string;
   event_channel: number;
   odts: DaqOdt[];
+  run_mode: number;
+  daq_list_mode: number;
+  prescaler: number;
 }
 
 export type DaqStatus = 'idle' | 'configured' | 'running';
@@ -162,6 +165,10 @@ export interface DaqLiveValue {
   addr: number;
   typeName: DaqEntryType;
   value: number | null;
+  min: number | null;
+  max: number | null;
+  sum: number;
+  count: number;
   history: { value: number; ts: number }[];
 }
 
