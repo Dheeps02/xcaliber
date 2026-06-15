@@ -8,6 +8,7 @@ import { useTooltip } from '../context/TooltipContext';
 import { api } from '../lib/api';
 import type { A2lVariable } from '../lib/types';
 import { Button } from './ui/Button';
+import { FieldLabel } from './ui/FieldLabel';
 import { useRotatingPreview } from '../hooks/useRotatingPreview';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -20,17 +21,6 @@ function resolveAddr(input: string, a2lVars: A2lVariable[]): number | null {
   }
   const v = a2lVars.find((v) => v.name === t);
   return v ? v.addr : null;
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      className="text-[9px] font-semibold uppercase tracking-widest leading-none"
-      style={{ color: 'var(--text-muted)' }}
-    >
-      {children}
-    </span>
-  );
 }
 
 // ── MemoryBar ─────────────────────────────────────────────────────────────────
