@@ -50,9 +50,9 @@ jobs:
         run: |
           cargo build --release --target aarch64-apple-darwin
           cargo build --release --target x86_64-apple-darwin
-          lipo -create -output target/release/xcaliber \
-            target/aarch64-apple-darwin/release/xcaliber \
-            target/x86_64-apple-darwin/release/xcaliber
+          lipo -create -output target/release/zenscope \
+            target/aarch64-apple-darwin/release/zenscope \
+            target/x86_64-apple-darwin/release/zenscope
 
       - run: npm run frontend:build
 

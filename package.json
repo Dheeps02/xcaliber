@@ -1,5 +1,5 @@
 {
-  "name": "xcaliber",
+  "name": "zenscope",
   "version": "0.1.0",
   "description": "XCP measurement and calibration client",
   "author": "Dheepan",
@@ -28,8 +28,8 @@
     "electron-winstaller@5.4.0": true
   },
   "build": {
-    "appId": "com.xcaliber.app",
-    "productName": "Xcaliber",
+    "appId": "com.zenscope.app",
+    "productName": "ZenScope",
     "directories": {
       "output": "release"
     },
@@ -40,20 +40,20 @@
     "mac": {
       "target": "dmg",
       "extraResources": [
-        { "from": "target/release/xcaliber", "to": "." }
+        { "from": "target/release/zenscope", "to": "." }
       ]
     },
     "win": {
       "target": "nsis",
       "icon": "icons/icon.ico",
       "extraResources": [
-        { "from": "target/release/xcaliber.exe", "to": "." }
+        { "from": "target/release/zenscope.exe", "to": "." }
       ]
     },
     "linux": {
       "target": "AppImage",
       "extraResources": [
-        { "from": "target/release/xcaliber", "to": "." }
+        { "from": "target/release/zenscope", "to": "." }
       ]
     }
   }

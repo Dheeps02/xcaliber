@@ -174,7 +174,7 @@ export function Header() {
             className="text-xs font-semibold tracking-widest uppercase"
             style={{ color: 'var(--text-primary)', letterSpacing: '0.1em' }}
           >
-            xcaliber
+            zenscope
           </span>
 
           <ConnectToggle checked={connected} onChange={handleToggle} disabled={connecting} />

@@ -117,12 +117,12 @@ async fn run_server() {
 
     let listener = match tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await {
         Ok(l) => {
-            eprintln!("[xcaliber] Axum listening on 0.0.0.0:{port}");
+            eprintln!("[zenscope] Axum listening on 0.0.0.0:{port}");
             l
         }
         Err(e) => {
-            eprintln!("[xcaliber] ERROR: failed to bind port {port}: {e}");
-            eprintln!("[xcaliber] Is another process using port {port}?");
+            eprintln!("[zenscope] ERROR: failed to bind port {port}: {e}");
+            eprintln!("[zenscope] Is another process using port {port}?");
             return;
         }
     };

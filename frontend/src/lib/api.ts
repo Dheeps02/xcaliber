@@ -11,7 +11,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
       body: body != null ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new Error('Cannot reach Xcaliber backend. Is the app running?');
+    throw new Error('Cannot reach ZenScope backend. Is the app running?');
   }
   const data = await res.json().catch(() => null) as Record<string, unknown> | null;
   if (!res.ok) {
@@ -30,7 +30,7 @@ async function get<T>(path: string): Promise<T> {
   try {
     res = await fetch(BASE + path);
   } catch {
-    throw new Error('Cannot reach Xcaliber backend. Is the app running?');
+    throw new Error('Cannot reach ZenScope backend. Is the app running?');
   }
   if (!res.ok) throw new Error('Request failed');
   return res.json() as Promise<T>;

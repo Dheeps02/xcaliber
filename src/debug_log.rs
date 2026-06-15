@@ -3,7 +3,7 @@ use std::time::Instant;
 
 static START: OnceLock<Instant> = OnceLock::new();
 
-/// Best-effort append a line to `xcaliber-debug.log` next to the executable.
+/// Best-effort append a line to `zenscope-debug.log` next to the executable.
 ///
 /// Packaged Windows builds run with `windows_subsystem = "windows"` (no
 /// console), so `eprintln!`/`println!` aren't visible to users. A log file
@@ -16,8 +16,8 @@ pub fn log(msg: impl AsRef<str>) {
     let elapsed = START.get_or_init(Instant::now).elapsed();
     let path = std::env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(|d| d.join("xcaliber-debug.log")))
-        .unwrap_or_else(|| std::path::PathBuf::from("xcaliber-debug.log"));
+        .and_then(|p| p.parent().map(|d| d.join("zenscope-debug.log")))
+        .unwrap_or_else(|| std::path::PathBuf::from("zenscope-debug.log"));
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
         // Single write_all call so concurrent writers from different tasks
         // can't interleave a line's content and its trailing newline.

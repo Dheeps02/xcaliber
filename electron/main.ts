@@ -20,8 +20,8 @@ let backend: ChildProcess | null = null;
 function spawnBackend() {
   const ext = process.platform === 'win32' ? '.exe' : '';
   const bin = isDev
-    ? join(__dirname, `../target/debug/xcaliber${ext}`)
-    : join(process.resourcesPath, `xcaliber${ext}`);
+    ? join(__dirname, `../target/debug/zenscope${ext}`)
+    : join(process.resourcesPath, `zenscope${ext}`);
 
   try {
     // 'pipe' stdin + windowsHide avoids spawning a visible console window on
@@ -40,7 +40,7 @@ function spawnBackend() {
           title: 'Missing DLLs — Npcap required',
           message: 'Packet.dll or wpcap.dll could not be found.',
           detail:
-            'Install Npcap from https://npcap.com and relaunch Xcaliber, or place Packet.dll and wpcap.dll in the same folder as the executable.',
+            'Install Npcap from https://npcap.com and relaunch ZenScope, or place Packet.dll and wpcap.dll in the same folder as the executable.',
           buttons: ['OK'],
         });
         app.quit();
@@ -87,7 +87,7 @@ app.whenReady().then(() => {
       type: 'error',
       title: 'Npcap not found',
       message: 'Npcap is required for Ethernet transport on Windows.',
-      detail: 'Download and install it from https://npcap.com, then relaunch Xcaliber.',
+      detail: 'Download and install it from https://npcap.com, then relaunch ZenScope.',
       buttons: ['OK'],
     });
     app.quit();

@@ -678,7 +678,7 @@ function AboutTab() {
           <span className="font-bold text-lg font-mono tracking-tight" style={{ color: 'var(--accent)' }}>X</span>
         </div>
         <div>
-          <p className="text-base font-semibold text-[var(--text-primary)] tracking-tight">XCaliber</p>
+          <p className="text-base font-semibold text-[var(--text-primary)] tracking-tight">ZenScope</p>
           <p className="text-[11px] text-[var(--text-muted)] mt-0.5">XCP measurement and calibration client</p>
         </div>
       </div>

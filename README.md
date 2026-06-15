@@ -1,4 +1,4 @@
-# Xcaliber
+# ZenScope
 
 A modern, open-source XCP client for automotive ECU calibration and measurement. Built with Rust, Electron, and React.
 
@@ -24,7 +24,7 @@ A modern, open-source XCP client for automotive ECU calibration and measurement.
 
 ```
 Electron Process
-├── xcaliber (Rust binary)
+├── zenscope (Rust binary)
 │   └── Axum :8080         HTTP + SSE server
 │       ├── /api/*         REST endpoints (commands, DAQ, config)
 │       └── /events        Server-Sent Events (live packet + DTO push)
