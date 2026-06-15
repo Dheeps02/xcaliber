@@ -1,18 +1,19 @@
 import {
   useRef, useState, useEffect,
-  type ChangeEvent, type MouseEvent,
+  type ChangeEvent, type MouseEvent, type ReactNode,
 } from 'react';
 import { TOOLBAR_ICON_SIZE, INFO_ICON_SIZE } from '../lib/constants';
 import { createPortal } from 'react-dom';
 import {
   PaperPlaneTilt, Plus, CaretLeft, CaretRight,
   CornersIn, CornersOut, CaretDown, Info, X, Command, MagnifyingGlass,
+  Monitor, UserCircle, BookmarksSimple, ClockCounterClockwise,
 } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { useTooltip } from '../context/TooltipContext';
-import { CMD_DEFS, CMD_CATEGORIES } from '../lib/cmd-defs';
+import { CMD_DEFS, CMD_GROUPS } from '../lib/cmd-defs';
 import { api } from '../lib/api';
-import type { FieldOption, SeqStep } from '../lib/types';
+import type { CmdDef, FieldOption, SeqStep } from '../lib/types';
 import { toTitleCase, formatLabel } from '../lib/utils';
 import { Button } from './ui/Button';
 import { SegmentControl } from './ui/SegmentControl';
@@ -22,6 +23,11 @@ import { SegmentControl } from './ui/SegmentControl';
 const BASE_CELLS = 8;
 const EXIT_MS = 160;
 const STAGGER_MS = 28;
+const PICKER_TABS = ['history', 'system', 'user', 'saved'] as const;
+const GROUP_STAGGER = 35;
+const GROUP_FADE = 180;
+const SUB_STAGGER = 30;
+const SUB_FADE = 160;
 
 interface DropdownState {
   cellIdx: number;
@@ -29,6 +35,87 @@ interface DropdownState {
   x: number;
   y: number;
   width: number;
+}
+
+const emptyMsgStyle = { padding: '16px 10px', fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' } as const;
+
+const CMD_GRID_COLS = '20px 36px 1fr 36px';
+
+function CmdPickerHeaderRow() {
+  return (
+    <div
+      style={{
+        display: 'grid', gridTemplateColumns: CMD_GRID_COLS, gap: 8, alignItems: 'center',
+        padding: '4px 10px', position: 'sticky', top: 0, zIndex: 1,
+        borderBottom: '1px solid var(--border)',
+        fontSize: 10, fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: 'var(--text-muted)',
+      }}
+    >
+      <span />
+      <span className="flex items-center gap-2"><span className="xcb-vdiv-fade" />PID</span>
+      <span className="flex items-center gap-2"><span className="xcb-vdiv-fade" />Name</span>
+      <span className="flex items-center justify-end gap-2"><span className="xcb-vdiv-fade" />Size</span>
+    </div>
+  );
+}
+
+function CmdPickerGroupHeader({ children, collapsed, onToggle }: { children: ReactNode; collapsed?: boolean; onToggle?: () => void }) {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        padding: '10px 10px 2px', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-secondary)',
+        cursor: onToggle ? 'pointer' : 'default', userSelect: 'none',
+      }}
+      onClick={onToggle}
+    >
+      {onToggle && <CaretDown size={10} style={{ transform: collapsed ? 'rotate(-90deg)' : undefined, transition: 'transform 120ms', flexShrink: 0 }} />}
+      {children}
+    </div>
+  );
+}
+
+function CmdPickerSectionHeader({ children, collapsed, onToggle }: { children: ReactNode; collapsed?: boolean; onToggle?: () => void }) {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        padding: '6px 10px 2px 16px', fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)',
+        cursor: onToggle ? 'pointer' : 'default', userSelect: 'none',
+      }}
+      onClick={onToggle}
+    >
+      {onToggle && <CaretDown size={9} style={{ transform: collapsed ? 'rotate(-90deg)' : undefined, transition: 'transform 120ms', flexShrink: 0 }} />}
+      {children}
+    </div>
+  );
+}
+
+function CmdPickerRow({ icon, pidLabel, label, size, onClick }: { icon: ReactNode; pidLabel: string; label: string; size: number; onClick: () => void }) {
+  return (
+    <button
+      style={{
+        display: 'grid', gridTemplateColumns: CMD_GRID_COLS, gap: 8, alignItems: 'center',
+        width: '100%', padding: '3px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-hover)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+      onClick={onClick}
+    >
+      <span style={{ display: 'flex', color: 'var(--text-muted)' }}>{icon}</span>
+      <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--text-muted)', textAlign: 'right' }}>{pidLabel}</span>
+      <span style={{ fontSize: 11, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--text-muted)', textAlign: 'right' }}>{size}</span>
+    </button>
+  );
+}
+
+function sourceIcon(source: 'system' | 'user' | 'saved') {
+  switch (source) {
+    case 'system': return <Monitor size={14} />;
+    case 'user':   return <UserCircle size={14} />;
+    case 'saved':  return <BookmarksSimple size={14} />;
+  }
 }
 
 // ── CommandBar ───────────────────────────────────────────────────────────────
@@ -40,6 +127,8 @@ export function CommandBar() {
   const setActiveCmd        = useAppStore((s) => s.setActiveCmd);
   const customCmdDefs       = useAppStore((s) => s.customCmdDefs);
   const userCmdDefs         = useAppStore((s) => s.userCmdDefs);
+  const commandHistory      = useAppStore((s) => s.commandHistory);
+  const addCommandHistory   = useAppStore((s) => s.addCommandHistory);
   const collapsed           = useAppStore((s) => s.byteBarCollapsed);
   const setCollapsed        = useAppStore((s) => s.setByteBarCollapsed);
   const showToast           = useAppStore((s) => s.showToast);
@@ -66,11 +155,18 @@ export function CommandBar() {
   const [expandKey, setExpandKey]   = useState(0);
   const [toggleKey, setToggleKey]   = useState(0);
   const [pickerOpen, setPickerOpen]   = useState(false);
-  const [pickerTab, setPickerTab]     = useState<'system' | 'user' | 'saved'>('system');
+  const [pickerTab, setPickerTab]     = useState<'history' | 'system' | 'user' | 'saved'>('history');
   const [pickerQuery, setPickerQuery] = useState('');
+  const [pickerPos, setPickerPos]     = useState<{ top: number; left: number; width: number } | null>(null);
+  const [pickerRender, setPickerRender]   = useState(false);
+  const [pickerClosing, setPickerClosing] = useState(false);
+  const [pickerSliding, setPickerSliding] = useState(false);
+  const [collapsedGroups, setCollapsedGroups]       = useState<Set<string>>(new Set());
+  const [collapsedSubgroups, setCollapsedSubgroups] = useState<Set<string>>(new Set());
 
   const inputRefs    = useRef<(HTMLInputElement | null)[]>([]);
   const pickerRef    = useRef<HTMLDivElement>(null);
+  const pickerPanelRef = useRef<HTMLDivElement>(null);
   const prevCollapsedRef = useRef(collapsed);
   const shownValuesRef = useRef(shownValues);
   shownValuesRef.current = shownValues;
@@ -79,6 +175,8 @@ export function CommandBar() {
   const allBytesRef    = useRef(allBytes);
   allBytesRef.current  = allBytes;
   const holdTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickerSlideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pickerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevLabelTextsRef = useRef<string[]>(Array(BASE_CELLS).fill(''));
 
   useEffect(() => {
@@ -95,16 +193,50 @@ export function CommandBar() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [dropdown]);
 
+  // Keep the picker panel mounted briefly after close so it can play an
+  // exit animation (mirrors the detail-expand entrance) instead of vanishing.
+  useEffect(() => {
+    if (pickerOpen) {
+      if (pickerCloseTimerRef.current) clearTimeout(pickerCloseTimerRef.current);
+      setPickerClosing(false);
+      setPickerRender(true);
+    } else if (pickerRender) {
+      setPickerClosing(true);
+      pickerCloseTimerRef.current = setTimeout(() => {
+        setPickerRender(false);
+        setPickerClosing(false);
+      }, 160);
+    }
+    return () => {
+      if (pickerCloseTimerRef.current) clearTimeout(pickerCloseTimerRef.current);
+    };
+  }, [pickerOpen]);
+
+  // Picker panel is portaled to <body> (see below) so its backdrop-filter
+  // isn't nested inside the bar's own .xcb-glass blur — nested
+  // backdrop-filters sample the ancestor's flat fill instead of the page,
+  // which renders as a flat tint with no visible blur.
   useEffect(() => {
     if (!pickerOpen) return;
-    const onDown = (e: globalThis.MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(false);
-      }
+    const update = () => {
+      const rect = pickerRef.current?.getBoundingClientRect();
+      if (rect) setPickerPos({ top: rect.bottom, left: rect.left, width: rect.width });
     };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
   }, [pickerOpen]);
+
+  // Hide pane scrollbars while the tab-slide transition is in flight —
+  // otherwise the scrollbar track slides across the screen with the pane.
+  useEffect(() => {
+    setPickerSliding(true);
+    if (pickerSlideTimerRef.current) clearTimeout(pickerSlideTimerRef.current);
+    pickerSlideTimerRef.current = setTimeout(() => setPickerSliding(false), 1000);
+    return () => {
+      if (pickerSlideTimerRef.current) clearTimeout(pickerSlideTimerRef.current);
+    };
+  }, [pickerTab]);
 
   useEffect(() => {
     prevLabelTextsRef.current = Array.from({ length: BASE_CELLS }, (_, i) => {
@@ -235,23 +367,54 @@ export function CommandBar() {
   }
 
   const q = pickerQuery.toLowerCase().trim();
-  const filteredCategories = CMD_CATEGORIES
-    .map(cat => ({
-      ...cat,
-      commands: cat.commands.filter(cmd =>
-        !q || cmd.id.includes(q) || cmd.label.toLowerCase().includes(q) || cmd.pid.toLowerCase().includes(q)
-      ),
+  const filteredGroups = CMD_GROUPS
+    .map(group => ({
+      ...group,
+      subgroups: group.subgroups
+        .map(sub => ({
+          ...sub,
+          commands: sub.commands.filter(cmd =>
+            !q || cmd.id.includes(q) || cmd.label.toLowerCase().includes(q) || cmd.pid.toLowerCase().includes(q)
+          ),
+        }))
+        .filter(sub => sub.commands.length > 0),
     }))
-    .filter(cat => cat.commands.length > 0);
+    .filter(group => group.subgroups.length > 0);
   const userEntries   = Object.entries(userCmdDefs).filter(([key, def]) =>
     !q || key.includes(q) || (def.userCmdName ?? '').toLowerCase().includes(q)
   );
   const customEntries = Object.entries(customCmdDefs).filter(([key]) => !q || key.includes(q));
+  const historyEntries = commandHistory
+    .map((id) => {
+      if (CMD_DEFS[id])      return { id, def: CMD_DEFS[id],      source: 'system' as const };
+      if (customCmdDefs[id]) return { id, def: customCmdDefs[id], source: 'saved'  as const };
+      if (userCmdDefs[id])   return { id, def: userCmdDefs[id],   source: 'user'   as const };
+      return null;
+    })
+    .filter((e): e is { id: string; def: CmdDef; source: 'system' | 'user' | 'saved' } => e !== null);
 
   function selectCmd(id: string) {
     setActiveCmd(id);
+    addCommandHistory(id);
     setPickerOpen(false);
     setPickerQuery('');
+    if (collapsed) setCollapsed(false);
+  }
+
+  function toggleGroup(name: string) {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+  }
+
+  function toggleSubgroup(key: string) {
+    setCollapsedSubgroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
   }
 
   const startByte = section * BASE_CELLS;
@@ -271,33 +434,27 @@ export function CommandBar() {
         style={{ height: 34, borderBottom: collapsed ? 'none' : '1px solid var(--border)' }}
         onClick={() => { setCollapsed(!collapsed); setToggleKey((k) => k + 1); }}
       >
-        {/* Centered search bar — grows downward into picker panel */}
+        {/* Centered search bar */}
         <div
           ref={pickerRef}
-          className={pickerOpen ? 'xcb-glass' : ''}
           style={{
             position: 'absolute',
             left: '50%',
             transform: 'translateX(-50%)',
-            width: 280,
+            width: 560,
             top: 4,
-            overflow: 'hidden',
-            borderRadius: pickerOpen ? '4px 4px 8px 8px' : 4,
-            border: `1px solid ${pickerOpen ? 'var(--border-strong)' : 'transparent'}`,
-            boxShadow: pickerOpen ? '0 16px 48px rgba(0,0,0,0.5)' : undefined,
-            transition: 'border-radius 200ms ease, box-shadow 200ms ease, border-color 150ms',
             zIndex: 20,
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Search input */}
           <div
             className="xcb-input relative flex items-center"
             style={{
               height: 26,
-              borderRadius: pickerOpen ? '4px 4px 0 0' : 4,
-              border: pickerOpen ? 'none' : undefined,
-              borderBottom: pickerOpen ? '1px solid var(--border)' : undefined,
+              borderRadius: 4,
+              background: 'var(--shadow-6)',
+              border: '1px solid var(--shadow-9)',
+              boxShadow: 'inset 0 2px 5px var(--shadow-10), inset 0 1px 2px var(--shadow-7), 0 1px 0 var(--shine-3)',
             }}
           >
             <MagnifyingGlass
@@ -320,93 +477,217 @@ export function CommandBar() {
               }}
               value={pickerQuery}
               onChange={e => setPickerQuery(e.target.value)}
-              onFocus={() => setPickerOpen(true)}
+              onFocus={() => { setPickerOpen(true); setPickerTab('history'); }}
             />
           </div>
+        </div>
 
-          {/* Panel — expands downward */}
-          <div style={{
-            display: 'grid',
-            gridTemplateRows: pickerOpen ? '1fr' : '0fr',
-            transition: 'grid-template-rows 220ms ease',
-          }}>
-            <div style={{ minHeight: 0, overflow: 'hidden' }}>
-              <div style={{ height: 374, display: 'flex', flexDirection: 'column' }}>
+        {/* Picker panel — portaled to <body> so its backdrop-filter blurs
+            real page content instead of nesting inside the bar's own .xcb-glass */}
+        {pickerRender && pickerPos && createPortal(
+          <>
+            {/* Click-outside backdrop — closes the picker and swallows the
+                click so it can't also trigger whatever's underneath. */}
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 9998,
+                pointerEvents: pickerClosing ? 'none' : undefined,
+              }}
+              onClick={(e) => { e.stopPropagation(); setPickerOpen(false); }}
+            />
+            <div
+              ref={pickerPanelRef}
+              className="xcb-glass-panel"
+              style={{
+                position: 'fixed',
+                top: pickerPos.top + 6,
+                left: pickerPos.left,
+                width: pickerPos.width,
+                zIndex: 9999,
+                overflow: 'hidden',
+                borderRadius: 8,
+                border: '1px solid var(--border-strong)',
+                boxShadow: 'inset 0 1px 0 var(--shine-3), 0 16px 48px rgba(0,0,0,0.5)',
+                animation: pickerClosing
+                  ? 'detail-collapse 160ms var(--ease-out) forwards'
+                  : 'detail-expand 160ms var(--ease-out)',
+                pointerEvents: pickerClosing ? 'none' : undefined,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+            <div style={{ height: 520, display: 'flex', flexDirection: 'column' }}>
                 {/* Tabs */}
                 <div style={{ padding: '8px 8px 5px', flexShrink: 0 }}>
-                  <SegmentControl<'system' | 'user' | 'saved'>
+                  <SegmentControl<'history' | 'system' | 'user' | 'saved'>
                     items={[
-                      { value: 'system', label: 'System' },
-                      { value: 'user',   label: 'User'   },
-                      { value: 'saved',  label: 'Saved'  },
+                      { value: 'history', label: 'History', icon: <ClockCounterClockwise size={18} /> },
+                      { value: 'system', label: 'System', icon: <Monitor size={18} /> },
+                      { value: 'user',   label: 'User',   icon: <UserCircle size={18} /> },
+                      { value: 'saved',  label: 'Saved',  icon: <BookmarksSimple size={18} /> },
                     ]}
                     value={pickerTab}
                     onChange={setPickerTab}
                     size="sm"
+                    variant="icon-text"
+                    className="fill"
                   />
                 </div>
                 {/* Command list */}
-                <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingBottom: 6 }}>
-                  {pickerTab === 'system' && (
-                    filteredCategories.length === 0
-                      ? <div style={{ padding: '16px 10px', fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>No commands match</div>
-                      : filteredCategories.map(cat => (
-                          <div key={cat.name}>
-                            <div style={{ padding: '8px 10px 2px', fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
-                              {cat.name}
-                            </div>
-                            {cat.commands.map(cmd => (
-                              <button
-                                key={cmd.id}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '3px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-                                onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-hover)')}
-                                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-                                onClick={() => selectCmd(cmd.id)}
-                              >
-                                <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--text-muted)', width: '2ch', textAlign: 'right', flexShrink: 0 }}>{cmd.pid.slice(2)}</span>
-                                <span style={{ fontSize: 11, color: 'var(--text-primary)' }}>{formatLabel(cmd.id)}</span>
-                              </button>
+                <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                  {q ? (
+                    <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingBottom: 6 }}>
+                      {/* Global search — merges results across System/User/Saved, ignoring the active tab */}
+                      {(filteredGroups.length === 0 && userEntries.length === 0 && customEntries.length === 0)
+                        ? <div style={emptyMsgStyle}>No commands match</div>
+                        : <>
+                            <CmdPickerHeaderRow />
+                            {filteredGroups.map(group => (
+                              <div key={group.name}>
+                                <CmdPickerGroupHeader>{group.name}</CmdPickerGroupHeader>
+                                {group.subgroups.map(sub => (
+                                  <div key={sub.name}>
+                                    <CmdPickerSectionHeader>{sub.name}</CmdPickerSectionHeader>
+                                    {sub.commands.map(cmd => (
+                                      <CmdPickerRow key={cmd.id} icon={<Monitor size={14} />} pidLabel={cmd.pid.slice(2)} label={formatLabel(cmd.id)} size={CMD_DEFS[cmd.id]?.fields.length ?? 0} onClick={() => selectCmd(cmd.id)} />
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
                             ))}
-                          </div>
-                        ))
-                  )}
-                  {pickerTab === 'user' && (
-                    userEntries.length === 0
-                      ? <div style={{ padding: '16px 10px', fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>{q ? 'No commands match' : 'No user commands loaded'}</div>
-                      : userEntries.map(([key, def]) => (
-                          <button
-                            key={key}
-                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '3px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-hover)')}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-                            onClick={() => selectCmd(key)}
-                          >
-                            <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--text-muted)', width: '2ch', textAlign: 'right', flexShrink: 0 }}>{def.pid ?? '--'}</span>
-                            <span style={{ fontSize: 11, color: 'var(--text-primary)' }}>{def.userCmdName ?? formatLabel(key)}</span>
-                          </button>
-                        ))
-                  )}
-                  {pickerTab === 'saved' && (
-                    customEntries.length === 0
-                      ? <div style={{ padding: '16px 10px', fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>{q ? 'No commands match' : 'No saved commands'}</div>
-                      : customEntries.map(([key, def]) => (
-                          <button
-                            key={key}
-                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '3px 10px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-hover)')}
-                            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
-                            onClick={() => selectCmd(key)}
-                          >
-                            <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--text-muted)', width: '2ch', textAlign: 'right', flexShrink: 0 }}>{def.pid ?? '--'}</span>
-                            <span style={{ fontSize: 11, color: 'var(--text-primary)' }}>{formatLabel(key)}</span>
-                          </button>
-                        ))
+                            {userEntries.length > 0 && (
+                              <div>
+                                <CmdPickerGroupHeader>User</CmdPickerGroupHeader>
+                                {userEntries.map(([key, def]) => (
+                                  <CmdPickerRow key={key} icon={<UserCircle size={14} />} pidLabel={def.pid ?? '--'} label={def.userCmdName ?? formatLabel(key)} size={def.fields.length} onClick={() => selectCmd(key)} />
+                                ))}
+                              </div>
+                            )}
+                            {customEntries.length > 0 && (
+                              <div>
+                                <CmdPickerGroupHeader>Saved</CmdPickerGroupHeader>
+                                {customEntries.map(([key, def]) => (
+                                  <CmdPickerRow key={key} icon={<BookmarksSimple size={14} />} pidLabel={def.pid ?? '--'} label={formatLabel(key)} size={def.fields.length} onClick={() => selectCmd(key)} />
+                                ))}
+                              </div>
+                            )}
+                          </>
+                      }
+                    </div>
+                  ) : (
+                    <>
+                      <CmdPickerHeaderRow />
+                      <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}>
+                        <div style={{
+                          display: 'flex',
+                          height: '100%',
+                          width: '400%',
+                          transform: `translateX(-${PICKER_TABS.indexOf(pickerTab) * 25}%)`,
+                          transition: 'transform 500ms var(--ease-in-out)',
+                          willChange: 'transform',
+                        }}>
+                      {/* History */}
+                      <div style={{ width: '25%', height: '100%', overflowY: pickerSliding ? 'hidden' : 'auto', flexShrink: 0, paddingBottom: 6 }}>
+                        {historyEntries.length === 0
+                          ? <div style={emptyMsgStyle}>No recent commands</div>
+                          : historyEntries.map(({ id, def, source }) => (
+                              <CmdPickerRow key={id} icon={sourceIcon(source)} pidLabel={def.pid ?? '--'} label={def.userCmdName ?? formatLabel(id)} size={def.fields.length} onClick={() => selectCmd(id)} />
+                            ))
+                        }
+                      </div>
+                      {/* System */}
+                      <div style={{ width: '25%', height: '100%', overflowY: pickerSliding ? 'hidden' : 'auto', flexShrink: 0, paddingBottom: 6 }}>
+                        {filteredGroups.length === 0
+                          ? <div style={emptyMsgStyle}>No commands match</div>
+                          : filteredGroups.map(group => {
+                                const groupCollapsed = collapsedGroups.has(group.name);
+                                return (
+                                  <div key={group.name}>
+                                    <CmdPickerGroupHeader collapsed={groupCollapsed} onToggle={() => toggleGroup(group.name)}>{group.name}</CmdPickerGroupHeader>
+                                    <div style={{
+                                      display: 'grid',
+                                      gridTemplateRows: groupCollapsed ? '0fr' : '1fr',
+                                      overflow: 'hidden',
+                                      transition: 'grid-template-rows 240ms ease',
+                                      transitionDelay: groupCollapsed ? `${Math.max(0, group.subgroups.length - 1) * GROUP_STAGGER + GROUP_FADE}ms` : '0ms',
+                                    }}>
+                                      <div style={{ minHeight: 0 }}>
+                                        {group.subgroups.map((sub, idx) => {
+                                          const subKey = `${group.name}::${sub.name}`;
+                                          const subCollapsed = collapsedSubgroups.has(subKey);
+                                          return (
+                                            <div
+                                              key={sub.name}
+                                              style={{
+                                                opacity: groupCollapsed ? 0 : 1,
+                                                transform: groupCollapsed ? 'translateY(-4px)' : 'translateY(0)',
+                                                transition: `opacity ${GROUP_FADE}ms ease, transform ${GROUP_FADE}ms ease`,
+                                                transitionDelay: `${idx * GROUP_STAGGER}ms`,
+                                              }}
+                                            >
+                                              <CmdPickerSectionHeader collapsed={subCollapsed} onToggle={() => toggleSubgroup(subKey)}>{sub.name}</CmdPickerSectionHeader>
+                                              <div style={{
+                                                display: 'grid',
+                                                gridTemplateRows: subCollapsed ? '0fr' : '1fr',
+                                                overflow: 'hidden',
+                                                transition: 'grid-template-rows 200ms ease',
+                                                transitionDelay: subCollapsed ? `${Math.max(0, sub.commands.length - 1) * SUB_STAGGER + SUB_FADE}ms` : '0ms',
+                                              }}>
+                                                <div style={{ minHeight: 0 }}>
+                                                  {sub.commands.map((cmd, cIdx) => (
+                                                    <div
+                                                      key={cmd.id}
+                                                      style={{
+                                                        opacity: subCollapsed ? 0 : 1,
+                                                        transform: subCollapsed ? 'translateY(-4px)' : 'translateY(0)',
+                                                        transition: `opacity ${SUB_FADE}ms ease, transform ${SUB_FADE}ms ease`,
+                                                        transitionDelay: `${cIdx * SUB_STAGGER}ms`,
+                                                      }}
+                                                    >
+                                                      <CmdPickerRow icon={<Monitor size={14} />} pidLabel={cmd.pid.slice(2)} label={formatLabel(cmd.id)} size={CMD_DEFS[cmd.id]?.fields.length ?? 0} onClick={() => selectCmd(cmd.id)} />
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                        }
+                      </div>
+                      {/* User */}
+                      <div style={{ width: '25%', height: '100%', overflowY: pickerSliding ? 'hidden' : 'auto', flexShrink: 0, paddingBottom: 6 }}>
+                        {userEntries.length === 0
+                          ? <div style={emptyMsgStyle}>No user commands loaded</div>
+                          : userEntries.map(([key, def]) => (
+                              <CmdPickerRow key={key} icon={<UserCircle size={14} />} pidLabel={def.pid ?? '--'} label={def.userCmdName ?? formatLabel(key)} size={def.fields.length} onClick={() => selectCmd(key)} />
+                            ))
+                        }
+                      </div>
+                      {/* Saved */}
+                      <div style={{ width: '25%', height: '100%', overflowY: pickerSliding ? 'hidden' : 'auto', flexShrink: 0, paddingBottom: 6 }}>
+                        {customEntries.length === 0
+                          ? <div style={emptyMsgStyle}>No saved commands</div>
+                          : customEntries.map(([key, def]) => (
+                              <CmdPickerRow key={key} icon={<BookmarksSimple size={14} />} pidLabel={def.pid ?? '--'} label={formatLabel(key)} size={def.fields.length} onClick={() => selectCmd(key)} />
+                            ))
+                        }
+                      </div>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </>,
+          document.body
+        )}
 
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <span

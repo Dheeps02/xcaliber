@@ -595,85 +595,125 @@ export const CMD_DEFS: Record<string, CmdDef> = {
 
 };
 
-export const CMD_CATEGORIES = [
+export const CMD_GROUPS = [
   {
-    name: 'Connection',
-    commands: [
-      { id: 'connect',    label: 'CONNECT',    pid: '0xFF' },
-      { id: 'disconnect', label: 'DISCONNECT', pid: '0xFE' },
-    ],
-  },
-  {
-    name: 'Read',
-    commands: [
-      { id: 'upload',       label: 'UPLOAD',       pid: '0xF5' },
-      { id: 'short-upload', label: 'SHORT_UPLOAD', pid: '0xF4' },
-    ],
-  },
-  {
-    name: 'Write',
-    commands: [
-      { id: 'download',       label: 'DOWNLOAD',       pid: '0xF0' },
-      { id: 'short-download', label: 'SHORT_DOWNLOAD', pid: '0xED' },
-    ],
-  },
-  {
-    name: 'Session',
-    commands: [
-      { id: 'get-status',         label: 'GET_STATUS',         pid: '0xFD' },
-      { id: 'sync',               label: 'SYNC',               pid: '0xFC' },
-      { id: 'get-comm-mode-info', label: 'GET_COMM_MODE_INFO', pid: '0xFB' },
-      { id: 'get-id',             label: 'GET_ID',             pid: '0xFA' },
-      { id: 'set-request',        label: 'SET_REQUEST',        pid: '0xF9' },
-      { id: 'get-seed',           label: 'GET_SEED',           pid: '0xF8' },
-      { id: 'unlock',             label: 'UNLOCK',             pid: '0xF7' },
-      { id: 'build-checksum',     label: 'BUILD_CHECKSUM',     pid: '0xF3' },
+    name: 'Standard',
+    subgroups: [
+      {
+        name: 'Connection',
+        commands: [
+          { id: 'connect',    label: 'CONNECT',    pid: '0xFF' },
+          { id: 'disconnect', label: 'DISCONNECT', pid: '0xFE' },
+        ],
+      },
+      {
+        name: 'Session',
+        commands: [
+          { id: 'get-status',         label: 'GET_STATUS',         pid: '0xFD' },
+          { id: 'sync',               label: 'SYNC',               pid: '0xFC' },
+          { id: 'get-comm-mode-info', label: 'GET_COMM_MODE_INFO', pid: '0xFB' },
+          { id: 'get-id',             label: 'GET_ID',             pid: '0xFA' },
+          { id: 'set-request',        label: 'SET_REQUEST',        pid: '0xF9' },
+          { id: 'get-seed',           label: 'GET_SEED',           pid: '0xF8' },
+          { id: 'unlock',             label: 'UNLOCK',             pid: '0xF7' },
+        ],
+      },
+      {
+        name: 'Memory Transfer',
+        commands: [
+          { id: 'upload',          label: 'UPLOAD',         pid: '0xF5' },
+          { id: 'short-upload',    label: 'SHORT_UPLOAD',   pid: '0xF4' },
+          { id: 'download',        label: 'DOWNLOAD',       pid: '0xF0' },
+          { id: 'short-download',  label: 'SHORT_DOWNLOAD', pid: '0xED' },
+          { id: 'build-checksum',  label: 'BUILD_CHECKSUM', pid: '0xF3' },
+        ],
+      },
     ],
   },
   {
     name: 'Cal / Pag',
-    commands: [
-      { id: 'set-cal-page',           label: 'SET_CAL_PAGE',           pid: '0xEB' },
-      { id: 'get-cal-page',           label: 'GET_CAL_PAGE',           pid: '0xEA' },
-      { id: 'get-pag-processor-info', label: 'GET_PAG_PROCESSOR_INFO', pid: '0xE9' },
-      { id: 'get-segment-info',       label: 'GET_SEGMENT_INFO',       pid: '0xE8' },
-      { id: 'get-page-info',          label: 'GET_PAGE_INFO',          pid: '0xE7' },
-      { id: 'set-segment-mode',       label: 'SET_SEGMENT_MODE',       pid: '0xE6' },
-      { id: 'get-segment-mode',       label: 'GET_SEGMENT_MODE',       pid: '0xE5' },
-      { id: 'copy-cal-page',          label: 'COPY_CAL_PAGE',          pid: '0xE4' },
+    subgroups: [
+      {
+        name: 'Page Control',
+        commands: [
+          { id: 'set-cal-page',           label: 'SET_CAL_PAGE',           pid: '0xEB' },
+          { id: 'get-cal-page',           label: 'GET_CAL_PAGE',           pid: '0xEA' },
+          { id: 'get-pag-processor-info', label: 'GET_PAG_PROCESSOR_INFO', pid: '0xE9' },
+          { id: 'set-segment-mode',       label: 'SET_SEGMENT_MODE',       pid: '0xE6' },
+          { id: 'get-segment-mode',       label: 'GET_SEGMENT_MODE',       pid: '0xE5' },
+          { id: 'copy-cal-page',          label: 'COPY_CAL_PAGE',          pid: '0xE4' },
+        ],
+      },
+      {
+        name: 'Segment Info',
+        commands: [
+          { id: 'get-segment-info', label: 'GET_SEGMENT_INFO', pid: '0xE8' },
+          { id: 'get-page-info',    label: 'GET_PAGE_INFO',    pid: '0xE7' },
+        ],
+      },
     ],
   },
   {
     name: 'DAQ',
-    commands: [
-      { id: 'free-daq',                label: 'FREE_DAQ',                pid: '0xD6' },
-      { id: 'alloc-daq',               label: 'ALLOC_DAQ',               pid: '0xD5' },
-      { id: 'alloc-odt',               label: 'ALLOC_ODT',               pid: '0xD4' },
-      { id: 'alloc-odt-entry',         label: 'ALLOC_ODT_ENTRY',         pid: '0xD3' },
-      { id: 'clear-daq-list',          label: 'CLEAR_DAQ_LIST',          pid: '0xE3' },
-      { id: 'set-daq-ptr',             label: 'SET_DAQ_PTR',             pid: '0xE2' },
-      { id: 'write-daq',               label: 'WRITE_DAQ',               pid: '0xE1' },
-      { id: 'set-daq-list-mode',       label: 'SET_DAQ_LIST_MODE',       pid: '0xE0' },
-      { id: 'get-daq-list-mode',       label: 'GET_DAQ_LIST_MODE',       pid: '0xDF' },
-      { id: 'start-stop-daq-list',     label: 'START_STOP_DAQ_LIST',     pid: '0xDE' },
-      { id: 'start-stop-synch',        label: 'START_STOP_SYNCH',        pid: '0xDD' },
-      { id: 'get-daq-clock',           label: 'GET_DAQ_CLOCK',           pid: '0xDC' },
-      { id: 'read-daq',                label: 'READ_DAQ',                pid: '0xDB' },
-      { id: 'get-daq-processor-info',  label: 'GET_DAQ_PROCESSOR_INFO',  pid: '0xDA' },
-      { id: 'get-daq-resolution-info', label: 'GET_DAQ_RESOLUTION_INFO', pid: '0xD9' },
-      { id: 'get-daq-list-info',       label: 'GET_DAQ_LIST_INFO',       pid: '0xD8' },
-      { id: 'get-daq-event-info',      label: 'GET_DAQ_EVENT_INFO',      pid: '0xD7' },
+    subgroups: [
+      {
+        name: 'Allocation',
+        commands: [
+          { id: 'free-daq',        label: 'FREE_DAQ',        pid: '0xD6' },
+          { id: 'alloc-daq',       label: 'ALLOC_DAQ',       pid: '0xD5' },
+          { id: 'alloc-odt',       label: 'ALLOC_ODT',       pid: '0xD4' },
+          { id: 'alloc-odt-entry', label: 'ALLOC_ODT_ENTRY', pid: '0xD3' },
+        ],
+      },
+      {
+        name: 'List Configuration',
+        commands: [
+          { id: 'clear-daq-list',    label: 'CLEAR_DAQ_LIST',    pid: '0xE3' },
+          { id: 'set-daq-ptr',       label: 'SET_DAQ_PTR',       pid: '0xE2' },
+          { id: 'write-daq',         label: 'WRITE_DAQ',         pid: '0xE1' },
+          { id: 'set-daq-list-mode', label: 'SET_DAQ_LIST_MODE', pid: '0xE0' },
+          { id: 'get-daq-list-mode', label: 'GET_DAQ_LIST_MODE', pid: '0xDF' },
+        ],
+      },
+      {
+        name: 'Execution',
+        commands: [
+          { id: 'start-stop-daq-list', label: 'START_STOP_DAQ_LIST', pid: '0xDE' },
+          { id: 'start-stop-synch',    label: 'START_STOP_SYNCH',    pid: '0xDD' },
+          { id: 'read-daq',            label: 'READ_DAQ',            pid: '0xDB' },
+        ],
+      },
+      {
+        name: 'Processor Info',
+        commands: [
+          { id: 'get-daq-clock',           label: 'GET_DAQ_CLOCK',           pid: '0xDC' },
+          { id: 'get-daq-processor-info',  label: 'GET_DAQ_PROCESSOR_INFO',  pid: '0xDA' },
+          { id: 'get-daq-resolution-info', label: 'GET_DAQ_RESOLUTION_INFO', pid: '0xD9' },
+          { id: 'get-daq-list-info',       label: 'GET_DAQ_LIST_INFO',       pid: '0xD8' },
+          { id: 'get-daq-event-info',      label: 'GET_DAQ_EVENT_INFO',      pid: '0xD7' },
+        ],
+      },
     ],
   },
   {
-    name: 'PGM',
-    commands: [
-      { id: 'program-start',          label: 'PROGRAM_START',          pid: '0xD2' },
-      { id: 'program-clear',          label: 'PROGRAM_CLEAR',          pid: '0xD1' },
-      { id: 'program-reset',          label: 'PROGRAM_RESET',          pid: '0xCF' },
-      { id: 'get-pgm-processor-info', label: 'GET_PGM_PROCESSOR_INFO', pid: '0xCE' },
-      { id: 'get-sector-info',        label: 'GET_SECTOR_INFO',        pid: '0xCD' },
-      { id: 'program-prepare',        label: 'PROGRAM_PREPARE',        pid: '0xCC' },
+    name: 'Programming',
+    subgroups: [
+      {
+        name: 'Sequence',
+        commands: [
+          { id: 'program-start',   label: 'PROGRAM_START',   pid: '0xD2' },
+          { id: 'program-clear',   label: 'PROGRAM_CLEAR',   pid: '0xD1' },
+          { id: 'program-prepare', label: 'PROGRAM_PREPARE', pid: '0xCC' },
+          { id: 'program-reset',   label: 'PROGRAM_RESET',   pid: '0xCF' },
+        ],
+      },
+      {
+        name: 'Info',
+        commands: [
+          { id: 'get-pgm-processor-info', label: 'GET_PGM_PROCESSOR_INFO', pid: '0xCE' },
+          { id: 'get-sector-info',        label: 'GET_SECTOR_INFO',        pid: '0xCD' },
+        ],
+      },
     ],
   },
 ];

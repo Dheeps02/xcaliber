@@ -69,6 +69,10 @@
   from { opacity: 0; transform: translateY(-6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes detail-collapse {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-6px); }
+}
 .detail-expand > td > * {
   animation: detail-expand 160ms var(--ease-out);
 }

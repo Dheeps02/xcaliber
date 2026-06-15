@@ -58,6 +58,7 @@ interface AppStore {
   autoScroll: boolean;
   activeCmd: string | null;
   byteValues: string[];
+  commandHistory: string[];
   theme: 'default' | 'light';
   uiZoom: number;
   sparkWindowMs: number;
@@ -76,6 +77,7 @@ interface AppStore {
   clearPackets: () => void;
   setActiveCmd: (cmd: string | null) => void;
   setByteValue: (idx: number, val: string) => void;
+  addCommandHistory: (id: string) => void;
   setTheme: (theme: 'default' | 'light') => void;
   setUiZoom: (zoom: number) => void;
   setSparkWindowMs: (ms: number) => void;
@@ -200,6 +202,7 @@ export const useAppStore = create<AppStore>((set) => ({
   autoScroll: true,
   activeCmd: null,
   byteValues: Array<string>(NUM_CELLS).fill(''),
+  commandHistory: JSON.parse(localStorage.getItem('commandHistory') ?? '[]'),
   theme: 'default' as const,
   uiZoom: Number(localStorage.getItem('uiZoom') ?? 1.2),
   sparkWindowMs: Math.min(Number(localStorage.getItem('sparkWindowMs') ?? SPARK_ZOOM_DEFAULT_MS), SPARK_ZOOM_MAX_MS),
@@ -293,6 +296,13 @@ export const useAppStore = create<AppStore>((set) => ({
       const next = [...s.byteValues];
       next[idx] = val;
       return { byteValues: next };
+    }),
+
+  addCommandHistory: (id) =>
+    set((s) => {
+      const commandHistory = [id, ...s.commandHistory.filter((c) => c !== id)].slice(0, 20);
+      localStorage.setItem('commandHistory', JSON.stringify(commandHistory));
+      return { commandHistory };
     }),
 
   setTheme: (theme) => set({ theme }),
