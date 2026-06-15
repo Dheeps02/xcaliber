@@ -38,6 +38,7 @@ dist/
 ### Vue / Vite ###
 .vite/
 .vuepress/dist
+**/.vitepress/cache
 
 ### Project-specific ###
 dev/
