@@ -11,6 +11,7 @@
 }
 .xcb-segment.sm { padding: 2px; border-radius: 7px; }
 .xcb-seg-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   padding: 4px 14px; border-radius: 6px;
   font-size: 12px; font-weight: 500;
   color: var(--text-muted); cursor: pointer;
@@ -21,3 +22,6 @@
 .xcb-seg-btn:hover { color: var(--text-secondary); }
 .xcb-seg-btn.active { color: var(--text-primary); }
 .xcb-segment.icon-only .xcb-seg-btn { padding: 4px 10px; }
+
+.xcb-segment.fill { display: flex; width: 100%; }
+.xcb-segment.fill .xcb-seg-btn { flex: 1; text-align: center; }
