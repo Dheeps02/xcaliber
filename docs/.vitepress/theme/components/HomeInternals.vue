@@ -234,15 +234,15 @@ npm install &amp;&amp; cd frontend &amp;&amp; npm install &amp;&amp; cd ..</code
 .zs-method { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; padding: 3px 7px; border-radius: 4px; white-space: nowrap; }
 .zs-get  { background: rgba(16,185,129,0.12); color: #34d399; }
 .zs-post { background: rgba(16,185,129,0.08); color: var(--zs-accent-2); }
-.zs-api-code-block { background: var(--zs-panel); border: 1px solid var(--zs-border); border-radius: 12px; overflow: hidden; }
+.zs-api-code-block { background: #2d353b; border: 1px solid var(--zs-border); border-radius: 12px; overflow: hidden; }
 .zs-code-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 14px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--zs-border);
+  padding: 10px 14px; background: rgba(0,0,0,0.15); border-bottom: 1px solid rgba(255,255,255,0.06);
 }
-.zs-code-lang { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--zs-faint); text-transform: uppercase; letter-spacing: 0.08em; }
-.zs-code { padding: 20px; margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.75; overflow-x: auto; color: var(--zs-muted); }
-.zs-c-dim { color: var(--zs-faint); }
-.zs-c-str { color: #6ee7b7; }
+.zs-code-lang { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #859289; text-transform: uppercase; letter-spacing: 0.08em; }
+.zs-code { padding: 20px; margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.75; overflow-x: auto; color: #d3c6aa; }
+.zs-c-dim { color: #859289; }
+.zs-c-str { color: #a7c080; }
 
 /* ── Quickstart ── */
 .zs-quickstart { padding: 100px 0; border-top: 1px solid var(--zs-border); }
@@ -251,8 +251,8 @@ npm install &amp;&amp; cd frontend &amp;&amp; npm install &amp;&amp; cd ..</code
 .zs-qs-title { font-size: 18px; font-weight: 600; color: var(--zs-text); margin-bottom: 16px; letter-spacing: -0.01em; }
 .zs-qs-desc { font-size: 15px; line-height: 1.65; color: var(--zs-muted); margin-bottom: 16px; }
 .zs-qs-desc code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--zs-accent-2); background: rgba(16,185,129,0.1); padding: 1px 5px; border-radius: 3px; }
-.zs-code-block-sm { background: var(--zs-panel); border: 1px solid var(--zs-border); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
-.zs-code-block-sm pre { padding: 12px 16px; margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--zs-text); overflow-x: auto; }
+.zs-code-block-sm { background: #2d353b; border: 1px solid var(--zs-border); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+.zs-code-block-sm pre { padding: 12px 16px; margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: #d3c6aa; overflow-x: auto; }
 .zs-code-block-sm pre code { font-family: inherit; }
 
 @media (max-width: 960px) {
