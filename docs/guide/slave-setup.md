@@ -23,8 +23,6 @@ It listens on `127.0.0.1:5555` (UDP) and exposes 50 simulated variables across f
 
 Once it's running, open ZenScope, go to **Settings**, and set the connection to `127.0.0.1:5555` (UDP). Hit **Connect** — you should see the slave info appear and all 50 variables ready to DAQ.
 
----
-
 ## Hardware ECU
 
 Connect your ECU directly to the PC running ZenScope via an Ethernet cable. Most ECUs don't need a switch or router in between — a direct connection works fine.
