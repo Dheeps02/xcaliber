@@ -162,6 +162,13 @@
   color: #10b981;
   letter-spacing: -0.02em;
   line-height: 1.15;
+  border-top: none;
+}
+
+.vp-doc hr {
+  border: none;
+  border-top: 1px solid rgba(16, 185, 129, 0.12);
+  margin: 2rem 0;
 }
 
 .vp-doc h2 {

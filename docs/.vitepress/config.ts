@@ -56,6 +56,13 @@ export default withMermaid(defineConfig({
     ],
   },
 
+  markdown: {
+    theme: {
+      dark: 'everforest-dark',
+      light: 'everforest-light',
+    },
+  },
+
   vite: {
     server: {
       port: 5174,
