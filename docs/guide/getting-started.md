@@ -18,8 +18,6 @@ Head to the [latest release](https://github.com/Dheeps02/xcaliber/releases/lates
 
 Open ZenScope from the Start Menu, your desktop shortcut, or directly from the extracted folder. The backend starts automatically — there's nothing else to run.
 
----
-
 ## Linux
 
 ### Prerequisites
@@ -62,8 +60,6 @@ Open ZenScope from the Start Menu, your desktop shortcut, or directly from the e
 
 The backend starts automatically alongside the app.
 
----
-
 ## macOS
 
 ### Prerequisites
@@ -92,8 +88,6 @@ Log out and back in. ZenScope will now open raw sockets without `sudo`.
 Right-click ZenScope in Applications and choose **Open**. On first launch macOS will warn you the app is from an unidentified developer — clicking **Open** in that dialog bypasses the check permanently for this app. After that, you can open it normally.
 
 The backend starts automatically alongside the app.
-
----
 
 ## Build from Source
 
