@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef, DaqList, DaqStatus, DaqLiveValue, DaqEntryType, EventDef, A2lVariable, UserCmdDef, Sequence, SeqRunResult, SeqStepResult } from '../lib/types';
+import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef, DaqList, DaqStatus, DaqLiveValue, DaqEntryType, EventDef, A2lVariable, UserCmdDef, Sequence, SeqRunResult, SeqStepResult, SavedCmd } from '../lib/types';
 import { CMD_DEFS } from '../lib/cmd-defs';
 
 const NUM_CELLS = 8;
@@ -136,6 +136,11 @@ interface AppStore {
   updateSequence: (seq: Sequence) => void;
   setSeqRunResult: (r: SeqRunResult | null) => void;
   updateSeqStepResult: (sr: SeqStepResult) => void;
+
+  // ── Saved commands ────────────────────────────────────────────────
+  savedCmds: SavedCmd[];
+  setSavedCmds: (cmds: SavedCmd[]) => void;
+  addSavedCmd: (cmd: SavedCmd) => void;
 }
 
 function buildUserCmdDefs(userCmds: UserCmdDef[]): Record<string, CmdDef> {
@@ -225,6 +230,7 @@ export const useAppStore = create<AppStore>((set) => ({
   activeSequenceId: null,
   seqSelectedStepId: null,
   seqRunResult: null,
+  savedCmds: JSON.parse(localStorage.getItem('savedCmds') ?? '[]'),
 
   setConnected: (connected, slave) =>
     set((s) => ({
@@ -403,5 +409,13 @@ export const useAppStore = create<AppStore>((set) => ({
         ? s.seqRunResult.stepResults.map((r) => (r.stepId === sr.stepId ? sr : r))
         : [...s.seqRunResult.stepResults, sr];
       return { seqRunResult: { ...s.seqRunResult, stepResults } };
+    }),
+
+  setSavedCmds: (savedCmds) => { localStorage.setItem('savedCmds', JSON.stringify(savedCmds)); set({ savedCmds }); },
+  addSavedCmd: (cmd) =>
+    set((s) => {
+      const savedCmds = [...s.savedCmds, cmd];
+      localStorage.setItem('savedCmds', JSON.stringify(savedCmds));
+      return { savedCmds };
     }),
 }));

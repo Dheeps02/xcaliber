@@ -8,15 +8,17 @@ import {
   PaperPlaneTilt, Plus, CaretLeft, CaretRight,
   CornersIn, CornersOut, CaretDown, Info, X, Command, MagnifyingGlass,
   Monitor, UserCircle, BookmarksSimple, ClockCounterClockwise,
+  Bookmark, Trash,
 } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { useTooltip } from '../context/TooltipContext';
 import { CMD_DEFS, CMD_GROUPS } from '../lib/cmd-defs';
 import { api } from '../lib/api';
-import type { CmdDef, FieldOption, SeqStep } from '../lib/types';
+import type { CmdDef, FieldOption, SeqStep, SavedCmd } from '../lib/types';
 import { toTitleCase, formatLabel } from '../lib/utils';
 import { Button } from './ui/Button';
 import { SegmentControl } from './ui/SegmentControl';
+import { SaveCommandModal } from './SaveCommandModal';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -134,8 +136,12 @@ export function CommandBar() {
   const showToast           = useAppStore((s) => s.showToast);
   const activeMainTab       = useAppStore((s) => s.activeMainTab);
   const activeSequenceId    = useAppStore((s) => s.activeSequenceId);
+  const seqSelectedStepId   = useAppStore((s) => s.seqSelectedStepId);
+  const setSeqSelectedStepId = useAppStore((s) => s.setSeqSelectedStepId);
+  const seqRunResult        = useAppStore((s) => s.seqRunResult);
   const sequences           = useAppStore((s) => s.sequences);
   const updateSequence      = useAppStore((s) => s.updateSequence);
+  const savedCmds           = useAppStore((s) => s.savedCmds);
 
   const { showTip, hideTip } = useTooltip();
 
@@ -163,6 +169,7 @@ export function CommandBar() {
   const [pickerSliding, setPickerSliding] = useState(false);
   const [collapsedGroups, setCollapsedGroups]       = useState<Set<string>>(new Set());
   const [collapsedSubgroups, setCollapsedSubgroups] = useState<Set<string>>(new Set());
+  const [saveSnapshot, setSaveSnapshot] = useState<{ cmdKey: string; bytes: string[]; defaultName: string } | null>(null);
 
   const inputRefs    = useRef<(HTMLInputElement | null)[]>([]);
   const pickerRef    = useRef<HTMLDivElement>(null);
@@ -366,6 +373,35 @@ export function CommandBar() {
     updateSequence({ ...seq, steps: [...seq.steps, newStep] });
   }
 
+  function handleRemoveSelectedStep() {
+    const seq = sequences.find((s) => s.id === activeSequenceId);
+    if (!seq || !seqSelectedStepId) return;
+    updateSequence({ ...seq, steps: seq.steps.filter((s) => s.id !== seqSelectedStepId) });
+    setSeqSelectedStepId(null);
+  }
+
+  function openSaveModal() {
+    let lastNonEmpty = -1;
+    for (let i = allBytes.length - 1; i >= 0; i--) {
+      if (allBytes[i]?.trim()) { lastNonEmpty = i; break; }
+    }
+    if (lastNonEmpty < 0) return;
+    const bytes = allBytes.slice(0, lastNonEmpty + 1).map((b) => (b ?? '').trim().toUpperCase());
+    const cmdKey = activeCmd ?? (CMD_DEFS[bytes[0]?.toLowerCase()] ? bytes[0].toLowerCase() : 'raw');
+    const defaultName = activeCmd
+      ? (def?.userCmdName ?? formatLabel(activeCmd))
+      : bytes.filter(Boolean).join(' ');
+    setSaveSnapshot({ cmdKey, bytes, defaultName });
+  }
+
+  function selectSaved(cmd: SavedCmd) {
+    setActiveCmd(cmd.cmdKey);
+    cmd.bytes.forEach((b, i) => setByteValue(i, b));
+    setPickerOpen(false);
+    setPickerQuery('');
+    if (collapsed) setCollapsed(false);
+  }
+
   const q = pickerQuery.toLowerCase().trim();
   const filteredGroups = CMD_GROUPS
     .map(group => ({
@@ -380,10 +416,9 @@ export function CommandBar() {
         .filter(sub => sub.commands.length > 0),
     }))
     .filter(group => group.subgroups.length > 0);
-  const userEntries   = Object.entries(userCmdDefs).filter(([key, def]) =>
+  const userEntries = [...Object.entries(userCmdDefs), ...Object.entries(customCmdDefs)].filter(([key, def]) =>
     !q || key.includes(q) || (def.userCmdName ?? '').toLowerCase().includes(q)
   );
-  const customEntries = Object.entries(customCmdDefs).filter(([key]) => !q || key.includes(q));
   const historyEntries = commandHistory
     .map((id) => {
       if (CMD_DEFS[id])      return { id, def: CMD_DEFS[id],      source: 'system' as const };
@@ -392,6 +427,41 @@ export function CommandBar() {
       return null;
     })
     .filter((e): e is { id: string; def: CmdDef; source: 'system' | 'user' | 'saved' } => e !== null);
+
+  const savedFiltered = savedCmds.filter((c) =>
+    !q || c.name.toLowerCase().includes(q) || c.cmdKey.toLowerCase().includes(q) ||
+    c.group.toLowerCase().includes(q) || (c.subgroup ?? '').toLowerCase().includes(q)
+  );
+
+  const savedByGroup = new Map<string, Map<string, SavedCmd[]>>();
+  for (const cmd of savedFiltered) {
+    let subMap = savedByGroup.get(cmd.group);
+    if (!subMap) { subMap = new Map(); savedByGroup.set(cmd.group, subMap); }
+    const subKey = cmd.subgroup ?? '';
+    let list = subMap.get(subKey);
+    if (!list) { list = []; subMap.set(subKey, list); }
+    list.push(cmd);
+  }
+
+  function renderSavedGroups() {
+    return Array.from(savedByGroup.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([group, subMap]) => (
+        <div key={group}>
+          <CmdPickerGroupHeader>{group}</CmdPickerGroupHeader>
+          {Array.from(subMap.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([subgroup, cmds]) => (
+              <div key={subgroup || '__root__'}>
+                {subgroup && <CmdPickerSectionHeader>{subgroup}</CmdPickerSectionHeader>}
+                {cmds.map((cmd) => (
+                  <CmdPickerRow key={cmd.id} icon={<BookmarksSimple size={14} />} pidLabel={cmd.bytes[0] || '--'} label={cmd.name} size={cmd.bytes.length} onClick={() => selectSaved(cmd)} />
+                ))}
+              </div>
+            ))}
+        </div>
+      ));
+  }
 
   function selectCmd(id: string) {
     setActiveCmd(id);
@@ -417,6 +487,7 @@ export function CommandBar() {
     });
   }
 
+  const isSeqRunning = seqRunResult?.status === 'running';
   const startByte = section * BASE_CELLS;
   const endByte   = startByte + BASE_CELLS - 1;
   const cmdLabel  = !activeCmd
@@ -539,7 +610,7 @@ export function CommandBar() {
                   {q ? (
                     <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingBottom: 6 }}>
                       {/* Global search — merges results across System/User/Saved, ignoring the active tab */}
-                      {(filteredGroups.length === 0 && userEntries.length === 0 && customEntries.length === 0)
+                      {(filteredGroups.length === 0 && userEntries.length === 0 && savedFiltered.length === 0)
                         ? <div style={emptyMsgStyle}>No commands match</div>
                         : <>
                             <CmdPickerHeaderRow />
@@ -564,14 +635,7 @@ export function CommandBar() {
                                 ))}
                               </div>
                             )}
-                            {customEntries.length > 0 && (
-                              <div>
-                                <CmdPickerGroupHeader>Saved</CmdPickerGroupHeader>
-                                {customEntries.map(([key, def]) => (
-                                  <CmdPickerRow key={key} icon={<BookmarksSimple size={14} />} pidLabel={def.pid ?? '--'} label={formatLabel(key)} size={def.fields.length} onClick={() => selectCmd(key)} />
-                                ))}
-                              </div>
-                            )}
+                            {savedFiltered.length > 0 && renderSavedGroups()}
                           </>
                       }
                     </div>
@@ -671,11 +735,9 @@ export function CommandBar() {
                       </div>
                       {/* Saved */}
                       <div style={{ width: '25%', height: '100%', overflowY: pickerSliding ? 'hidden' : 'auto', flexShrink: 0, paddingBottom: 6 }}>
-                        {customEntries.length === 0
-                          ? <div style={emptyMsgStyle}>No saved commands</div>
-                          : customEntries.map(([key, def]) => (
-                              <CmdPickerRow key={key} icon={<BookmarksSimple size={14} />} pidLabel={def.pid ?? '--'} label={formatLabel(key)} size={def.fields.length} onClick={() => selectCmd(key)} />
-                            ))
+                        {savedFiltered.length === 0
+                          ? <div style={emptyMsgStyle}>{q ? 'No commands match' : 'No saved commands — use the save button next to Send'}</div>
+                          : renderSavedGroups()
                         }
                       </div>
                         </div>
@@ -860,34 +922,64 @@ export function CommandBar() {
             })}
 
             {activeMainTab === 'sequence' ? (
-              <Button
-                key={`add-${expandKey}`}
-                variant="primary"
-                className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
-                style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${BASE_CELLS * 28}ms both` } : undefined}
-                disabled={!activeSequenceId}
-                onClick={handleAddToSequence}
-              >
-                <Plus size={14} />
-                Add
-              </Button>
+              <>
+                <Button
+                  key={`add-${expandKey}`}
+                  variant="primary"
+                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
+                  style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${BASE_CELLS * 28}ms both` } : undefined}
+                  disabled={!activeSequenceId || isSeqRunning}
+                  onClick={handleAddToSequence}
+                >
+                  <Plus size={14} />
+                  Add
+                </Button>
+                <Button
+                  key={`del-${expandKey}`}
+                  variant="primary"
+                  intent="danger"
+                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
+                  style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${(BASE_CELLS + 1) * 28}ms both` } : undefined}
+                  disabled={!activeSequenceId || !seqSelectedStepId || isSeqRunning}
+                  title="Remove selected frame from sequence"
+                  onClick={handleRemoveSelectedStep}
+                >
+                  <Trash size={14} />
+                  Del
+                </Button>
+              </>
             ) : (
-              <Button
-                key={`send-${expandKey}`}
-                variant="primary"
-                className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
-                style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${BASE_CELLS * 28}ms both` } : undefined}
-                onClick={() => {
-                  setSendFlying(true);
-                  setTimeout(() => setSendFlying(false), 550);
-                  handleSend();
-                }}
-              >
-                <span className={sendFlying ? 'icon-send-cycle' : ''}>
-                  <PaperPlaneTilt size={14} />
-                </span>
-                Send
-              </Button>
+              <>
+                <Button
+                  key={`send-${expandKey}`}
+                  variant="primary"
+                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
+                  style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${BASE_CELLS * 28}ms both` } : undefined}
+                  onClick={() => {
+                    setSendFlying(true);
+                    setTimeout(() => setSendFlying(false), 550);
+                    handleSend();
+                  }}
+                >
+                  <span className={sendFlying ? 'icon-send-cycle' : ''}>
+                    <PaperPlaneTilt size={14} />
+                  </span>
+                  Send
+                </Button>
+                <Button
+                  key={`save-${expandKey}`}
+                  variant="primary"
+                  intent="info"
+                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
+                  style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${(BASE_CELLS + 1) * 28}ms both` } : undefined}
+                  disabled={!activeCmd && !allBytes.some((b) => b?.trim())}
+                  title="Save command to list"
+                  onClick={openSaveModal}
+                >
+                  <Bookmark size={14} />
+                  Save
+                </Button>
+              </>
             )}
           </div>
 
@@ -926,6 +1018,15 @@ export function CommandBar() {
           ))}
         </div>,
         document.body
+      )}
+
+      {saveSnapshot && (
+        <SaveCommandModal
+          defaultName={saveSnapshot.defaultName}
+          cmdKey={saveSnapshot.cmdKey}
+          bytes={saveSnapshot.bytes}
+          onClose={() => setSaveSnapshot(null)}
+        />
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 import { forwardRef } from 'react';
 
 type Variant = 'default' | 'primary' | 'ghost' | 'upload' | 'download';
-type Intent  = 'success' | 'danger' | 'warning';
+type Intent  = 'success' | 'danger' | 'warning' | 'info';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;

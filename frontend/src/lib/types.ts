@@ -57,6 +57,17 @@ export interface CustomCommandConfig {
   fields?: CustomFieldDef[];
 }
 
+// ── Saved commands (user-defined command list) ────────────────────
+
+export interface SavedCmd {
+  id: string;
+  name: string;
+  group: string;
+  subgroup?: string;
+  cmdKey: string;
+  bytes: string[];
+}
+
 export interface AppConfig {
   connection: {
     server_ip: string;

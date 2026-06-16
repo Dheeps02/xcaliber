@@ -18,6 +18,8 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(version),
   },
   server: {
+    port: 5173,
+    strictPort: true,
     proxy: {
       '/api': 'http://localhost:8080',
       '/events': { target: 'http://localhost:8080', changeOrigin: true },

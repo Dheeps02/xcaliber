@@ -84,10 +84,12 @@
 .xcb-btn.intent-success { --btn-color: var(--status-ok); }
 .xcb-btn.intent-danger  { --btn-color: var(--status-err); }
 .xcb-btn.intent-warning { --btn-color: var(--status-warn); }
+.xcb-btn.intent-info    { --btn-color: var(--tx); }
 
 .xcb-btn.ghost.intent-success,
 .xcb-btn.ghost.intent-danger,
-.xcb-btn.ghost.intent-warning {
+.xcb-btn.ghost.intent-warning,
+.xcb-btn.ghost.intent-info {
   color: var(--btn-color);
   border-color: color-mix(in srgb, var(--btn-color) 35%, transparent);
   background: color-mix(in srgb, var(--btn-color) 10%, transparent);
