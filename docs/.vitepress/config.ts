@@ -24,6 +24,7 @@ export default withMermaid(defineConfig({
           text: 'Guide',
           items: [
             { text: 'Getting Started', link: '/guide/getting-started' },
+            { text: 'Slave Setup', link: '/guide/slave-setup' },
             { text: 'Use Cases', link: '/guide/use-cases' },
             { text: 'Configuration', link: '/guide/configuration' },
           ],
