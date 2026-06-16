@@ -162,12 +162,14 @@
   color: #10b981;
   letter-spacing: -0.02em;
   line-height: 1.15;
-  border-top: none;
+  border-top: none !important;
+  border-bottom: none !important;
+  padding-top: 0 !important;
 }
 
 .vp-doc hr {
-  border: none;
-  border-top: 1px solid rgba(16, 185, 129, 0.12);
+  border: none !important;
+  border-top: 1px solid rgba(16, 185, 129, 0.12) !important;
   margin: 2rem 0;
 }
 
@@ -175,9 +177,9 @@
   font-size: 1.3rem;
   font-weight: 600;
   color: #6ee7b7;
-  padding-top: 0;
+  padding-top: 0 !important;
   padding-bottom: 10px;
-  border-top: none;
+  border-top: none !important;
   border-bottom: 1px solid rgba(16, 185, 129, 0.2);
   margin-top: 2.5rem !important;
 }
