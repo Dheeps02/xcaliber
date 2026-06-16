@@ -5,6 +5,12 @@ export default withMermaid(defineConfig({
   title: 'ZenScope',
   description: 'Open-source XCP client for automotive ECU calibration and measurement',
 
+  head: [
+    ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
+    ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
+    ['link', { href: 'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap', rel: 'stylesheet' }],
+  ],
+
   themeConfig: {
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
