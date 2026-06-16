@@ -4,6 +4,14 @@ import { ref, onMounted, onUnmounted } from 'vue'
 const heroCanvas = ref(null)
 let raf = null
 
+const navVisible = ref(true)
+let lastScrollY = 0
+function onScroll() {
+  const y = window.scrollY
+  navVisible.value = y < lastScrollY || y < 80
+  lastScrollY = y
+}
+
 const waveTraces = [
   { yFrac: 0.26, amp: 28, freq: 0.013, spd: 1.0,  phase: 0.0, color: '#6ee7b7', alpha: 0.34, lw: 1.5 },
   { yFrac: 0.44, amp: 19, freq: 0.018, spd: 1.45, phase: 1.6, color: '#34d399', alpha: 0.20, lw: 1.2 },
@@ -76,8 +84,14 @@ function loop() {
   raf = requestAnimationFrame(loop)
 }
 
-onMounted(() => { raf = requestAnimationFrame(loop) })
-onUnmounted(() => { if (raf) cancelAnimationFrame(raf) })
+onMounted(() => {
+  raf = requestAnimationFrame(loop)
+  window.addEventListener('scroll', onScroll, { passive: true })
+})
+onUnmounted(() => {
+  if (raf) cancelAnimationFrame(raf)
+  window.removeEventListener('scroll', onScroll)
+})
 
 function onCopy(e) {
   const btn = e.currentTarget
@@ -106,7 +120,7 @@ const themes = [
     <div class="zs-grain" aria-hidden="true"></div>
 
     <!-- NAV -->
-    <nav class="zs-nav">
+    <nav class="zs-nav" :class="{ 'zs-nav--hidden': !navVisible }">
       <a href="/" class="zs-logo">
         <span class="zs-logo-mark">Z</span>
         <span class="zs-logo-name">zenscope</span>
@@ -153,7 +167,7 @@ const themes = [
       <div class="zs-hero-content">
         <a href="https://github.com/Dheeps02/xcaliber" target="_blank" rel="noopener" class="zs-badge">
           <span class="zs-badge-dot" aria-hidden="true"></span>
-          Open Source — MIT Licensed
+          Open Source — GPL-3.0
         </a>
         <h1 class="zs-hero-title">Measure. Calibrate.<br><em>Master your ECU.</em></h1>
         <p class="zs-hero-sub">
@@ -596,7 +610,7 @@ npm install &amp;&amp; cd frontend &amp;&amp; npm install &amp;&amp; cd ..</code
             <div class="zs-aurora-blob zs-aurora-blob-2"></div>
           </div>
           <h2 class="zs-cta-title">Ready to scope your ECU?</h2>
-          <p class="zs-cta-sub">Free, open-source, and MIT licensed. No login. No telemetry. Just you and your ECU.</p>
+          <p class="zs-cta-sub">Free, open-source, GPL-3.0. No login. No telemetry. Just you and your ECU.</p>
           <div class="zs-cta-btns">
             <a href="/guide/getting-started" class="zs-btn-primary">
               <svg width="15" height="15" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true"><path d="M240 136v64a16 16 0 0 1-16 16H32a16 16 0 0 1-16-16v-64a16 16 0 0 1 16-16h48a8 8 0 0 1 0 16H32v64h192v-64h-48a8 8 0 0 1 0-16h48a16 16 0 0 1 16 16Zm-114.34-61.66a8 8 0 0 1 10.68 0l40 40a8 8 0 0 1-11.31 11.31L136 96.69V176a8 8 0 0 1-16 0V96.69l-29.03 29.0a8 8 0 0 1-11.31-11.31Z"/></svg>
@@ -648,7 +662,7 @@ npm install &amp;&amp; cd frontend &amp;&amp; npm install &amp;&amp; cd ..</code
           </div>
         </div>
         <div class="zs-footer-bottom">
-          <span class="zs-footer-copy">© 2026 ZenScope. MIT License.</span>
+          <span class="zs-footer-copy">© 2026 ZenScope. GPL-3.0.</span>
           <span class="zs-footer-copy">Built for automotive engineers.</span>
         </div>
       </div>
@@ -693,7 +707,9 @@ npm install &amp;&amp; cd frontend &amp;&amp; npm install &amp;&amp; cd ..</code
   background: rgba(6,12,10,0.85);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--zs-border);
+  transition: transform 0.3s ease;
 }
+.zs-nav--hidden { transform: translateY(-100%); }
 .zs-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; flex-shrink: 0; }
 .zs-logo-mark {
   width: 30px; height: 30px; background: var(--zs-accent); border-radius: 7px;
@@ -716,6 +732,8 @@ npm install &amp;&amp; cd frontend &amp;&amp; npm install &amp;&amp; cd ..</code
   transition: border-color 0.15s, color 0.15s;
 }
 .zs-star:hover { border-color: rgba(16,185,129,0.55); color: #fff; }
+.zs-star svg { transition: filter 0.2s ease, color 0.2s ease; }
+.zs-star:hover svg { color: var(--zs-accent-2); filter: drop-shadow(0 0 5px rgba(110,231,183,0.65)); }
 .zs-btn-download {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 13px; font-weight: 500; color: #000; background: var(--zs-accent);
@@ -816,6 +834,8 @@ npm install &amp;&amp; cd frontend &amp;&amp; npm install &amp;&amp; cd ..</code
   border: 1px solid var(--zs-border); transition: border-color 0.2s, color 0.2s;
 }
 .zs-btn-ghost:hover { border-color: rgba(16,185,129,0.45); color: #fff; }
+.zs-btn-ghost svg { transition: filter 0.2s ease, color 0.2s ease; }
+.zs-btn-ghost:hover svg { color: var(--zs-accent-2); filter: drop-shadow(0 0 5px rgba(110,231,183,0.65)); }
 .zs-quickstart-cmd {
   display: inline-flex; align-items: center; gap: 10px;
   font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--zs-muted);
@@ -899,11 +919,15 @@ npm install &amp;&amp; cd frontend &amp;&amp; npm install &amp;&amp; cd ..</code
   transition: background 0.2s, border-color 0.2s, transform 0.2s;
 }
 .zs-feature-card:hover .zs-feature-icon {
-  background: rgba(16,185,129,0.18); border-color: rgba(16,185,129,0.40);
+  background: rgba(16,185,129,0.22); border-color: rgba(16,185,129,0.50);
+  color: #d1fae5;
   transform: scale(1.08) rotate(5deg);
 }
-.zs-feature-icon svg { transition: transform 0.2s ease; }
-.zs-feature-card:hover .zs-feature-icon svg { transform: scale(1.1); }
+.zs-feature-icon svg { transition: transform 0.2s ease, filter 0.2s ease; }
+.zs-feature-card:hover .zs-feature-icon svg {
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 6px rgba(110,231,183,0.70));
+}
 
 .zs-feature-title { font-size: 16px; font-weight: 600; color: var(--zs-text); margin-bottom: 8px; letter-spacing: -0.01em; }
 .zs-feature-desc { font-size: 14px; line-height: 1.65; color: var(--zs-muted); }
@@ -1068,7 +1092,9 @@ npm install &amp;&amp; cd frontend &amp;&amp; npm install &amp;&amp; cd ..</code
 .zs-footer-tagline { font-size: 14px; line-height: 1.65; color: var(--zs-faint); margin-top: 14px; max-width: 260px; }
 .zs-footer-social { margin-top: 18px; display: flex; gap: 10px; }
 .zs-footer-icon { color: var(--zs-faint); text-decoration: none; transition: color 0.15s; }
-.zs-footer-icon:hover { color: var(--zs-text); }
+.zs-footer-icon:hover { color: var(--zs-accent-2); }
+.zs-footer-icon svg { transition: filter 0.2s ease; }
+.zs-footer-icon:hover svg { filter: drop-shadow(0 0 5px rgba(110,231,183,0.65)); }
 .zs-footer-col { display: flex; flex-direction: column; gap: 10px; }
 .zs-footer-col-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--zs-muted); margin-bottom: 4px; }
 .zs-footer-link { font-size: 14px; color: var(--zs-faint); text-decoration: none; transition: color 0.15s; }
