@@ -67,10 +67,9 @@ pub enum DaqStatus {
 
 pub struct AppState {
     pub config: Mutex<Config>,
-    pub config_path: String,
     /// XCP session — None when disconnected.
     pub session: AsyncMutex<Option<XcpSession>>,
-    /// SQLite for packet history — every TX/RX is INSERTed immediately.
+    /// SQLite for packet history + settings — persisted to disk.
     pub db: Mutex<Connection>,
     /// Live SSE push channel.
     pub tx: broadcast::Sender<String>,
@@ -101,8 +100,7 @@ pub struct PacketEntry {
 }
 
 impl AppState {
-    pub fn new(config: Config, config_path: String) -> Self {
-        let db = Connection::open_in_memory().expect("sqlite open failed");
+    pub fn new(config: Config, db: Connection) -> Self {
         db.execute_batch(
             "CREATE TABLE IF NOT EXISTS packets (
                id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,6 +110,10 @@ impl AppState {
                hex          TEXT    NOT NULL,
                pid          TEXT    NOT NULL,
                decoded      TEXT    NOT NULL
+             );
+             CREATE TABLE IF NOT EXISTS settings (
+               id          INTEGER PRIMARY KEY CHECK (id = 1),
+               config_json TEXT    NOT NULL
              );",
         )
         .expect("schema init failed");
@@ -119,7 +121,6 @@ impl AppState {
         let (tx, _) = broadcast::channel(1024);
         Self {
             config: Mutex::new(config),
-            config_path,
             session: AsyncMutex::new(None),
             db: Mutex::new(db),
             tx,
@@ -130,6 +131,15 @@ impl AppState {
             daq_task: Mutex::new(None),
             monitor_task: Mutex::new(None),
         }
+    }
+
+    pub fn save_config(&self) {
+        let json = serde_json::to_string(&*self.config.lock().unwrap()).unwrap_or_default();
+        let db = self.db.lock().unwrap();
+        let _ = db.execute(
+            "INSERT OR REPLACE INTO settings (id, config_json) VALUES (1, ?1)",
+            rusqlite::params![json],
+        );
     }
 
     pub fn insert_packet(&self, entry: &PacketEntry) -> i64 {

@@ -5,14 +5,42 @@ mod session;
 mod xcp;
 
 use axum::{Router, routing::get};
+use rusqlite::Connection;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
+fn resolve_db_path(name: &str) -> String {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join(name)))
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| name.to_owned())
+}
+
+fn load_config(db: &Connection) -> config::Config {
+    db.query_row(
+        "SELECT config_json FROM settings WHERE id = 1",
+        [],
+        |row| row.get::<_, String>(0),
+    )
+    .ok()
+    .and_then(|json| serde_json::from_str(&json).ok())
+    .unwrap_or_default()
+}
+
 async fn run_server() {
-    let (cfg, config_path) =
-        config::Config::load_with_path("config.toml").expect("failed to load config.toml");
+    let db_path = resolve_db_path("zenscope.db");
+    let db = Connection::open(&db_path).expect("failed to open zenscope.db");
+    db.execute_batch(
+        "CREATE TABLE IF NOT EXISTS settings (
+           id          INTEGER PRIMARY KEY CHECK (id = 1),
+           config_json TEXT    NOT NULL
+         );",
+    )
+    .expect("settings table init failed");
+    let cfg = load_config(&db);
     let port = cfg.server.listen_port;
-    let state = Arc::new(http::state::AppState::new(cfg, config_path));
+    let state = Arc::new(http::state::AppState::new(cfg, db));
 
     let router = Router::new()
         .route("/events", get(http::sse::sse_handler))

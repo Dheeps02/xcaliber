@@ -1005,7 +1005,7 @@ pub async fn update_config(
         }
     }
 
-    let result = {
+    {
         let mut cfg = state.config.lock().unwrap();
         cfg.connection.server_ip = body.server_ip;
         cfg.connection.server_port = body.server_port;
@@ -1023,12 +1023,9 @@ pub async fn update_config(
         if let Some(endian) = body.endian {
             cfg.endian = endian;
         }
-        cfg.save(&state.config_path)
-    };
-    match result {
-        Ok(()) => Json(json!({ "ok": true })).into_response(),
-        Err(e) => Json(json!({ "ok": false, "error": e.to_string() })).into_response(),
     }
+    state.save_config();
+    Json(json!({ "ok": true })).into_response()
 }
 
 fn is_valid_mac(mac: &str) -> bool {

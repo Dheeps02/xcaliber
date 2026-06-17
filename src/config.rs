@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EventDef {
@@ -114,36 +113,6 @@ pub struct MatchByte {
     pub value: u8,
 }
 
-impl Config {
-    pub fn load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        Ok(Self::load_with_path(path)?.0)
-    }
-
-    /// Returns (config, resolved_path). Resolved path is the file that was loaded,
-    /// or `path` itself as a fallback (for use with `save`).
-    pub fn load_with_path(path: &str) -> Result<(Self, String), Box<dyn std::error::Error>> {
-        let candidates = [
-            std::env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(|d| d.join(path))),
-            Some(Path::new(path).to_path_buf()),
-        ];
-        for candidate in candidates.into_iter().flatten() {
-            if candidate.exists() {
-                let text = std::fs::read_to_string(&candidate)?;
-                let resolved = candidate.to_string_lossy().into_owned();
-                return Ok((toml::from_str(&text)?, resolved));
-            }
-        }
-        Ok((Self::default(), path.to_owned()))
-    }
-
-    pub fn save(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let text = toml::to_string_pretty(self)?;
-        std::fs::write(path, text)?;
-        Ok(())
-    }
-}
 
 impl Default for Config {
     fn default() -> Self {
