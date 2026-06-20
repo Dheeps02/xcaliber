@@ -134,10 +134,12 @@ function GapZone({ absIdx, onInsert, onOpen, onClose, cellWidth }: {
   cellWidth: number;
 }) {
   const [open, setOpen] = useState(false);
-  const timerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const animRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mouseInRef  = useRef(false);
+  const timerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cooldownRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mouseInRef   = useRef(false);
   const fullyOpenRef = useRef(false);
+  const deafRef      = useRef(false);
 
   function clearTimer() {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
@@ -150,9 +152,18 @@ function GapZone({ absIdx, onInsert, onOpen, onClose, cellWidth }: {
     fullyOpenRef.current = false;
     setOpen(false);
     onClose();
+    // Ignore re-entry for the duration of the collapse + a small buffer so
+    // DOM reflow from the collapsing ghost can't immediately re-trigger the loop.
+    deafRef.current = true;
+    if (cooldownRef.current) clearTimeout(cooldownRef.current);
+    cooldownRef.current = setTimeout(() => { deafRef.current = false; }, GHOST_OUT_MS + 80);
   }
 
-  useEffect(() => () => { clearTimer(); clearAnim(); }, []);
+  useEffect(() => () => {
+    clearTimer();
+    clearAnim();
+    if (cooldownRef.current) clearTimeout(cooldownRef.current);
+  }, []);
 
   return (
     <div
@@ -167,6 +178,7 @@ function GapZone({ absIdx, onInsert, onOpen, onClose, cellWidth }: {
         cursor: open ? 'pointer' : 'default',
       }}
       onMouseEnter={() => {
+        if (deafRef.current) return;
         mouseInRef.current = true;
         clearTimer();
         timerRef.current = setTimeout(() => {
