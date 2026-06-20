@@ -144,10 +144,11 @@ function GapZone({ absIdx, onInsert, cellWidth }: {
     <div
       style={{
         flexShrink: 0,
-        width: open ? cellWidth : 6,
+        width: open ? cellWidth + 12 : 6,
         alignSelf: 'stretch',
         overflow: 'hidden',
-        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
         transition: `width ${open ? GHOST_IN_MS : GHOST_OUT_MS}ms ease`,
         cursor: open ? 'pointer' : 'default',
       }}
@@ -166,10 +167,12 @@ function GapZone({ absIdx, onInsert, cellWidth }: {
         onInsert(absIdx);
       }}
     >
+      {/* Mirror the label row (h-4 = 16px + mb-1 = 4px) so the ghost aligns with the inputs */}
+      <div style={{ height: 20, flexShrink: 0 }} />
       <div
         style={{
-          position: 'absolute',
-          inset: 0,
+          flex: 1,
+          margin: '0 6px',
           borderRadius: 4,
           background: 'var(--surface-hover)',
           border: '1px solid var(--border)',
