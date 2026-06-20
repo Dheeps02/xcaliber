@@ -1053,11 +1053,11 @@ export function CommandBar() {
             })}
 
             {activeMainTab === 'sequence' ? (
-              <>
+              <div className="flex gap-1.5 ml-1.5 self-end shrink-0">
                 <Button
                   key={`add-${expandKey}`}
                   variant="primary"
-                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
+                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px]"
                   style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${BASE_CELLS * 28}ms both` } : undefined}
                   disabled={!activeSequenceId || isSeqRunning}
                   onClick={handleAddToSequence}
@@ -1069,7 +1069,7 @@ export function CommandBar() {
                   key={`del-${expandKey}`}
                   variant="primary"
                   intent="danger"
-                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
+                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px]"
                   style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${(BASE_CELLS + 1) * 28}ms both` } : undefined}
                   disabled={!activeSequenceId || !seqSelectedStepId || isSeqRunning}
                   title="Remove selected frame from sequence"
@@ -1078,13 +1078,13 @@ export function CommandBar() {
                   <Trash size={14} />
                   Del
                 </Button>
-              </>
+              </div>
             ) : (
-              <>
+              <div className="flex gap-1.5 ml-1.5 self-end shrink-0">
                 <Button
                   key={`send-${expandKey}`}
                   variant="primary"
-                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
+                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px]"
                   style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${BASE_CELLS * 28}ms both` } : undefined}
                   onClick={() => {
                     setSendFlying(true);
@@ -1101,7 +1101,7 @@ export function CommandBar() {
                   key={`save-${expandKey}`}
                   variant="primary"
                   intent="info"
-                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px] shrink-0 self-end"
+                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px]"
                   style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${(BASE_CELLS + 1) * 28}ms both` } : undefined}
                   disabled={!activeCmd && !allBytes.some((b) => b?.trim())}
                   title="Save command to list"
@@ -1110,7 +1110,7 @@ export function CommandBar() {
                   <Bookmark size={14} />
                   Save
                 </Button>
-              </>
+              </div>
             )}
           </div>
 
