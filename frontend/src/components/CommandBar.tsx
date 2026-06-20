@@ -949,7 +949,12 @@ export function CommandBar() {
                     className="flex-1 flex flex-col min-w-0"
                     style={{
                       ...(expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${i * 28}ms both` } : {}),
-                      ...(i === BASE_CELLS - 1 ? { opacity: openGapAbsIdx !== null ? 0 : 1, transition: 'opacity 200ms ease' } : {}),
+                      ...(i === BASE_CELLS - 1 ? {
+                      flexGrow: openGapAbsIdx !== null ? 0 : 1,
+                      overflow: 'hidden',
+                      opacity: openGapAbsIdx !== null ? 0 : 1,
+                      transition: 'flex-grow 200ms ease, opacity 200ms ease',
+                    } : {}),
                     }}
                   >
                   <div className="flex items-baseline justify-between mb-1 h-4 overflow-hidden pr-0.5">
