@@ -134,18 +134,25 @@ function GapZone({ absIdx, onInsert, onOpen, onClose, cellWidth }: {
   cellWidth: number;
 }) {
   const [open, setOpen] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mouseInRef  = useRef(false);
+  const fullyOpenRef = useRef(false);
 
   function clearTimer() {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
   }
+  function clearAnim() {
+    if (animRef.current) { clearTimeout(animRef.current); animRef.current = null; }
+  }
 
   function doClose() {
+    fullyOpenRef.current = false;
     setOpen(false);
     onClose();
   }
 
-  useEffect(() => clearTimer, []);
+  useEffect(() => () => { clearTimer(); clearAnim(); }, []);
 
   return (
     <div
@@ -160,13 +167,29 @@ function GapZone({ absIdx, onInsert, onOpen, onClose, cellWidth }: {
         cursor: open ? 'pointer' : 'default',
       }}
       onMouseEnter={() => {
+        mouseInRef.current = true;
         clearTimer();
-        timerRef.current = setTimeout(() => { setOpen(true); onOpen(absIdx); }, GAP_DELAY_MS);
+        timerRef.current = setTimeout(() => {
+          setOpen(true);
+          onOpen(absIdx);
+          clearAnim();
+          animRef.current = setTimeout(() => {
+            fullyOpenRef.current = true;
+            if (!mouseInRef.current) doClose();
+          }, GHOST_IN_MS);
+        }, GAP_DELAY_MS);
       }}
-      onMouseLeave={() => { clearTimer(); if (open) doClose(); }}
+      onMouseLeave={() => {
+        mouseInRef.current = false;
+        clearTimer();
+        // Only close once fully expanded — mid-animation leaves are ignored;
+        // the animRef callback above will close once the animation settles.
+        if (fullyOpenRef.current) doClose();
+      }}
       onClick={() => {
         if (!open) return;
         clearTimer();
+        clearAnim();
         doClose();
         onInsert(absIdx);
       }}
