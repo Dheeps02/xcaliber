@@ -142,36 +142,24 @@ function GapZone({ absIdx, onInsert, onOpen, onClose, cellWidth }: {
   onClose: () => void;
   cellWidth: number;
 }) {
-  const divRef       = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const timerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const animRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fullyOpenRef = useRef(false);
+  const openTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function clearTimer() {
-    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-  }
-  function clearAnim() {
-    if (animRef.current) { clearTimeout(animRef.current); animRef.current = null; }
-  }
+  function clearOpenTimer()  { if (openTimerRef.current)  { clearTimeout(openTimerRef.current);  openTimerRef.current  = null; } }
+  function clearCloseTimer() { if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; } }
 
-  function isMouseInside() {
-    if (!divRef.current) return false;
-    const r = divRef.current.getBoundingClientRect();
-    return _mouse.x >= r.left && _mouse.x <= r.right && _mouse.y >= r.top && _mouse.y <= r.bottom;
+  function doClose() { setOpen(false); onClose(); }
+
+  function scheduleClose() {
+    clearCloseTimer();
+    closeTimerRef.current = setTimeout(doClose, 1000);
   }
 
-  function doClose() {
-    fullyOpenRef.current = false;
-    setOpen(false);
-    onClose();
-  }
-
-  useEffect(() => () => { clearTimer(); clearAnim(); }, []);
+  useEffect(() => () => { clearOpenTimer(); clearCloseTimer(); }, []);
 
   return (
     <div
-      ref={divRef}
       style={{
         flexShrink: 0,
         width: open ? (BASE_CELLS * cellWidth + 102) / (BASE_CELLS + 1) : 6,
@@ -183,30 +171,22 @@ function GapZone({ absIdx, onInsert, onOpen, onClose, cellWidth }: {
         cursor: open ? 'pointer' : 'default',
       }}
       onMouseEnter={() => {
-        clearTimer();
-        timerRef.current = setTimeout(() => {
+        clearCloseTimer();
+        if (open) return;
+        clearOpenTimer();
+        openTimerRef.current = setTimeout(() => {
           setOpen(true);
           onOpen(absIdx);
-          clearAnim();
-          // After the expand animation, check actual cursor position against
-          // the rendered element bounds — onMouseLeave can fire spuriously
-          // mid-transition as the flex layout reflows around the expanding zone.
-          animRef.current = setTimeout(() => {
-            fullyOpenRef.current = true;
-            if (!isMouseInside()) doClose();
-          }, GHOST_IN_MS);
         }, GAP_DELAY_MS);
       }}
       onMouseLeave={() => {
-        clearTimer();
-        // Only close once fully expanded — mid-animation leaves are ignored;
-        // the animRef callback above will close once the animation settles.
-        if (fullyOpenRef.current) doClose();
+        clearOpenTimer();
+        if (open) scheduleClose();
       }}
       onClick={() => {
         if (!open) return;
-        clearTimer();
-        clearAnim();
+        clearOpenTimer();
+        clearCloseTimer();
         doClose();
         onInsert(absIdx);
       }}
