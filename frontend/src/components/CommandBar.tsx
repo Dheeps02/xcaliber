@@ -1,5 +1,5 @@
 import {
-  useRef, useState, useEffect,
+  Fragment, useRef, useState, useEffect,
   type ChangeEvent, type MouseEvent, type ReactNode,
 } from 'react';
 import { TOOLBAR_ICON_SIZE, INFO_ICON_SIZE } from '../lib/constants';
@@ -22,7 +22,11 @@ import { SaveCommandModal } from './SaveCommandModal';
 
 // ── constants ────────────────────────────────────────────────────────────────
 
-const BASE_CELLS = 8;
+const BASE_CELLS    = 8;
+const GAP_DELAY_MS  = 480;
+const GHOST_IN_MS   = 200;
+const GHOST_OUT_MS  = 150;
+
 const EXIT_MS = 160;
 const STAGGER_MS = 28;
 const PICKER_TABS = ['history', 'system', 'user', 'saved'] as const;
@@ -120,6 +124,69 @@ function sourceIcon(source: 'system' | 'user' | 'saved') {
   }
 }
 
+// ── GapZone ──────────────────────────────────────────────────────────────────
+
+function GapZone({ absIdx, onInsert, cellWidth }: {
+  absIdx: number;
+  onInsert: (idx: number) => void;
+  cellWidth: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearTimer() {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+  }
+
+  useEffect(() => clearTimer, []);
+
+  return (
+    <div
+      style={{
+        flexShrink: 0,
+        width: open ? cellWidth : 6,
+        alignSelf: 'stretch',
+        overflow: 'hidden',
+        position: 'relative',
+        transition: `width ${open ? GHOST_IN_MS : GHOST_OUT_MS}ms ease`,
+        cursor: open ? 'pointer' : 'default',
+      }}
+      onMouseEnter={() => {
+        clearTimer();
+        timerRef.current = setTimeout(() => setOpen(true), GAP_DELAY_MS);
+      }}
+      onMouseLeave={() => {
+        clearTimer();
+        setOpen(false);
+      }}
+      onClick={() => {
+        if (!open) return;
+        clearTimer();
+        setOpen(false);
+        onInsert(absIdx);
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: 4,
+          background: 'var(--surface-hover)',
+          border: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--accent)',
+          opacity: open ? 1 : 0,
+          transition: `opacity ${open ? GHOST_IN_MS : GHOST_OUT_MS}ms ease`,
+        }}
+      >
+        <Plus size={10} />
+      </div>
+    </div>
+  );
+}
+
 // ── CommandBar ───────────────────────────────────────────────────────────────
 
 export function CommandBar() {
@@ -172,6 +239,7 @@ export function CommandBar() {
   const [saveSnapshot, setSaveSnapshot] = useState<{ cmdKey: string; bytes: string[]; defaultName: string } | null>(null);
 
   const inputRefs    = useRef<(HTMLInputElement | null)[]>([]);
+  const cellDivRefs  = useRef<(HTMLDivElement | null)[]>([]);
   const pickerRef    = useRef<HTMLDivElement>(null);
   const pickerPanelRef = useRef<HTMLDivElement>(null);
   const prevCollapsedRef = useRef(collapsed);
@@ -286,6 +354,24 @@ export function CommandBar() {
       next[idx] = v;
       return next;
     });
+  }
+
+  function insertByteAt(absIdx: number) {
+    const next = [...allBytesRef.current];
+    next.splice(absIdx, 0, '');
+    setAllBytes(next);
+    const pageStart = sectionRef.current * BASE_CELLS;
+    setShownValues(Array.from({ length: BASE_CELLS }, (_, i) => next[pageStart + i] ?? ''));
+    setTypeKeys(prev => prev.map(k => k + 1));
+  }
+
+  function deleteByteAt(absIdx: number) {
+    const next = [...allBytesRef.current];
+    next.splice(absIdx, 1);
+    setAllBytes(next);
+    const pageStart = sectionRef.current * BASE_CELLS;
+    const newPageVals = Array.from({ length: BASE_CELLS }, (_, i) => next[pageStart + i] ?? '');
+    animate(newPageVals, shownValuesRef.current);
   }
 
   function animate(newShown: string[], oldShown: string[]) {
@@ -820,7 +906,7 @@ export function CommandBar() {
         <div style={{ overflow: 'hidden' }}>
 
           {/* Cells */}
-          <div className="flex items-end gap-1.5 px-3.5 pt-2 pb-2">
+          <div className="flex items-end px-3.5 pt-2 pb-2">
             {Array.from({ length: BASE_CELLS }, (_, i) => {
               const absIdx    = startByte + i;
               const fieldDef  = section === 0 ? def?.fields[i] : undefined;
@@ -838,11 +924,19 @@ export function CommandBar() {
                 spanPhase !== 'idle' ? { animationDelay: `${i * STAGGER_MS}ms` } : undefined;
 
               return (
-                <div
-                  key={`${i}-${expandKey}`}
-                  className="flex-1 flex flex-col min-w-0"
-                  style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${i * 28}ms both` } : undefined}
-                >
+                <Fragment key={`${i}-${expandKey}`}>
+                  {i > 0 && (
+                    <GapZone
+                      absIdx={section * BASE_CELLS + i}
+                      onInsert={insertByteAt}
+                      cellWidth={cellDivRefs.current[i - 1]?.offsetWidth ?? 56}
+                    />
+                  )}
+                  <div
+                    ref={(el) => { cellDivRefs.current[i] = el; }}
+                    className="flex-1 flex flex-col min-w-0"
+                    style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${i * 28}ms both` } : undefined}
+                  >
                   <div className="flex items-baseline justify-between mb-1 h-4 overflow-hidden pr-0.5">
                     <span
                       key={`lbl-${labelKey}-${i}`}
@@ -885,7 +979,6 @@ export function CommandBar() {
                         if (isLocked) return;
                         const v = e.target.value.replace(/[^0-9a-fA-F]/g, '').toUpperCase().slice(0, 2);
                         setCellValue(i, v);
-                        if (section === 0) setByteValue(i, v);
                         setShownValues((prev) => { const n = [...prev]; n[i] = v; return n; });
                         setTypeKeys((prev) => { const n = [...prev]; n[i]++; return n; });
                       }}
@@ -901,23 +994,15 @@ export function CommandBar() {
                       }}
                     >{cellShown || '00'}</span>
                     <button
-                      className="absolute top-0.5 right-0.5 w-[13px] h-[13px] flex items-center justify-center rounded cursor-pointer z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className={`absolute top-0.5 right-0.5 w-[13px] h-[13px] flex items-center justify-center rounded z-10 opacity-0 group-hover:opacity-100 transition-opacity ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                       style={{ background: 'var(--surface-overlay)', color: 'var(--text-muted)' }}
-                      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
-                      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
-                      onClick={() => {
-                        if (isLocked) {
-                          setActiveCmd(null);
-                        } else {
-                          setCellValue(i, '');
-                          if (section === 0) setByteValue(i, '');
-                          setShownValues((prev) => { const n = [...prev]; n[i] = ''; return n; });
-                          inputRefs.current[i]?.focus();
-                        }
-                      }}
+                      onMouseEnter={isLocked ? undefined : (e) => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
+                      onMouseLeave={isLocked ? undefined : (e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
+                      onClick={isLocked ? undefined : () => deleteByteAt(section * BASE_CELLS + i)}
                     ><X size={9} /></button>
                   </div>
-                </div>
+                  </div>
+                </Fragment>
               );
             })}
 
@@ -1007,7 +1092,6 @@ export function CommandBar() {
               onClick={() => {
                 const i = dropdown.cellIdx;
                 setCellValue(i, opt.val);
-                if (section === 0) setByteValue(i, opt.val);
                 setShownValues((prev) => { const n = [...prev]; n[i] = opt.val; return n; });
                 setDropdown(null);
               }}
