@@ -20,6 +20,15 @@ import { Button } from './ui/Button';
 import { SegmentControl } from './ui/SegmentControl';
 import { SaveCommandModal } from './SaveCommandModal';
 
+// ── module-level mouse tracker ───────────────────────────────────────────────
+// getBoundingClientRect checks in timers need the current cursor position, but
+// React synthetic events can't be read asynchronously. A single passive listener
+// keeps coords fresh without per-component overhead.
+const _mouse = { x: 0, y: 0 };
+if (typeof document !== 'undefined') {
+  document.addEventListener('pointermove', (e) => { _mouse.x = e.clientX; _mouse.y = e.clientY; }, { passive: true, capture: true });
+}
+
 // ── constants ────────────────────────────────────────────────────────────────
 
 const BASE_CELLS    = 8;
@@ -133,13 +142,11 @@ function GapZone({ absIdx, onInsert, onOpen, onClose, cellWidth }: {
   onClose: () => void;
   cellWidth: number;
 }) {
+  const divRef       = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const timerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const animRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cooldownRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mouseInRef   = useRef(false);
   const fullyOpenRef = useRef(false);
-  const deafRef      = useRef(false);
 
   function clearTimer() {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
@@ -148,25 +155,23 @@ function GapZone({ absIdx, onInsert, onOpen, onClose, cellWidth }: {
     if (animRef.current) { clearTimeout(animRef.current); animRef.current = null; }
   }
 
+  function isMouseInside() {
+    if (!divRef.current) return false;
+    const r = divRef.current.getBoundingClientRect();
+    return _mouse.x >= r.left && _mouse.x <= r.right && _mouse.y >= r.top && _mouse.y <= r.bottom;
+  }
+
   function doClose() {
     fullyOpenRef.current = false;
     setOpen(false);
     onClose();
-    // Ignore re-entry for the duration of the collapse + a small buffer so
-    // DOM reflow from the collapsing ghost can't immediately re-trigger the loop.
-    deafRef.current = true;
-    if (cooldownRef.current) clearTimeout(cooldownRef.current);
-    cooldownRef.current = setTimeout(() => { deafRef.current = false; }, GHOST_OUT_MS + 80);
   }
 
-  useEffect(() => () => {
-    clearTimer();
-    clearAnim();
-    if (cooldownRef.current) clearTimeout(cooldownRef.current);
-  }, []);
+  useEffect(() => () => { clearTimer(); clearAnim(); }, []);
 
   return (
     <div
+      ref={divRef}
       style={{
         flexShrink: 0,
         width: open ? (BASE_CELLS * cellWidth + 102) / (BASE_CELLS + 1) : 6,
@@ -178,21 +183,21 @@ function GapZone({ absIdx, onInsert, onOpen, onClose, cellWidth }: {
         cursor: open ? 'pointer' : 'default',
       }}
       onMouseEnter={() => {
-        if (deafRef.current) return;
-        mouseInRef.current = true;
         clearTimer();
         timerRef.current = setTimeout(() => {
           setOpen(true);
           onOpen(absIdx);
           clearAnim();
+          // After the expand animation, check actual cursor position against
+          // the rendered element bounds — onMouseLeave can fire spuriously
+          // mid-transition as the flex layout reflows around the expanding zone.
           animRef.current = setTimeout(() => {
             fullyOpenRef.current = true;
-            if (!mouseInRef.current) doClose();
+            if (!isMouseInside()) doClose();
           }, GHOST_IN_MS);
         }, GAP_DELAY_MS);
       }}
       onMouseLeave={() => {
-        mouseInRef.current = false;
         clearTimer();
         // Only close once fully expanded — mid-animation leaves are ignored;
         // the animRef callback above will close once the animation settles.
