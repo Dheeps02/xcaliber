@@ -126,9 +126,11 @@ function sourceIcon(source: 'system' | 'user' | 'saved') {
 
 // ── GapZone ──────────────────────────────────────────────────────────────────
 
-function GapZone({ absIdx, onInsert, cellWidth }: {
+function GapZone({ absIdx, onInsert, onOpen, onClose, cellWidth }: {
   absIdx: number;
   onInsert: (idx: number) => void;
+  onOpen: (absIdx: number) => void;
+  onClose: () => void;
   cellWidth: number;
 }) {
   const [open, setOpen] = useState(false);
@@ -136,6 +138,11 @@ function GapZone({ absIdx, onInsert, cellWidth }: {
 
   function clearTimer() {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+  }
+
+  function doClose() {
+    setOpen(false);
+    onClose();
   }
 
   useEffect(() => clearTimer, []);
@@ -154,16 +161,13 @@ function GapZone({ absIdx, onInsert, cellWidth }: {
       }}
       onMouseEnter={() => {
         clearTimer();
-        timerRef.current = setTimeout(() => setOpen(true), GAP_DELAY_MS);
+        timerRef.current = setTimeout(() => { setOpen(true); onOpen(absIdx); }, GAP_DELAY_MS);
       }}
-      onMouseLeave={() => {
-        clearTimer();
-        setOpen(false);
-      }}
+      onMouseLeave={() => { clearTimer(); if (open) doClose(); }}
       onClick={() => {
         if (!open) return;
         clearTimer();
-        setOpen(false);
+        doClose();
         onInsert(absIdx);
       }}
     >
@@ -174,8 +178,10 @@ function GapZone({ absIdx, onInsert, cellWidth }: {
           flex: 1,
           margin: '0 6px',
           borderRadius: 4,
-          background: 'var(--surface-hover)',
-          border: '1px solid var(--border)',
+          background: 'var(--input-bg)',
+          border: '1px solid var(--input-border)',
+          borderTopColor: 'var(--input-border-top)',
+          boxShadow: 'inset 0 2px 4px var(--shadow-8), inset 0 1px 2px var(--shadow-6), 0 1px 0 var(--shine-2)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -228,8 +234,9 @@ export function CommandBar() {
   const [typeKeys, setTypeKeys]   = useState<number[]>(Array(BASE_CELLS).fill(0));
   const [sendFlying, setSendFlying] = useState(false);
   const [dropdown, setDropdown]   = useState<DropdownState | null>(null);
-  const [expandKey, setExpandKey]   = useState(0);
-  const [toggleKey, setToggleKey]   = useState(0);
+  const [expandKey, setExpandKey]     = useState(0);
+  const [toggleKey, setToggleKey]     = useState(0);
+  const [openGapAbsIdx, setOpenGapAbsIdx] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen]   = useState(false);
   const [pickerTab, setPickerTab]     = useState<'history' | 'system' | 'user' | 'saved'>('history');
   const [pickerQuery, setPickerQuery] = useState('');
@@ -932,13 +939,18 @@ export function CommandBar() {
                     <GapZone
                       absIdx={section * BASE_CELLS + i}
                       onInsert={insertByteAt}
+                      onOpen={setOpenGapAbsIdx}
+                      onClose={() => setOpenGapAbsIdx(null)}
                       cellWidth={cellDivRefs.current[i - 1]?.offsetWidth ?? 56}
                     />
                   )}
                   <div
                     ref={(el) => { cellDivRefs.current[i] = el; }}
                     className="flex-1 flex flex-col min-w-0"
-                    style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${i * 28}ms both` } : undefined}
+                    style={{
+                      ...(expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${i * 28}ms both` } : {}),
+                      ...(i === BASE_CELLS - 1 ? { opacity: openGapAbsIdx !== null ? 0 : 1, transition: 'opacity 200ms ease' } : {}),
+                    }}
                   >
                   <div className="flex items-baseline justify-between mb-1 h-4 overflow-hidden pr-0.5">
                     <span
