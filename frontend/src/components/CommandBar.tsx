@@ -249,8 +249,9 @@ export function CommandBar() {
   const [section, setSection]     = useState(0);
   const [labelKey, setLabelKey]   = useState(0);
   const [shownValues, setShownValues] = useState<string[]>(() => [...byteValues]);
-  const [spanPhase, setSpanPhase] = useState<'idle' | 'exit' | 'enter'>('idle');
-  const [phaseKey, setPhaseKey]   = useState(0);
+  const [spanPhase, setSpanPhase]       = useState<'idle' | 'exit' | 'enter'>('idle');
+  const [phaseKey, setPhaseKey]         = useState(0);
+  const [animateFromCell, setAnimateFromCell] = useState(0);
   const [typeKeys, setTypeKeys]   = useState<number[]>(Array(BASE_CELLS).fill(0));
   const [sendFlying, setSendFlying] = useState(false);
   const [dropdown, setDropdown]   = useState<DropdownState | null>(null);
@@ -400,11 +401,13 @@ export function CommandBar() {
     next.splice(absIdx, 1);
     setAllBytes(next);
     const pageStart = sectionRef.current * BASE_CELLS;
+    const localIdx = absIdx - pageStart;
     const newPageVals = Array.from({ length: BASE_CELLS }, (_, i) => next[pageStart + i] ?? '');
-    animate(newPageVals, shownValuesRef.current);
+    animate(newPageVals, shownValuesRef.current, localIdx);
   }
 
-  function animate(newShown: string[], oldShown: string[]) {
+  function animate(newShown: string[], oldShown: string[], fromCell = 0) {
+    setAnimateFromCell(fromCell);
     const hasOld = oldShown.some((v) => v !== '');
     if (!hasOld) {
       setShownValues(newShown);
@@ -415,7 +418,7 @@ export function CommandBar() {
     }
     setSpanPhase('exit');
     setPhaseKey((k) => k + 1);
-    const exitTotal = EXIT_MS + STAGGER_MS * (BASE_CELLS - 1);
+    const exitTotal = EXIT_MS + STAGGER_MS * (BASE_CELLS - 1 - fromCell);
     setTimeout(() => {
       setShownValues(newShown);
       setSpanPhase('enter');
@@ -946,12 +949,15 @@ export function CommandBar() {
               const prevLbl   = prevLabelTextsRef.current[i] ?? '';
               const currLbl   = fieldDef ? toTitleCase(fieldDef.label) : '';
               const lblCls    = prevLbl === '' && currLbl !== '' ? 'label-enter' : 'label-fade';
+              const isAnimated = i >= animateFromCell;
               const spanCls   =
-                spanPhase === 'exit'  ? 'count-exit' :
-                spanPhase === 'enter' ? 'count-tick'  :
-                typeKeys[i] > 0       ? 'type-fade'   : '';
+                spanPhase === 'exit'  && isAnimated ? 'count-exit' :
+                spanPhase === 'enter' && isAnimated ? 'count-tick'  :
+                typeKeys[i] > 0                     ? 'type-fade'   : '';
               const spanStyle =
-                spanPhase !== 'idle' ? { animationDelay: `${i * STAGGER_MS}ms` } : undefined;
+                spanPhase !== 'idle' && isAnimated
+                  ? { animationDelay: `${(i - animateFromCell) * STAGGER_MS}ms` }
+                  : undefined;
 
               return (
                 <Fragment key={`${i}-${expandKey}`}>
