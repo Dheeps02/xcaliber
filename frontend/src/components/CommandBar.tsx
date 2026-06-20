@@ -144,7 +144,7 @@ function GapZone({ absIdx, onInsert, cellWidth }: {
     <div
       style={{
         flexShrink: 0,
-        width: open ? cellWidth + 12 : 6,
+        width: open ? (BASE_CELLS * cellWidth + 102) / (BASE_CELLS + 1) : 6,
         alignSelf: 'stretch',
         overflow: 'hidden',
         display: 'flex',
