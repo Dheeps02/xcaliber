@@ -102,7 +102,7 @@ export function MemoryBar() {
 
   function resolveOrWarn(input: string): number | null {
     const t = input.trim();
-    if (!t) { showToast('Enter an address or variable name first', 'info'); return null; }
+    if (!t) { showToast('Enter an address or variable name first', 'warning'); return null; }
     const isHex = /^(?:0x)?[0-9a-fA-F]+$/i.test(t);
     if (!isHex && a2lVars.length === 0) {
       showToast('No A2L file loaded — load one to resolve variable names', 'error');

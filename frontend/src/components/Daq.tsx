@@ -469,23 +469,17 @@ function DaqToolbar({
           onMouseDown={e => { if (e.target === e.currentTarget) closeConfirm(); }}
         >
           <div
-            className={`w-72 p-5 flex flex-col gap-4 rounded-lg shadow-2xl ${confirmExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}
-            style={{ background: 'var(--surface-raised)', border: '1px solid var(--border-strong)' }}
+            className={`xcb-glass-panel w-72 p-5 flex flex-col gap-4 rounded-lg ${confirmExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}
+            style={{ border: '1px solid var(--border-strong)', boxShadow: '0 16px 48px var(--shadow-8)' }}
           >
             <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
               Free all DAQ resources on the slave? This stops acquisition and releases all configured lists.
             </p>
             <div className="flex gap-2 justify-end">
               <Button variant="ghost" onClick={closeConfirm}>Cancel</Button>
-              <button
-                onClick={() => { closeConfirm(); onFree(); }}
-                className="px-4 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 transition-opacity active:scale-95"
-                style={{ background: 'var(--status-err)', color: '#fff' }}
-                onMouseEnter={e => ((e.currentTarget as HTMLElement).style.opacity = '0.85')}
-                onMouseLeave={e => ((e.currentTarget as HTMLElement).style.opacity = '1')}
-              >
+              <Button variant="primary" intent="danger" onClick={() => { closeConfirm(); onFree(); }}>
                 <Trash size={13} />Free All
-              </button>
+              </Button>
             </div>
           </div>
         </div>,

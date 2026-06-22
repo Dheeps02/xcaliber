@@ -82,11 +82,11 @@ export function SaveCommandModal({ defaultName, cmdKey, bytes, onClose }: Props)
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 ${isExiting ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
       onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}
     >
       <div
-        className={`xcb-glass w-80 p-4 flex flex-col gap-3 rounded-lg ${isExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}
+        className={`xcb-glass-panel w-80 p-4 flex flex-col gap-3 rounded-lg ${isExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}
         style={{ border: '1px solid var(--border-strong)', boxShadow: '0 16px 48px rgba(0,0,0,0.5)' }}
       >
         <div className="flex items-center gap-2">

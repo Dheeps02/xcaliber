@@ -35,8 +35,11 @@ export function AlertModal() {
       className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 ${isExiting ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
       onMouseDown={(e) => { if (e.target === e.currentTarget && !alertAction) handleClose(); }}
     >
-      <div className={`bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-80 p-5 flex flex-col gap-4 ${isExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}>
-        <p className="text-sm text-gray-200 leading-relaxed">{alertMsg}</p>
+      <div
+        className={`xcb-glass-panel rounded-lg w-80 p-5 flex flex-col gap-4 ${isExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}
+        style={{ border: '1px solid var(--border-strong)', boxShadow: '0 16px 48px var(--shadow-8)' }}
+      >
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>{alertMsg}</p>
         <div className="flex gap-2 justify-end">
           {alertAction ? (
             <>

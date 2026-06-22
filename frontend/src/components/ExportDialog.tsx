@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen } from '@phosphor-icons/react';
+import { FolderOpen, Bookmark } from '@phosphor-icons/react';
 import { isElectron } from '../lib/electron';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
 
 const inElectron = isElectron();
 
@@ -68,70 +70,51 @@ export function ExportDialog({ defaultFilename, content, onClose, onSuccess }: P
     }
   }
 
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') close();
+  }
+
   return createPortal(
     <div
-      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 ${isExiting ? 'modal-backdrop-exit' : 'modal-backdrop-enter'}`}
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
       onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}
     >
-      <div className={`bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-96 p-5 flex flex-col gap-4 ${isExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}>
-        <p className="text-sm font-medium text-gray-200">Export File</p>
+      <div
+        className={`xcb-glass-panel rounded-lg w-96 p-5 flex flex-col gap-4 ${isExiting ? 'modal-panel-exit' : 'modal-panel-enter'}`}
+        style={{ border: '1px solid var(--border-strong)', boxShadow: '0 16px 48px var(--shadow-8)' }}
+      >
+        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Export File</p>
 
-        {/* Filename */}
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Filename</label>
-          <div className="flex items-stretch rounded-md border border-gray-700 bg-gray-800 focus-within:border-blue-500 transition-colors overflow-hidden">
-            <input
-              autoFocus
-              value={stem}
-              onChange={(e) => { setStem(e.target.value); setError(''); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') close(); }}
-              className="flex-1 px-2.5 py-1.5 bg-transparent text-xs font-mono text-gray-200 focus:outline-none min-w-0"
-            />
+          <label className="text-[9px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Filename</label>
+          <div className="flex items-center gap-1.5">
+            <Input mono autoFocus value={stem} onChange={(v) => { setStem(v); setError(''); }} onKeyDown={handleKeyDown} />
             {ext && (
-              <span className="px-2 py-1.5 text-xs font-mono text-gray-500 bg-gray-750 border-l border-gray-700 select-none shrink-0">
-                {ext}
-              </span>
+              <span className="text-xs font-mono shrink-0" style={{ color: 'var(--text-muted)' }}>{ext}</span>
             )}
           </div>
         </div>
 
-        {/* Folder — Electron only */}
         {inElectron && (
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Folder</label>
+            <label className="text-[9px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Folder</label>
             <div className="flex gap-2">
-              <input
-                value={folder}
-                onChange={(e) => setFolder(e.target.value)}
-                placeholder="Choose a folder…"
-                className="flex-1 px-2.5 py-1.5 rounded-md bg-gray-800 border border-gray-700 text-xs font-mono text-gray-200 focus:outline-none focus:border-blue-500 transition-colors min-w-0"
-              />
-              <button
-                onClick={browseFolder}
-                className="px-2.5 py-1.5 rounded-md bg-gray-800 border border-gray-700 text-gray-400 hover:text-gray-200 hover:bg-gray-700 transition-colors flex items-center gap-1.5 text-xs shrink-0"
-              >
-                <FolderOpen size={14} /> Browse
-              </button>
+              <Input mono value={folder} onChange={setFolder} placeholder="Choose a folder…" onKeyDown={handleKeyDown} />
+              <Button variant="default" onClick={browseFolder}>
+                <FolderOpen size={13} />Browse
+              </Button>
             </div>
           </div>
         )}
 
-        {error && <p className="text-[10px] text-red-400">{error}</p>}
+        {error && <p className="text-[10px]" style={{ color: 'var(--status-err)' }}>{error}</p>}
 
         <div className="flex gap-2 justify-end">
-          <button
-            onClick={close}
-            className="px-4 py-1.5 rounded text-xs font-medium text-gray-400 hover:text-gray-200 hover:bg-gray-800 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-1.5 rounded text-xs font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors active:scale-95"
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
+          <Button variant="ghost" onClick={close}>Cancel</Button>
+          <Button variant="primary" disabled={saving} onClick={handleSave}>
+            <Bookmark size={13} />{saving ? 'Saving…' : 'Save'}
+          </Button>
         </div>
       </div>
     </div>,
