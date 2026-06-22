@@ -66,7 +66,7 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
             zIndex: 9999,
             maxWidth: 220,
           }}
-          className="bg-gray-800 border border-gray-700 text-gray-300 rounded px-2 py-1.5 text-[10px] leading-relaxed"
+          className="xcb-tooltip"
         >
           {tip.text}
         </div>,
