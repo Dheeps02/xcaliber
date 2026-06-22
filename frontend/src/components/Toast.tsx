@@ -1,14 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { CheckCircle, XCircle, Warning, Info } from '@phosphor-icons/react';
+import { CheckCircle, XCircle, WarningCircle, Info } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import type { Toast } from '../stores/app-store';
 
 function iconFor(type: Toast['type'], color: string) {
-  const props = { size: 16, weight: 'fill', style: { color, flexShrink: 0 } } as const;
-  if (type === 'success') return <CheckCircle {...props} />;
-  if (type === 'error')   return <XCircle     {...props} />;
-  if (type === 'warning') return <Warning      {...props} />;
-  return                         <Info         {...props} />;
+  const props = { size: 16, weight: 'fill', style: { color, flexShrink: 0, filter: `drop-shadow(0 0 4px ${color})` } } as const;
+  if (type === 'success') return <CheckCircle   {...props} />;
+  if (type === 'error')   return <XCircle       {...props} />;
+  if (type === 'warning') return <WarningCircle {...props} />;
+  return                         <Info          {...props} />;
 }
 
 function colorFor(type: Toast['type']): string {
