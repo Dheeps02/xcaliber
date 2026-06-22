@@ -38,7 +38,7 @@ function appendHistory(
 export interface Toast {
   id: number;
   message: string;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'warning' | 'info';
   detail?: string;
 }
 
@@ -317,7 +317,10 @@ export const useAppStore = create<AppStore>((set) => ({
   setDisplayTimeoutMs: (displayTimeoutMs) => set({ displayTimeoutMs }),
   setAnimationsEnabled: (animationsEnabled) => set({ animationsEnabled }),
   showToast: (message, type = 'info', detail) =>
-    set((s) => ({ toasts: [...s.toasts, { id: ++toastSeq, message, type, detail }] })),
+    set((s) => {
+      const next = [...s.toasts, { id: ++toastSeq, message, type, detail }];
+      return { toasts: next.length > 6 ? next.slice(1) : next };
+    }),
   dismissToast: (id) =>
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   setAnimationWatermark: (v) => set({ animationWatermark: v }),

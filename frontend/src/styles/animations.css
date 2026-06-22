@@ -404,14 +404,18 @@ select {
 
 /* ── Toast animations ────────────────────────────────────────────── */
 @keyframes toast-in-anim {
-  from { opacity: 0; transform: translateX(24px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes toast-out-anim {
-  from { opacity: 1; transform: translateX(0); }
-  to   { opacity: 0; transform: translateX(24px); }
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(8px); }
 }
-.toast-in  { animation: toast-in-anim  220ms var(--ease-spring-soft) both; }
+@keyframes toast-glow-shift {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+.toast-in  { animation: toast-in-anim  240ms var(--ease-spring-soft) both; }
 .toast-out { animation: toast-out-anim var(--duration-base) var(--ease-in) both; }
 
 /* ── Wrench animation ────────────────────────────────────────────── */

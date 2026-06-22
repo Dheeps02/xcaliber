@@ -1,17 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { CheckCircle, XCircle, Warning, Info } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import type { Toast } from '../stores/app-store';
 
-function ToastItem({ id, message, type, detail }: Toast) {
+function iconFor(type: Toast['type'], color: string) {
+  const props = { size: 16, weight: 'fill', style: { color, flexShrink: 0 } } as const;
+  if (type === 'success') return <CheckCircle {...props} />;
+  if (type === 'error')   return <XCircle     {...props} />;
+  if (type === 'warning') return <Warning      {...props} />;
+  return                         <Info         {...props} />;
+}
+
+function colorFor(type: Toast['type']): string {
+  if (type === 'success') return 'var(--status-ok)';
+  if (type === 'error')   return 'var(--status-err)';
+  if (type === 'warning') return 'var(--status-warn)';
+  return 'var(--text-muted)';
+}
+
+function ToastItem({ id, message, type, detail, faded }: Toast & { faded: boolean }) {
   const dismissToast = useAppStore((s) => s.dismissToast);
-  const [dying, setDying] = useState(false);
+  const [dying, setDying]       = useState(false);
   const [expanded, setExpanded] = useState(false);
 
+  const color   = colorFor(type);
   const hasMore = !!detail || message.length > 55;
 
   useEffect(() => {
     if (expanded) return;
-    const out = setTimeout(() => setDying(true), 3200);
+    const out  = setTimeout(() => setDying(true),   3200);
     const kill = setTimeout(() => dismissToast(id), 3600);
     return () => { clearTimeout(out); clearTimeout(kill); };
   }, [id, dismissToast, expanded]);
@@ -21,72 +38,117 @@ function ToastItem({ id, message, type, detail }: Toast) {
     setTimeout(() => dismissToast(id), 400);
   }
 
-  const colorCls =
-    type === 'success' ? 'bg-green-900/95 border-green-500/40 text-green-200' :
-    type === 'error'   ? 'bg-red-900/95 border-red-500/40 text-red-200' :
-                         'bg-gray-800/98 border-gray-600/50 text-gray-200';
-
   return (
     <div
-      className={`rounded-lg border shadow-2xl text-xs font-medium w-72 pointer-events-auto select-none ${colorCls} ${dying ? 'toast-out' : 'toast-in'}`}
-      onClick={dismiss}
+      data-toast-id={id}
+      style={{
+        opacity: faded ? 0 : 1,
+        transition: 'opacity 240ms ease',
+        pointerEvents: faded ? 'none' : 'auto',
+      }}
     >
-      <div className="px-3 py-2.5 flex items-start gap-2">
-        <div className="flex-1 min-w-0">
-          {!expanded ? (
-            <div className="relative flex items-center gap-1.5">
-              <p
-                className="flex-1 min-w-0 overflow-hidden whitespace-nowrap text-xs leading-snug"
-                style={{
-                  maskImage: hasMore
-                    ? `linear-gradient(to right, black 65%, transparent 92%)`
-                    : 'none',
-                  WebkitMaskImage: hasMore
-                    ? `linear-gradient(to right, black 65%, transparent 92%)`
-                    : 'none',
-                }}
-              >
-                {message}
-              </p>
-              {hasMore && (
-                <button
-                  className="shrink-0 text-[10px] opacity-60 hover:opacity-100 transition-opacity underline"
-                  style={{ color: 'inherit' }}
-                  onClick={e => { e.stopPropagation(); setExpanded(true); }}
+      <div
+        data-type={type}
+        className={`xcb-toast select-none ${dying ? 'toast-out' : 'toast-in'}`}
+        style={{ width: 720 }}
+        onClick={dismiss}
+      >
+        <div className="xcb-toast-glow" />
+        <div className="relative flex items-center gap-2.5 px-4 py-2.5">
+          {iconFor(type, color)}
+          <div className="flex-1 min-w-0">
+            {!expanded ? (
+              <div className="flex items-center gap-2">
+                <p
+                  className="flex-1 min-w-0 text-xs font-medium leading-snug overflow-hidden whitespace-nowrap"
+                  style={{
+                    color: 'var(--toast-text)',
+                    maskImage: hasMore ? 'linear-gradient(to right, black 70%, transparent 95%)' : 'none',
+                    WebkitMaskImage: hasMore ? 'linear-gradient(to right, black 70%, transparent 95%)' : 'none',
+                  }}
                 >
-                  More
-                </button>
-              )}
-            </div>
-          ) : (
-            <div>
-              <p className="text-xs leading-relaxed break-words">{message}</p>
-              {detail && (
-                <p className="mt-2 text-[10px] opacity-60 break-words font-normal leading-relaxed border-t border-white/10 pt-2">
-                  {detail}
+                  {message}
                 </p>
-              )}
-            </div>
+                {hasMore && (
+                  <button
+                    className="shrink-0 text-[10px] underline opacity-50 hover:opacity-90 transition-opacity"
+                    style={{ color }}
+                    onClick={e => { e.stopPropagation(); setExpanded(true); }}
+                  >
+                    More
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs font-medium leading-relaxed break-words" style={{ color: 'var(--toast-text)' }}>
+                  {message}
+                </p>
+                {detail && (
+                  <p
+                    className="mt-2 text-[10px] font-normal leading-relaxed break-words border-t pt-2 opacity-60"
+                    style={{ color: 'var(--text-secondary)', borderColor: 'var(--border)' }}
+                  >
+                    {detail}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          {expanded && (
+            <button
+              className="shrink-0 text-base leading-none opacity-40 hover:opacity-80 transition-opacity"
+              style={{ color: 'var(--text-muted)' }}
+              onClick={e => { e.stopPropagation(); dismiss(); }}
+            >
+              ×
+            </button>
           )}
         </div>
-        {expanded && (
-          <button
-            className="shrink-0 opacity-50 hover:opacity-90 transition-opacity text-base leading-none mt-px"
-            onClick={e => { e.stopPropagation(); dismiss(); }}
-          >
-            ×
-          </button>
-        )}
       </div>
     </div>
   );
 }
 
 export function ToastContainer() {
-  const toasts = useAppStore((s) => s.toasts);
+  const toasts    = useAppStore((s) => s.toasts);
+  const listRef   = useRef<HTMLDivElement>(null);
+  const posRef    = useRef<Map<number, number>>(new Map());
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const items = list.querySelectorAll<HTMLElement>('[data-toast-id]');
+
+    items.forEach(item => {
+      const id   = Number(item.getAttribute('data-toast-id'));
+      const newY = item.getBoundingClientRect().top;
+      const oldY = posRef.current.get(id);
+
+      if (oldY !== undefined && Math.abs(oldY - newY) > 0.5 && !item.querySelector('.toast-out')) {
+        const delta = oldY - newY;
+        item.animate(
+          [{ transform: `translateY(${delta}px)` }, { transform: 'translateY(0)' }],
+          { duration: 240, easing: 'cubic-bezier(0.34, 1.20, 0.64, 1)' },
+        );
+      }
+
+      posRef.current.set(id, newY);
+    });
+
+    const live = new Set(Array.from(items).map(el => Number(el.getAttribute('data-toast-id'))));
+    posRef.current.forEach((_, id) => { if (!live.has(id)) posRef.current.delete(id); });
+  });
+
   return (
-    <div className="fixed bottom-4 right-4 flex flex-col gap-2 z-[10001] pointer-events-none">
-      {toasts.map((t) => <ToastItem key={t.id} {...t} />)}
+    <div
+      ref={listRef}
+      className="fixed z-[10001] pointer-events-none flex flex-col items-center gap-2"
+      style={{ bottom: '10vh', left: '50%', transform: 'translateX(-50%)' }}
+    >
+      {toasts.map((t, i) => (
+        <ToastItem key={t.id} {...t} faded={i < toasts.length - 3} />
+      ))}
     </div>
   );
 }
