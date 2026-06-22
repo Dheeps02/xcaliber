@@ -62,7 +62,7 @@ button:active:not(:disabled) { transform: scale(0.95); }
   background: linear-gradient(
     105deg,
     transparent 38%,
-    color-mix(in srgb, var(--toast-color, white) 50%, rgba(255,255,255,0.18)) 50%,
+    rgba(255,255,255,0.18) 50%,
     transparent 62%
   );
   will-change: transform;
