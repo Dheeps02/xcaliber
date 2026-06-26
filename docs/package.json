@@ -11,8 +11,14 @@
   },
   "devDependencies": {
     "@phosphor-icons/core": "^2.1.1",
+    "@vitejs/plugin-react": "^6.0.3",
     "mermaid": "^11.15.0",
     "vitepress": "^1.6.4",
     "vitepress-plugin-mermaid": "^2.0.17"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   }
 }
