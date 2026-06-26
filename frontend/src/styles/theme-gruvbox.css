@@ -1,0 +1,17 @@
+[data-xcb-theme="gruvbox"] {
+  --surface-base:    #282828;
+  --surface-raised:  #3C3836;
+  --surface-overlay: #504945;
+  --surface-hover:   #665C54;
+  --accent:          #B8BB26;
+  --border:          rgba(255,255,255,0.08);
+  --border-strong:   rgba(255,255,255,0.14);
+  --text-primary:    #EBDBB2;
+  --text-secondary:  #D5C4A1;
+  --text-muted:      #928374;
+  --status-ok:       #B8BB26;
+  --status-err:      #FB4934;
+  --status-warn:     #FABD2F;
+  --tx:              #83A598;
+  --rx:              #B8BB26;
+}

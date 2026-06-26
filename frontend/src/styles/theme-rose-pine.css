@@ -1,0 +1,17 @@
+[data-xcb-theme="rose-pine"] {
+  --surface-base:    #191724;
+  --surface-raised:  #1F1D2E;
+  --surface-overlay: #26233A;
+  --surface-hover:   #403D52;
+  --accent:          #EBBCBA;
+  --border:          rgba(255,255,255,0.07);
+  --border-strong:   rgba(255,255,255,0.12);
+  --text-primary:    #E0DEF4;
+  --text-secondary:  #908CAA;
+  --text-muted:      #6E6A86;
+  --status-ok:       #9CCFD8;
+  --status-err:      #EB6F92;
+  --status-warn:     #F6C177;
+  --tx:              #9CCFD8;
+  --rx:              #31748F;
+}

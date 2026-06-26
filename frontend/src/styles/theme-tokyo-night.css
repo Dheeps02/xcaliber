@@ -1,0 +1,17 @@
+[data-xcb-theme="tokyo-night"] {
+  --surface-base:    #1A1B26;
+  --surface-raised:  #1F2035;
+  --surface-overlay: #24283B;
+  --surface-hover:   #2E3148;
+  --accent:          #7AA2F7;
+  --border:          rgba(255,255,255,0.07);
+  --border-strong:   rgba(255,255,255,0.12);
+  --text-primary:    #C0CAF5;
+  --text-secondary:  #A9B1D6;
+  --text-muted:      #565F89;
+  --status-ok:       #9ECE6A;
+  --status-err:      #F7768E;
+  --status-warn:     #E0AF68;
+  --tx:              #7AA2F7;
+  --rx:              #9ECE6A;
+}

@@ -1,0 +1,17 @@
+[data-xcb-theme="one-dark"] {
+  --surface-base:    #282C34;
+  --surface-raised:  #21252B;
+  --surface-overlay: #2C313A;
+  --surface-hover:   #323842;
+  --accent:          #61AFEF;
+  --border:          rgba(255,255,255,0.08);
+  --border-strong:   rgba(255,255,255,0.14);
+  --text-primary:    #ABB2BF;
+  --text-secondary:  #9DA5B4;
+  --text-muted:      #636D83;
+  --status-ok:       #98C379;
+  --status-err:      #E06C75;
+  --status-warn:     #E5C07B;
+  --tx:              #61AFEF;
+  --rx:              #98C379;
+}

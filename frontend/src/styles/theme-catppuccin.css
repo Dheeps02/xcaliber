@@ -1,0 +1,17 @@
+[data-xcb-theme="catppuccin"] {
+  --surface-base:    #1E1E2E;
+  --surface-raised:  #313244;
+  --surface-overlay: #45475A;
+  --surface-hover:   #585B70;
+  --accent:          #CBA6F7;
+  --border:          rgba(255,255,255,0.07);
+  --border-strong:   rgba(255,255,255,0.12);
+  --text-primary:    #CDD6F4;
+  --text-secondary:  #BAC2DE;
+  --text-muted:      #6C7086;
+  --status-ok:       #A6E3A1;
+  --status-err:      #F38BA8;
+  --status-warn:     #F9E2AF;
+  --tx:              #89B4FA;
+  --rx:              #A6E3A1;
+}

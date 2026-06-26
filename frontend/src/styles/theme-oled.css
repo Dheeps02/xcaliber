@@ -1,0 +1,17 @@
+[data-xcb-theme="oled"] {
+  --surface-base:    #000000;
+  --surface-raised:  #0A0A0A;
+  --surface-overlay: #111111;
+  --surface-hover:   #1A1A1A;
+  --accent:          #FFFFFF;
+  --border:          rgba(255,255,255,0.10);
+  --border-strong:   rgba(255,255,255,0.18);
+  --text-primary:    #FFFFFF;
+  --text-secondary:  #AAAAAA;
+  --text-muted:      #555555;
+  --status-ok:       #888888;
+  --status-err:      #FF4444;
+  --status-warn:     #FFAA00;
+  --tx:              #CCCCCC;
+  --rx:              #888888;
+}

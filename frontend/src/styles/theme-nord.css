@@ -1,0 +1,17 @@
+[data-xcb-theme="nord"] {
+  --surface-base:    #2E3440;
+  --surface-raised:  #3B4252;
+  --surface-overlay: #434C5E;
+  --surface-hover:   #4C566A;
+  --accent:          #88C0D0;
+  --border:          rgba(255,255,255,0.08);
+  --border-strong:   rgba(255,255,255,0.14);
+  --text-primary:    #ECEFF4;
+  --text-secondary:  #D8DEE9;
+  --text-muted:      #6B7D8B;
+  --status-ok:       #A3BE8C;
+  --status-err:      #BF616A;
+  --status-warn:     #EBCB8B;
+  --tx:              #88C0D0;
+  --rx:              #A3BE8C;
+}

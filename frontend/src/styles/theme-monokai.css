@@ -1,0 +1,17 @@
+[data-xcb-theme="monokai"] {
+  --surface-base:    #272822;
+  --surface-raised:  #2C2D27;
+  --surface-overlay: #3E3D32;
+  --surface-hover:   #49483E;
+  --accent:          #A6E22E;
+  --border:          rgba(255,255,255,0.08);
+  --border-strong:   rgba(255,255,255,0.14);
+  --text-primary:    #F8F8F2;
+  --text-secondary:  #CFCFC2;
+  --text-muted:      #75715E;
+  --status-ok:       #A6E22E;
+  --status-err:      #F92672;
+  --status-warn:     #E6DB74;
+  --tx:              #66D9E8;
+  --rx:              #A6E22E;
+}
