@@ -1,3 +1,7 @@
+/* ── App tokens — sourced from frontend ────────────────────────── */
+@import '@xcb-styles/theme-default.css';
+@import '@xcb-styles/themes.css';
+
 /* ── VitePress brand ── */
 :root {
   --vp-c-brand-1: #10b981;
@@ -152,6 +156,32 @@
   .zs-marquee { animation: none !important; }
   .zs-hero-title, .zs-hero-sub, .zs-hero-ctas, .zs-badge, .zs-quickstart-cmd, .zs-xcp-pill { animation: none !important; }
 }
+
+/* ── Nav order: place ThemeSelector between appearance and social links ── */
+.VPNavBarSearch    { order: 1; }
+.VPNavBarAppearance { order: 2; }
+.VPNavBarSocialLinks { order: 4; }
+.VPNavBarExtra     { order: 5; }
+
+/* ── App tokens: light (emerald) ───────────────────────────────── */
+html:not(.dark):not([data-xcb-theme]) {
+  --surface-base:    #f2f7f5;
+  --surface-raised:  #e8f0ed;
+  --surface-overlay: #dde9e5;
+  --surface-hover:   #d3e2dd;
+  --accent:          #059669;
+  --border:          rgba(0,0,0,0.10);
+  --border-strong:   rgba(0,0,0,0.18);
+  --text-primary:    #0d1f18;
+  --text-secondary:  #2a5a45;
+  --text-muted:      #5a7a6e;
+  --status-ok:       #16a34a;
+  --status-err:      #dc2626;
+  --status-warn:     #d97706;
+  --tx:              #0284c7;
+  --rx:              #16a34a;
+}
+
 
 /* ── Doc content pages ──────────────────────────────────────────── */
 
