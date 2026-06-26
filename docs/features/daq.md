@@ -5,7 +5,7 @@ The DAQ (Data Acquisition) view configures and runs XCP measurement lists agains
 ## Configuring a DAQ list
 
 - Add measurement entries by memory address, size, and type
-- Group entries into ODTs (Object Descriptor Tables) under XCP events configured in [Configuration](../guide/configuration)
+- Group entries into ODTs (Object Descriptor Tables) under XCP events configured in the in-app **Settings** panel
 - Save the full list as a `.daq` file and reload it later — no need to rebuild a measurement setup from scratch each session
 
 ## Live plots

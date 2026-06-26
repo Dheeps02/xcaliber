@@ -39,4 +39,3 @@ Open **Settings** in ZenScope and fill in the IP, port, and protocol, then hit *
 Raw Ethernet transport is only needed when the ECU expects proper source/destination MAC addresses in the XCP request packets. If your ECU documentation doesn't specifically call this out, UDP will work and is simpler to configure.
 :::
 
-For a full breakdown of every connection setting, see [Configuration](./configuration).
