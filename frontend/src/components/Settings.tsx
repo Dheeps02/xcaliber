@@ -759,6 +759,7 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
             border: '1px solid var(--input-border)',
             borderTopColor: 'var(--input-border-top)',
             boxShadow: 'inset 0 2px 8px var(--shadow-8), inset 0 1px 3px var(--shadow-6)',
+            clipPath: 'polygon(0 0, calc(100% - 44px) 0, calc(100% - 44px) 44px, 100% 44px, 100% 100%, 0 100%)',
           }}>
             <div key={tab} className={`flex-1 tab-content-anim ${tab === 'usercmds' ? 'overflow-hidden' : 'overflow-y-auto p-6'}`}>
               {tab === 'appearance' && <AppearanceTab />}
