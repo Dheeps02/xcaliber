@@ -695,7 +695,8 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
     const el = contentPanelRef.current;
     if (!el) return;
     const update = () => {
-      const { width: w, height: h } = el.getBoundingClientRect();
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
       const n = 44, r = 12;
       setNotchClip(
         `path('M ${r} 0 L ${w-n-r} 0 Q ${w-n} 0 ${w-n} ${r} L ${w-n} ${n-r} Q ${w-n} ${n} ${w-n+r} ${n} L ${w-r} ${n} Q ${w} ${n} ${w} ${n+r} L ${w} ${h-r} Q ${w} ${h} ${w-r} ${h} L ${r} ${h} Q 0 ${h} 0 ${h-r} L 0 ${r} Q 0 0 ${r} 0 Z')`
