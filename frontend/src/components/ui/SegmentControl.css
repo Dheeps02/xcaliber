@@ -25,3 +25,6 @@
 
 .xcb-segment.fill { display: flex; width: 100%; }
 .xcb-segment.fill .xcb-seg-btn { flex: 1; text-align: center; }
+
+.xcb-segment.vertical { flex-direction: column; width: 100%; }
+.xcb-segment.vertical .xcb-seg-btn { width: 100%; justify-content: flex-start; }

@@ -266,7 +266,7 @@ select {
   80%  { transform: translateX(-2px) scale(1); }
   100% { transform: translateX(0)    scale(1); }
 }
-.btn-jiggle { animation: btn-jiggle 260ms var(--ease-bounce) both; }
+.btn-jiggle { animation: btn-jiggle 260ms var(--ease-bounce) both !important; }
 
 @keyframes icon-rotate-in {
   from { transform: rotate(-35deg); opacity: 0; }
@@ -402,6 +402,12 @@ select {
 .modal-backdrop-in  { animation: modal-backdrop-in-anim  180ms ease both; }
 .modal-backdrop-out { animation: modal-backdrop-out-anim 160ms ease both; }
 
+/* opacity-only variants — no backdrop-filter blur on the overlay */
+@keyframes overlay-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes overlay-out { from { opacity: 1; } to { opacity: 0; } }
+.overlay-in  { animation: overlay-in  180ms ease both; }
+.overlay-out { animation: overlay-out 160ms ease both; }
+
 /* ── Toast animations ────────────────────────────────────────────── */
 @keyframes toast-in-anim {
   from { opacity: 0; transform: translateY(12px); }
@@ -498,3 +504,10 @@ select {
 
 /* ── Sequence result pulse ───────────────────────────────────────── */
 @keyframes result-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── Reset button accent glow flash ─────────────────────────────── */
+@keyframes reset-glow-flash {
+  0%   { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 8px 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+  100% { box-shadow: none; }
+}
+.field-flash { animation: reset-glow-flash 500ms ease-out forwards; }

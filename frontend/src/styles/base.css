@@ -214,14 +214,21 @@ button:active:not(:disabled) { transform: scale(0.95); }
 .no-animations .gradient-bg::before,
 .no-animations .gradient-bg::after { animation: none; }
 
-/* ── Smooth theme transitions ──────────────────────────────────────── */
+/* ── Theme switch crossfade (View Transitions API) ─────────────────── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 1s;
+  animation-timing-function: ease;
+}
+
+/* Fallback per-element transitions for browsers without View Transitions */
 .theme-transitioning,
 .theme-transitioning * {
   transition:
     background-color 220ms ease,
     color 220ms ease,
     border-color 220ms ease,
-    box-shadow 220ms ease !important;
+    box-shadow 220ms ease;
 }
 
 /* ── Expand detail smooth transition ─────────────────────────────── */

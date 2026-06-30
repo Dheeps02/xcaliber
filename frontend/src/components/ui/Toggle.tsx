@@ -33,16 +33,16 @@ export function Toggle({ checked, onChange, disabled = false }: ToggleProps) {
   }
 
   const trackBg     = checked
-    ? 'color-mix(in srgb, var(--status-ok) 18%, var(--surface-overlay))'
+    ? 'color-mix(in srgb, var(--accent) 18%, var(--surface-overlay))'
     : 'var(--input-bg)';
   const trackBorder = checked
-    ? 'color-mix(in srgb, var(--status-ok) 30%, var(--input-border))'
+    ? 'color-mix(in srgb, var(--accent) 30%, var(--input-border))'
     : 'var(--input-border)';
   const trackShadow = checked
-    ? 'inset 0 2px 4px var(--shadow-7), inset 0 1px 2px var(--shadow-6), 0 0 0 1px color-mix(in srgb, var(--status-ok) 15%, transparent)'
+    ? 'inset 0 2px 4px var(--shadow-7), inset 0 1px 2px var(--shadow-6), 0 0 0 1px color-mix(in srgb, var(--accent) 15%, transparent)'
     : 'inset 0 2px 4px var(--shadow-8), inset 0 1px 2px var(--shadow-6)';
   const thumbBorder = checked && !pressing
-    ? 'color-mix(in srgb, var(--status-ok) 35%, var(--input-border))'
+    ? 'color-mix(in srgb, var(--accent) 35%, var(--input-border))'
     : 'var(--input-border)';
 
   return (

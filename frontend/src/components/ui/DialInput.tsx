@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef } from 'react';
 
 interface DialInputProps {
   value: number;
@@ -15,7 +15,7 @@ const REEL_W       = 14;
 const TICK_SPACING = 5;
 const PX_PER_STEP  = TICK_SPACING;
 
-export function DialInput({ value, onChange, min, max, step = 1, digits = 3, style, inputStyle }: DialInputProps) {
+export const DialInput = forwardRef<HTMLDivElement, DialInputProps>(function DialInput({ value, onChange, min, max, step = 1, digits = 3, style, inputStyle }, fwdRef) {
   const [phase, setPhase]           = useState(0);
   const [active, setActive] = useState(false);
 
@@ -88,6 +88,7 @@ export function DialInput({ value, onChange, min, max, step = 1, digits = 3, sty
 
   return (
     <div
+      ref={fwdRef}
       style={{
         display: 'inline-flex', alignItems: 'stretch',
         width: digits * 8 + 10 + REEL_W,
@@ -133,19 +134,22 @@ export function DialInput({ value, onChange, min, max, step = 1, digits = 3, sty
           maskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.25) 18%, rgba(0,0,0,0.8) 32%, black 42%, black 58%, rgba(0,0,0,0.8) 68%, rgba(0,0,0,0.25) 82%, transparent 100%)',
         }}
       >
-        {/* Tick layer — scrolls via background-position-y */}
+        {/* Tick tape — large div translates for GPU-compositable animation */}
         <div
           style={{
-            position: 'absolute', inset: 0,
+            position: 'absolute',
+            left: 0, right: 0,
+            top: -10000,
+            height: 20500,
             backgroundImage: `linear-gradient(to bottom, transparent 0%, transparent ${(TICK_SPACING - 2) / TICK_SPACING * 100}%, var(--reel-tick) ${(TICK_SPACING - 2) / TICK_SPACING * 100}%, var(--reel-tick) ${(TICK_SPACING - 1) / TICK_SPACING * 100}%, transparent ${(TICK_SPACING - 1) / TICK_SPACING * 100}%)`,
             backgroundSize: `100% ${TICK_SPACING}px`,
             backgroundRepeat: 'repeat-y',
-            backgroundPositionY: `${bgPos}px`,
-            transition: 'background-position-y 60ms linear',
+            transform: `translateY(${bgPos}px)`,
+            transition: 'transform 60ms linear',
             pointerEvents: 'none',
           }}
         />
       </div>
     </div>
   );
-}
+});
