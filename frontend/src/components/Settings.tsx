@@ -272,7 +272,7 @@ function ConnectionTab() {
   const toDraft = (c: AppConfig): ConnDraft => ({
     server_ip:   c.connection.server_ip,
     server_port: c.connection.server_port,
-    protocol:    c.connection.protocol,
+    protocol:    c.connection.protocol === 'ethernet' ? 'raw_ethernet' : c.connection.protocol,
     timeout_ms:  c.connection.timeout_ms,
     listen_port: c.server.listen_port,
     bind_ip:     c.connection.bind_ip     ?? '',
@@ -311,7 +311,7 @@ function ConnectionTab() {
       await api.updateConfig({
         server_ip:   draft.server_ip,
         server_port: draft.server_port,
-        protocol:    draft.protocol,
+        protocol:    draft.protocol === 'raw_ethernet' ? 'ethernet' : draft.protocol,
         timeout_ms:  draft.timeout_ms,
         listen_port: draft.listen_port,
         bind_ip:     draft.bind_ip,
