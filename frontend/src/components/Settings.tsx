@@ -702,11 +702,8 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
       />
 
       <div
-        className={`relative flex overflow-hidden w-[90vw] max-w-5xl h-[85vh] max-h-[800px] rounded-2xl ${closing ? 'modal-out' : 'modal-in'}`}
+        className={`xcb-glass-panel relative flex overflow-hidden w-[90vw] max-w-5xl h-[85vh] max-h-[800px] rounded-2xl ${closing ? 'modal-out' : 'modal-in'}`}
         style={{
-          background: 'color-mix(in srgb, var(--surface-base) 10%, transparent)',
-          backdropFilter: 'blur(40px) saturate(1.8)',
-          WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
           border: '1px solid var(--border)',
           boxShadow: '0 32px 72px var(--shadow-9), 0 4px 20px var(--shadow-6), inset 0 1px 0 var(--shine-2)',
         }}
