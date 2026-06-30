@@ -316,9 +316,9 @@ function ConnectionTab() {
         listen_port: draft.listen_port,
         bind_ip:     draft.bind_ip,
         source_port: draft.source_port,
-        src_mac:     isEth ? draft.src_mac  : undefined,
-        dst_mac:     isEth ? draft.dst_mac  : undefined,
-        vlan_id:     isEth ? draft.vlan_id  : undefined,
+        src_mac:     isEth ? (draft.src_mac  || undefined) : undefined,
+        dst_mac:     isEth ? (draft.dst_mac  || undefined) : undefined,
+        vlan_id:     isEth ? (draft.vlan_id  || undefined) : undefined,
         endian:      draft.endian,
         events:      config.events,
       });
