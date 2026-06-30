@@ -708,6 +708,14 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
           boxShadow: '0 32px 72px var(--shadow-9), 0 4px 20px var(--shadow-6), inset 0 1px 0 var(--shine-2)',
         }}
       >
+        <Button
+          variant="ghost"
+          onClick={handleClose}
+          className="absolute top-3 right-3 z-10"
+          style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <X size={16} />
+        </Button>
         {/* Left nav */}
         <nav
           className="w-52 flex flex-col shrink-0 m-2 rounded-xl"
@@ -742,11 +750,6 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
             />
           </div>
 
-          <div className="p-2.5">
-            <Button variant="ghost" onClick={handleClose} className="w-full justify-start gap-2 px-3">
-              <X size={13} /> Close
-            </Button>
-          </div>
         </nav>
 
         {/* Content */}
