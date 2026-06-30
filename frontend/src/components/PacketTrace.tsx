@@ -146,7 +146,7 @@ export function HexCells({ hex, dir }: { hex: string; dir: string }) {
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
-function makeColumns(): ColDef<PacketEntry>[] {
+function makeColumns(timestampFormat: 'absolute' | 'relative', baseMs: number | undefined): ColDef<PacketEntry>[] {
   return [
     {
       key: 'command',
@@ -187,7 +187,7 @@ function makeColumns(): ColDef<PacketEntry>[] {
       sortValue: (p) => p.timestamp_ms,
       renderCell: (p) => (
         <div className="flex items-center py-2 font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
-          {formatTime(p.timestamp_ms)}
+          {formatTime(p.timestamp_ms, timestampFormat, baseMs)}
         </div>
       ),
     },
@@ -210,7 +210,6 @@ function makeColumns(): ColDef<PacketEntry>[] {
   ];
 }
 
-const COLUMNS = makeColumns();
 
 // ── PacketTrace ───────────────────────────────────────────────────────────────
 
@@ -222,6 +221,7 @@ const DIR_ITEMS: { value: DirFilter; label: string }[] = [
 
 export function PacketTrace() {
   const packets          = useAppStore((s) => s.packets);
+  const timestampFormat  = useAppStore((s) => s.timestampFormat);
   const autoScroll       = useAppStore((s) => s.autoScroll);
   const setAutoScroll    = useAppStore((s) => s.setAutoScroll);
   const clearPackets     = useAppStore((s) => s.clearPackets);
@@ -260,6 +260,9 @@ export function PacketTrace() {
     }, maxDelay + 400);
     return () => clearTimeout(t);
   }, [packets, animationWatermark]);
+
+  const baseMs = packets[0]?.timestamp_ms;
+  const columns = useMemo(() => makeColumns(timestampFormat, baseMs), [timestampFormat, baseMs]);
 
   const dirFilteredPackets = useMemo(
     () => packets.filter((p) => dirFilter === 'all' || p.direction === dirFilter),
@@ -369,7 +372,7 @@ export function PacketTrace() {
           </div>
 
           <Button
-            variant="ghost"
+            variant="default"
             className="!px-2 !py-1 !w-7 !h-7 !p-0"
             title="Clear"
             onClick={() => {
@@ -389,7 +392,7 @@ export function PacketTrace() {
 
       {/* ── Table ───────────────────────────────────────────────────── */}
       <DataTable
-        columns={COLUMNS}
+        columns={columns}
         rows={dirFilteredPackets}
         rowKey={(p) => p.id}
         autoScroll={autoScroll}

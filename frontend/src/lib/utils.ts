@@ -28,7 +28,11 @@ export function formatLabel(s: string): string {
   return fixAbbrevs(sentence);
 }
 
-export function formatTime(ms: number): string {
+export function formatTime(ms: number, format: 'absolute' | 'relative' = 'absolute', baseMs?: number): string {
+  if (format === 'relative' && baseMs != null) {
+    const elapsed = Math.max(0, ms - baseMs) / 1000;
+    return `+${elapsed.toFixed(3)} s`;
+  }
   const d = new Date(ms);
   return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
 }

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSSE } from './hooks/useSSE';
 import { TooltipProvider } from './context/TooltipContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -16,6 +16,7 @@ function AppInner() {
   const theme             = useAppStore((s) => s.theme);
   const uiZoom            = useAppStore((s) => s.uiZoom);
   const animationsEnabled = useAppStore((s) => s.animationsEnabled);
+  const accentColor       = useAppStore((s) => s.accentColor);
   const activeMainTab     = useAppStore((s) => s.activeMainTab);
 
   useEffect(() => {
@@ -32,7 +33,34 @@ function AppInner() {
   }, [animationsEnabled]);
 
   useEffect(() => {
-    window.electron?.setZoom(uiZoom).catch(() => {});
+    const el = document.documentElement;
+    if (accentColor) el.style.setProperty('--accent', accentColor);
+    else el.style.removeProperty('--accent');
+  }, [accentColor]);
+
+  const zoomRef = useRef(uiZoom);
+  useEffect(() => {
+    const target = uiZoom;
+    const from   = zoomRef.current;
+    const delta  = target - from;
+    if (Math.abs(delta) < 0.001) {
+      window.electron?.setZoom(target).catch(() => {});
+      return;
+    }
+    let cancelled = false;
+    const duration = 250;
+    const start    = performance.now();
+    function tick(now: number) {
+      if (cancelled) return;
+      const t      = Math.min((now - start) / duration, 1);
+      const eased  = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const z      = from + delta * eased;
+      zoomRef.current = z;
+      window.electron?.setZoom(z).catch(() => {});
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+    return () => { cancelled = true; };
   }, [uiZoom]);
 
   return (

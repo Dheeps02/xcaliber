@@ -253,7 +253,8 @@ export function CommandBar() {
   const [phaseKey, setPhaseKey]         = useState(0);
   const [animateFromCell, setAnimateFromCell] = useState(0);
   const [typeKeys, setTypeKeys]   = useState<number[]>(Array(BASE_CELLS).fill(0));
-  const [sendFlying, setSendFlying] = useState(false);
+  const [sendFlying,  setSendFlying]  = useState(false);
+const [saveJiggling, setSaveJiggling] = useState(false);
   const [dropdown, setDropdown]   = useState<DropdownState | null>(null);
   const [expandKey, setExpandKey]     = useState(0);
   const [toggleKey, setToggleKey]     = useState(0);
@@ -504,7 +505,7 @@ export function CommandBar() {
     for (let i = allBytes.length - 1; i >= 0; i--) {
       if (allBytes[i]?.trim()) { lastNonEmpty = i; break; }
     }
-    if (lastNonEmpty < 0) return;
+    if (lastNonEmpty < 0) { setSaveJiggling(true); setTimeout(() => setSaveJiggling(false), 380); showToast('Enter at least one byte first', 'warning'); return; }
     const bytes = allBytes.slice(0, lastNonEmpty + 1).map((b) => (b ?? '').trim().toUpperCase());
     const cmdKey = activeCmd ?? (CMD_DEFS[bytes[0]?.toLowerCase()] ? bytes[0].toLowerCase() : 'raw');
     const defaultName = activeCmd
@@ -1101,9 +1102,8 @@ export function CommandBar() {
                   key={`save-${expandKey}`}
                   variant="primary"
                   intent="info"
-                  className="!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px]"
+                  className={`!text-[11px] !py-1.5 leading-4 !px-0 !w-[66px]${saveJiggling ? ' btn-jiggle' : ''}`}
                   style={expandKey > 0 ? { animation: `bar-enter 200ms ease-out ${(BASE_CELLS + 1) * 28}ms both` } : undefined}
-                  disabled={!activeCmd && !allBytes.some((b) => b?.trim())}
                   title="Save command to list"
                   onClick={openSaveModal}
                 >

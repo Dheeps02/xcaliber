@@ -5,7 +5,7 @@ import {
 import { createPortal } from 'react-dom';
 import {
   Trash, Wrench, ArrowSquareOut, FolderOpen,
-  Plus, X, DotsSixVertical,
+  Plus, X, DotsSixVertical, CaretDown,
 } from '@phosphor-icons/react';
 import { useAppStore, SPARK_ZOOM_MIN_MS, SPARK_ZOOM_MAX_MS } from '../stores/app-store';
 import { AnimatedCount } from './AnimatedCount';
@@ -17,6 +17,7 @@ import { RunStopButton } from './ui/RunStopButton';
 import { DialInput } from './ui/DialInput';
 import { Toggle } from './ui/Toggle';
 import { FieldLabel } from './ui/FieldLabel';
+import { Select } from './ui/Select';
 
 // ── constants ────────────────────────────────────────────────────
 const TYPE_SIZES: Record<DaqEntryType, number> = {
@@ -296,8 +297,8 @@ interface ToolbarProps {
   lists: DaqList[];
   configuring: boolean;
   onConfigure: () => void;
-  onStart: () => void;
-  onStop: () => void;
+  onStart: () => Promise<void>;
+  onStop: () => Promise<void>;
   onFree: () => void;
   onSave: () => void;
   onLoad: (file: File) => void;
@@ -310,12 +311,15 @@ function DaqToolbar({
   const daqStatus     = useAppStore(s => s.daqStatus);
   const connected     = useAppStore(s => s.connected);
   const daqDtoRate    = useAppStore(s => s.daqDtoRate);
+  const showToast     = useAppStore(s => s.showToast);
   const sparkWindowMs = useAppStore(s => s.sparkWindowMs);
   const setSparkWindowMs = useAppStore(s => s.setSparkWindowMs);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sliderRef    = useRef<HTMLInputElement>(null);
   const [wrenchKey,      setWrenchKey]      = useState(0);
-  const [runPending,     setRunPending]     = useState(false);
+  const [runPending,       setRunPending]       = useState(false);
+  const [runJiggling,      setRunJiggling]      = useState(false);
+  const [configJiggling,   setConfigJiggling]   = useState(false);
   const [confirmOpen,    setConfirmOpen]    = useState(false);
   const [confirmExiting, setConfirmExiting] = useState(false);
   const prevStatusRef = useRef(daqStatus);
@@ -367,14 +371,33 @@ function DaqToolbar({
 
       <span className={`w-2 h-2 rounded-full shrink-0 ${ledClass}`} />
       <span className="text-[10px] w-16 shrink-0" style={{ color: stateColor }}>{stateLabel}</span>
-      <div className="xcb-vdiv" />
+      <div className="xcb-vdiv-fade" />
 
       <Button variant="ghost" intent="danger" className="!px-2 !py-0.5 !text-[10px] !gap-1" disabled={!canFree} onClick={() => setConfirmOpen(true)}>
         <Trash size={13} />Free All
       </Button>
-      <div className="xcb-vdiv" />
+      <div className="xcb-vdiv-fade" />
 
-      <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" disabled={!canConfigure} onClick={onConfigure}>
+      <Button
+        variant="default"
+        className={`!px-2 !py-0.5 !text-[10px] !gap-1${configJiggling ? ' btn-jiggle' : ''}`}
+        disabled={configuring}
+        onClick={() => {
+          if (!connected) {
+            setConfigJiggling(true); setTimeout(() => setConfigJiggling(false), 380);
+            showToast('Not connected to slave', 'error'); return;
+          }
+          if (daqStatus !== 'idle') {
+            setConfigJiggling(true); setTimeout(() => setConfigJiggling(false), 380);
+            showToast('Free the DAQ lists before reconfiguring', 'warning'); return;
+          }
+          if (!lists.some(l => l.odts.some(o => o.entries.length > 0))) {
+            setConfigJiggling(true); setTimeout(() => setConfigJiggling(false), 380);
+            showToast('Add at least one entry to a DAQ list first', 'warning'); return;
+          }
+          onConfigure();
+        }}
+      >
         {configuring ? (
           <>
             <svg className="animate-spin" width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -393,8 +416,23 @@ function DaqToolbar({
         pending={runPending}
         canRun={canStart}
         canStop={canStop}
-        onRun={() => { setRunPending(true); onStart(); }}
-        onStop={() => { setRunPending(true); onStop(); }}
+        className={runJiggling ? 'btn-jiggle' : ''}
+        onRun={async () => {
+          if (!connected) {
+            setRunJiggling(true);
+            setTimeout(() => setRunJiggling(false), 380);
+            showToast('Not connected to slave', 'error');
+            return;
+          }
+          setRunPending(true);
+          try { await onStart(); }
+          catch { setRunPending(false); }
+        }}
+        onStop={async () => {
+          setRunPending(true);
+          try { await onStop(); }
+          catch { setRunPending(false); }
+        }}
       />
 
       <div className="flex-1" />
@@ -416,7 +454,7 @@ function DaqToolbar({
           {fmtZoom(sparkWindowMs)}
         </span>
       </div>
-      <div className="xcb-vdiv" />
+      <div className="xcb-vdiv-fade" />
 
       {/* LCD-style DTO rate display */}
       <div style={{
@@ -454,7 +492,7 @@ function DaqToolbar({
           DTOs/s
         </span>
       </div>
-      <div className="xcb-vdiv" />
+      <div className="xcb-vdiv-fade" />
 
       <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" title="Export" onClick={onSave}>
         <ArrowSquareOut size={13} />Export
@@ -604,16 +642,13 @@ function DaqInlineEdit({ onSave, onCancel }: InlineEditProps) {
       </span>
 
       {/* Type column */}
-      <select
+      <Select<DaqEntryType>
         value={typeName}
-        onChange={e => setTypeName(e.target.value as DaqEntryType)}
+        onChange={setTypeName}
+        options={(['u8','u16','u32','i8','i16','i32','f32','f64'] as DaqEntryType[]).map(t => ({ value: t, label: t }))}
         onKeyDown={e => { if (e.key === 'Escape') onCancel(); }}
-        style={fieldStyle({ width: 48, flexShrink: 0, fontSize: 10, fontFamily: 'monospace', cursor: 'pointer', appearance: 'none' })}
-      >
-        {(['u8','u16','u32','i8','i16','i32','f32','f64'] as DaqEntryType[]).map(t => (
-          <option key={t} value={t}>{t}</option>
-        ))}
-      </select>
+        style={{ width: 60, flexShrink: 0, fontSize: 10, fontFamily: 'monospace' }}
+      />
 
       {/* Address column */}
       <input
@@ -1132,39 +1167,50 @@ function DaqOdtSection({
 }
 
 // ── DaqModeButton ────────────────────────────────────────────────
-// Dropdown for the SET_DAQ_LIST_MODE bitfield — a button showing the
-// current mode byte that opens a popover of per-bit toggle sliders.
 function DaqModeButton({ mode, onChange }: { mode: number; onChange: (mode: number) => void }) {
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const btnRef          = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!pos) return;
+    if (!rect) return;
     function onDown(e: MouseEvent) {
-      if (!(e.target as Element).closest('#daq-mode-popover')) setPos(null);
+      const t = e.target as Element;
+      if (!t.closest('#daq-mode-popover') && !btnRef.current?.contains(t)) setRect(null);
     }
+    function onScroll() { setRect(null); }
     document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [pos]);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [rect]);
 
   return (
     <>
       <button
+        ref={btnRef}
         data-no-collapse=""
-        className="xcb-select"
-        style={{ width: 'auto', fontSize: 9, fontFamily: 'monospace', color: 'var(--text-muted)', flexShrink: 0, cursor: 'pointer' }}
+        className={`xcb-select-trigger${rect ? ' open' : ''}`}
+        style={{ fontSize: 9, fontFamily: 'monospace', flexShrink: 0 }}
         title="SET_DAQ_LIST_MODE bitfield"
-        onClick={e => { e.stopPropagation(); setPos(p => p ? null : { x: e.clientX, y: e.clientY + 6 }); }}
+        onClick={e => { e.stopPropagation(); const el = btnRef.current; setRect(r => r ? null : el?.getBoundingClientRect() ?? null); }}
       >
-        Mode 0x{mode.toString(16).padStart(2, '0').toUpperCase()}
+        <span className="xcb-select-value">Mode 0x{mode.toString(16).padStart(2, '0').toUpperCase()}</span>
+        <CaretDown size={9} className={`xcb-select-caret${rect ? ' open' : ''}`} />
       </button>
-      {pos && createPortal(
+      {rect && createPortal(
         <div
           id="daq-mode-popover"
+          className="xcb-glass-panel"
+          onClick={e => e.stopPropagation()}
           style={{
-            position: 'fixed', top: pos.y, left: pos.x,
-            background: 'var(--surface-raised)', border: '1px solid var(--border-strong)',
-            borderRadius: 8, padding: 10, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', zIndex: 9999,
-            minWidth: 170,
+            position: 'fixed', top: rect.bottom + 2, left: rect.left,
+            border: '1px solid var(--border-strong)',
+            borderRadius: 8, padding: 10,
+            boxShadow: '0 8px 32px var(--shadow-7), inset 0 1px 0 var(--shine-2)',
+            zIndex: 9999, minWidth: 170,
+            animation: 'xcb-select-drop 130ms var(--ease-out) both',
           }}
         >
           <p style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
@@ -1274,33 +1320,27 @@ function DaqListGroup({
         {/* per-list run mode (START_STOP_DAQ_LIST) */}
         <div data-no-collapse="" className="flex flex-col gap-0.5" onClick={e => e.stopPropagation()}>
           <FieldLabel>Run</FieldLabel>
-          <select
+          <Select<number>
             value={list.run_mode}
-            onChange={e => onSetRunMode(Number(e.target.value))}
-            className="xcb-select"
+            onChange={onSetRunMode}
+            options={RUN_MODES}
+            valueColor={RUN_MODE_COLORS[list.run_mode] ?? 'var(--text-muted)'}
             title="START_STOP_DAQ_LIST — per-list run state"
-            style={{ width: 'auto', fontSize: 9, fontFamily: 'monospace', flexShrink: 0, color: RUN_MODE_COLORS[list.run_mode] ?? 'var(--text-muted)' }}
-          >
-            {RUN_MODES.map(m => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </select>
+            style={{ fontSize: 9, fontFamily: 'monospace', flexShrink: 0 }}
+          />
         </div>
         {/* event channel */}
         <div data-no-collapse="" className="flex flex-col gap-0.5" onClick={e => e.stopPropagation()}>
           <FieldLabel>Event</FieldLabel>
-          <select
+          <Select<number>
             value={list.event_channel}
-            onChange={e => onSetEvent(Number(e.target.value))}
-            className="xcb-select"
-            style={{ width: 'auto', fontSize: 9, fontFamily: 'monospace', color: 'var(--text-muted)', flexShrink: 0 }}
-          >
-            {events.map(ev => (
-              <option key={ev.id} value={ev.id}>
-                0x{ev.id.toString(16).padStart(2,'0').toUpperCase()} — {ev.name}
-              </option>
-            ))}
-          </select>
+            onChange={onSetEvent}
+            options={events.map(ev => ({
+              value: ev.id,
+              label: `0x${ev.id.toString(16).padStart(2,'0').toUpperCase()} — ${ev.name}`,
+            }))}
+            style={{ fontSize: 9, fontFamily: 'monospace', flexShrink: 0 }}
+          />
         </div>
         {/* prescaler */}
         <div data-no-collapse="" className="flex flex-col gap-0.5" onClick={e => e.stopPropagation()} title="SET_DAQ_LIST_MODE — prescaler">
@@ -1539,12 +1579,12 @@ export function Daq() {
   async function handleStart() {
     clearDaqLiveValues();
     try { await api.daqStart(); setDaqStatus('running'); }
-    catch (e) { showToast((e as Error).message, 'error'); }
+    catch (e) { showToast((e as Error).message, 'error'); throw e; }
   }
 
   async function handleStop() {
     try { await api.daqStop(); setDaqStatus('configured'); }
-    catch (e) { showToast((e as Error).message, 'error'); }
+    catch (e) { showToast((e as Error).message, 'error'); throw e; }
   }
 
   async function handleFree() {

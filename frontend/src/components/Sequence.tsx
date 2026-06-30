@@ -14,6 +14,7 @@ import { formatTime } from '../lib/utils';
 import type { PacketEntry, Sequence as SeqType, SeqFile, SeqStepOutcome, SeqStepResp } from '../lib/types';
 import { ExportDialog } from './ExportDialog';
 import { Button } from './ui/Button';
+import { Select } from './ui/Select';
 import { DialInput } from './ui/DialInput';
 import { Toggle } from './ui/Toggle';
 import { RunStopButton } from './ui/RunStopButton';
@@ -172,7 +173,8 @@ export function Sequence() {
   const isRunning = runStatus === 'running';
   const canRun    = !!activeSeq && connected && !isRunning && (activeSeq.steps.length > 0);
 
-  const [exportContent, setExportContent] = useState<string | null>(null);
+  const [exportContent,  setExportContent]  = useState<string | null>(null);
+  const [runJiggling,    setRunJiggling]    = useState(false);
 
   const [expandedSteps,    setExpandedSteps]    = useState<Set<string>>(new Set());
   const [expandedSubRows,  setExpandedSubRows]  = useState<Set<string>>(new Set());
@@ -285,8 +287,13 @@ export function Sequence() {
     }, 200);
   }
 
+  function jiggleRun() { setRunJiggling(true); setTimeout(() => setRunJiggling(false), 380); }
+
   async function runSequence() {
-    if (!canRun) return;
+    if (!activeSeq) { jiggleRun(); showToast('Select a sequence first', 'warning'); return; }
+    if (!connected) { jiggleRun(); showToast('Not connected to slave', 'error'); return; }
+    if (activeSeq.steps.length === 0) { jiggleRun(); showToast('Add steps to the sequence first', 'warning'); return; }
+    if (isRunning) return;
     setSeqRunResult({ status: 'running', stepResults: [] });
     const payload = {
       ...activeSeq,
@@ -352,21 +359,22 @@ export function Sequence() {
         <RunStopButton
           running={false}
           pending={isRunning}
-          canRun={canRun}
+          canRun={!isRunning}
+          className={runJiggling ? 'btn-jiggle' : ''}
           onRun={runSequence}
         />
         <div className="xcb-vdiv" />
 
         {/* Sequence selector */}
-        <select
+        <Select<string>
           value={activeSequenceId ?? ''}
-          onChange={(e) => { setActiveSequenceId(e.target.value || null); setSeqSelectedStepId(null); }}
-          className="xcb-select"
+          onChange={(v) => { setActiveSequenceId(v || null); setSeqSelectedStepId(null); }}
+          options={sequences.length === 0
+            ? [{ value: '', label: '— no sequences —' }]
+            : sequences.map(s => ({ value: s.id, label: s.name }))
+          }
           style={{ width: 160 }}
-        >
-          {sequences.length === 0 && <option value="">— no sequences —</option>}
-          {sequences.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        />
 
         {/* New / Delete */}
         <Button variant="ghost" className="!w-7 !h-7 !p-0" title="New sequence" onClick={addSequence}>
