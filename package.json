@@ -35,7 +35,8 @@
     },
     "files": [
       "dist-electron/**/*",
-      "frontend/dist/**/*"
+      "frontend/dist/**/*",
+      "!node_modules/**/*"
     ],
     "mac": {
       "target": "dmg",
