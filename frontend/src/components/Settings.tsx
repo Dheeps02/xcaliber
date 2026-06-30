@@ -704,7 +704,7 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
       <div
         className={`relative flex overflow-hidden w-[90vw] max-w-5xl h-[85vh] max-h-[800px] rounded-2xl ${closing ? 'modal-out' : 'modal-in'}`}
         style={{
-          background: 'color-mix(in srgb, var(--surface-base) 55%, transparent)',
+          background: 'color-mix(in srgb, var(--surface-base) 10%, transparent)',
           backdropFilter: 'blur(40px) saturate(1.8)',
           WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
           border: '1px solid var(--border)',
@@ -715,7 +715,7 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
         <nav
           className="w-52 flex flex-col shrink-0"
           style={{
-            background: 'color-mix(in srgb, var(--surface-raised) 35%, transparent)',
+            background: 'color-mix(in srgb, var(--surface-raised) 10%, transparent)',
             borderRight: '1px solid var(--border)',
           }}
         >
