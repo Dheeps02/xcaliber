@@ -751,7 +751,12 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
 
         {/* Content */}
         <SaveBarCtx.Provider value={setSaveBar}>
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden m-2 rounded-xl" style={{
+            background: 'var(--input-bg)',
+            border: '1px solid var(--input-border)',
+            borderTopColor: 'var(--input-border-top)',
+            boxShadow: 'inset 0 2px 8px var(--shadow-8), inset 0 1px 3px var(--shadow-6)',
+          }}>
             <div key={tab} className={`flex-1 tab-content-anim ${tab === 'usercmds' ? 'overflow-hidden' : 'overflow-y-auto p-6'}`}>
               {tab === 'appearance' && <AppearanceTab />}
               {tab === 'connection' && <ConnectionTab />}
