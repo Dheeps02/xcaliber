@@ -21,8 +21,8 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': 'http://localhost:8080',
-      '/events': { target: 'http://localhost:8080', changeOrigin: true },
+      '/api': 'http://localhost:8084',
+      '/events': { target: 'http://localhost:8084', changeOrigin: true },
     },
   },
 })
