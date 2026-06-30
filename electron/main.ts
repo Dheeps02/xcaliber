@@ -4,6 +4,14 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 
+if (process.platform === 'win32') {
+  // Force GPU compositing so backdrop-filter renders correctly.
+  // Without this, Chromium may fall back to software rendering on some
+  // Windows drivers/policies, silently dropping all blur effects.
+  app.commandLine.appendSwitch('enable-features', 'CSSBackdropFilter');
+  app.commandLine.appendSwitch('force-gpu-compositing');
+}
+
 if (process.platform === 'linux') {
   const platform = process.env.WAYLAND_DISPLAY ? 'wayland' : 'x11';
   app.commandLine.appendSwitch('ozone-platform', platform);
