@@ -89,6 +89,19 @@ export interface AppConfig {
   endian?: string;
 }
 
+// ── USER_CMD group hierarchy ──────────────────────────────────────
+
+export interface CmdGroup {
+  id: string;
+  name: string;
+}
+
+export interface CmdSubgroup {
+  id: string;
+  name: string;
+  parentGroupId: string;
+}
+
 // ── USER_CMD (0xF1) types ─────────────────────────────────────────
 
 export interface MatchCondition {
@@ -119,13 +132,16 @@ export interface UserCmdRequestByte {
 export interface UserCmdDef {
   id: string;
   name: string;
-  group?: string;
+  groupId?: string;
+  subgroupId?: string;
   requestBytes: UserCmdRequestByte[];
   responseVariants: UserCmdResponseVariant[];
 }
 
 export interface UserCmdFileFormat {
   version: 1;
+  groups?: CmdGroup[];
+  subgroups?: CmdSubgroup[];
   commands: UserCmdDef[];
 }
 

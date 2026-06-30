@@ -10,10 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@phosphor-icons/react": "^2.1.10",
     "react": "^19.2.6",
+    "react-colorful": "^5.7.0",
     "react-dom": "^19.2.6",
     "zustand": "^5.0.14"
   },

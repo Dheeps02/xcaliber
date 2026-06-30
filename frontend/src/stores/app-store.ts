@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef, DaqList, DaqStatus, DaqLiveValue, DaqEntryType, EventDef, A2lVariable, UserCmdDef, Sequence, SeqRunResult, SeqStepResult, SavedCmd } from '../lib/types';
+import type { ConnectResponse, PacketEntry, AppConfig, CmdDef, FieldDef, DaqList, DaqStatus, DaqLiveValue, DaqEntryType, EventDef, A2lVariable, UserCmdDef, CmdGroup, CmdSubgroup, Sequence, SeqRunResult, SeqStepResult, SavedCmd } from '../lib/types';
 import { CMD_DEFS } from '../lib/cmd-defs';
 
 const NUM_CELLS = 8;
@@ -63,7 +63,9 @@ interface AppStore {
   uiZoom: number;
   sparkWindowMs: number;
   displayTimeoutMs: number;
+  timestampFormat: 'absolute' | 'relative';
   animationsEnabled: boolean;
+  accentColor: string;
   toasts: Toast[];
   animationWatermark: number | null;
 
@@ -82,7 +84,9 @@ interface AppStore {
   setUiZoom: (zoom: number) => void;
   setSparkWindowMs: (ms: number) => void;
   setDisplayTimeoutMs: (ms: number) => void;
+  setTimestampFormat: (f: 'absolute' | 'relative') => void;
   setAnimationsEnabled: (v: boolean) => void;
+  setAccentColor: (color: string) => void;
   showToast: (message: string, type?: Toast['type'], detail?: string) => void;
   dismissToast: (id: number) => void;
   setAnimationWatermark: (v: number) => void;
@@ -109,7 +113,12 @@ interface AppStore {
 
   userCmds: UserCmdDef[];
   userCmdDefs: Record<string, CmdDef>;
+  cmdGroups: CmdGroup[];
+  cmdSubgroups: CmdSubgroup[];
   setUserCmds: (cmds: UserCmdDef[]) => void;
+  setCmdGroups: (groups: CmdGroup[]) => void;
+  setCmdSubgroups: (subgroups: CmdSubgroup[]) => void;
+  setCmdData: (cmds: UserCmdDef[], groups: CmdGroup[], subgroups: CmdSubgroup[]) => void;
 
   alertMsg: string | null;
   alertAction: { label: string; fn: () => Promise<void> } | null;
@@ -143,7 +152,13 @@ interface AppStore {
   addSavedCmd: (cmd: SavedCmd) => void;
 }
 
-function buildUserCmdDefs(userCmds: UserCmdDef[]): Record<string, CmdDef> {
+function buildUserCmdDefs(
+  userCmds: UserCmdDef[],
+  groups: CmdGroup[],
+  subgroups: CmdSubgroup[],
+): Record<string, CmdDef> {
+  const groupById    = new Map(groups.map(g => [g.id, g.name]));
+  const subgroupById = new Map(subgroups.map(s => [s.id, s.name]));
   const defs: Record<string, CmdDef> = {};
   for (const uc of userCmds) {
     const id = `ucmd_${uc.id}`;
@@ -159,11 +174,13 @@ function buildUserCmdDefs(userCmds: UserCmdDef[]): Record<string, CmdDef> {
         ...(b.options.length > 0 ? { options: b.options } : {}),
       })),
     ];
+    const groupName    = uc.groupId    ? groupById.get(uc.groupId)       : undefined;
+    const subgroupName = uc.subgroupId ? subgroupById.get(uc.subgroupId) : undefined;
     defs[id] = {
       pid: 'F1',
       isUserCmd: true,
       userCmdName: uc.name,
-      group: uc.group,
+      group: subgroupName ? `${groupName ?? ''} / ${subgroupName}` : groupName,
       prefill,
       fields,
     };
@@ -211,8 +228,10 @@ export const useAppStore = create<AppStore>((set) => ({
   theme: 'default' as const,
   uiZoom: Number(localStorage.getItem('uiZoom') ?? 1.2),
   sparkWindowMs: Math.min(Number(localStorage.getItem('sparkWindowMs') ?? SPARK_ZOOM_DEFAULT_MS), SPARK_ZOOM_MAX_MS),
-  displayTimeoutMs: 2000,
+  displayTimeoutMs: Number(localStorage.getItem('displayTimeoutMs') ?? 2000),
+  timestampFormat: (localStorage.getItem('timestampFormat') as 'absolute' | 'relative') ?? 'absolute',
   animationsEnabled: true,
+  accentColor: localStorage.getItem('accentColor') ?? '',
   toasts: [],
   animationWatermark: null,
   activeMainTab: 'trace',
@@ -225,6 +244,8 @@ export const useAppStore = create<AppStore>((set) => ({
   a2lVariables: [],
   userCmds: [],
   userCmdDefs: {},
+  cmdGroups: [],
+  cmdSubgroups: [],
   slaveDropped: false,
   sequences: [],
   activeSequenceId: null,
@@ -240,7 +261,7 @@ export const useAppStore = create<AppStore>((set) => ({
 
   setConfig: (config) => {
     const userCmds = config.user_cmds ?? [];
-    set({ config, customCmdDefs: buildCustomCmdDefs(config), events: config.events ?? [], userCmds, userCmdDefs: buildUserCmdDefs(userCmds) });
+    set((s) => ({ config, customCmdDefs: buildCustomCmdDefs(config), events: config.events ?? [], userCmds, userCmdDefs: buildUserCmdDefs(userCmds, s.cmdGroups, s.cmdSubgroups) }));
   },
 
   setEvents: (events) => set({ events }),
@@ -314,8 +335,10 @@ export const useAppStore = create<AppStore>((set) => ({
   setTheme: (theme) => set({ theme }),
   setUiZoom: (uiZoom) => { localStorage.setItem('uiZoom', String(uiZoom)); set({ uiZoom }); },
   setSparkWindowMs: (sparkWindowMs) => { localStorage.setItem('sparkWindowMs', String(sparkWindowMs)); set({ sparkWindowMs }); },
-  setDisplayTimeoutMs: (displayTimeoutMs) => set({ displayTimeoutMs }),
+  setDisplayTimeoutMs: (displayTimeoutMs) => { localStorage.setItem('displayTimeoutMs', String(displayTimeoutMs)); set({ displayTimeoutMs }); },
+  setTimestampFormat: (timestampFormat) => { localStorage.setItem('timestampFormat', timestampFormat); set({ timestampFormat }); },
   setAnimationsEnabled: (animationsEnabled) => set({ animationsEnabled }),
+  setAccentColor: (accentColor) => { localStorage.setItem('accentColor', accentColor); set({ accentColor }); },
   showToast: (message, type = 'info', detail) =>
     set((s) => {
       const next = [...s.toasts, { id: ++toastSeq, message, type, detail }];
@@ -337,7 +360,10 @@ export const useAppStore = create<AppStore>((set) => ({
   setDaqDtoRate: (daqDtoRate) => set({ daqDtoRate }),
   clearDaqLiveValues: () => set({ daqLiveValues: new Map() }),
   setA2lVariables: (a2lVariables) => set({ a2lVariables }),
-  setUserCmds: (userCmds) => set({ userCmds, userCmdDefs: buildUserCmdDefs(userCmds) }),
+  setUserCmds: (userCmds) => set((s) => ({ userCmds, userCmdDefs: buildUserCmdDefs(userCmds, s.cmdGroups, s.cmdSubgroups) })),
+  setCmdGroups: (cmdGroups) => set((s) => ({ cmdGroups, userCmdDefs: buildUserCmdDefs(s.userCmds, cmdGroups, s.cmdSubgroups) })),
+  setCmdSubgroups: (cmdSubgroups) => set((s) => ({ cmdSubgroups, userCmdDefs: buildUserCmdDefs(s.userCmds, s.cmdGroups, cmdSubgroups) })),
+  setCmdData: (userCmds, cmdGroups, cmdSubgroups) => set({ userCmds, cmdGroups, cmdSubgroups, userCmdDefs: buildUserCmdDefs(userCmds, cmdGroups, cmdSubgroups) }),
 
   alertMsg: null,
   alertAction: null,
