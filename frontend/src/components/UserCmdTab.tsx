@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -21,8 +21,6 @@ import {
   CaretDown,
   CaretRight,
   ArrowLeft,
-  Upload,
-  Download,
   Plus,
   X,
 } from '@phosphor-icons/react';
@@ -31,16 +29,19 @@ import { Input } from './ui/Input';
 import { DialInput } from './ui/DialInput';
 import { Select } from './ui/Select';
 import { useAppStore } from '../stores/app-store';
+import { api } from '../lib/api';
 import type {
   UserCmdDef,
   UserCmdRequestByte,
   UserCmdResponseVariant,
   UserCmdResponseByte,
   MatchCondition,
-  UserCmdFileFormat,
   CmdGroup,
   CmdSubgroup,
 } from '../lib/types';
+
+type SaveBarState = { save: () => Promise<void>; dirty: boolean; saving: boolean } | null;
+type TabAction   = { label: string; icon: React.ReactNode; onClick: () => void };
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -802,7 +803,7 @@ function OverlayGhost({ children }: { children: React.ReactNode }) {
 
 // ── TreeView ───────────────────────────────────────────────────────
 
-function TreeView({ onEdit }: { onEdit: (cmdId: string) => void }) {
+function TreeView({ onEdit, onSetActions }: { onEdit: (cmdId: string) => void; onSetActions: (a: TabAction[]) => void }) {
   const userCmds     = useAppStore(s => s.userCmds);
   const setUserCmds  = useAppStore(s => s.setUserCmds);
   const cmdGroups    = useAppStore(s => s.cmdGroups);
@@ -814,7 +815,6 @@ function TreeView({ onEdit }: { onEdit: (cmdId: string) => void }) {
   const [openGroups, setOpenGroups]       = useState<Set<string>>(() => new Set([]));
   const [openSubgroups, setOpenSubgroups] = useState<Set<string>>(() => new Set([]));
   const [activeId, setActiveId]           = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -862,32 +862,23 @@ function TreeView({ onEdit }: { onEdit: (cmdId: string) => void }) {
     setUserCmds([...userCmds, cmd]);
   }
 
-  // ── Import / export ──────────────────────────────────────────────
+  // ── Action registration ───────────────────────────────────────────
 
-  function exportCmds() {
-    const payload: UserCmdFileFormat = { version: 1, groups: cmdGroups, subgroups: cmdSubgroups, commands: userCmds };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = 'commands.ucmd'; a.click();
-    URL.revokeObjectURL(url);
-  }
+  const addGroupRef = useRef<() => void>(null!);
+  addGroupRef.current = addGroup;
+  const stableAddGroup = useCallback(() => addGroupRef.current(), []);
 
-  function importCmds(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(reader.result as string) as UserCmdFileFormat;
-        if (parsed.version === 1 && Array.isArray(parsed.commands)) {
-          setCmdData(parsed.commands, parsed.groups ?? [], parsed.subgroups ?? []);
-        }
-      } catch { /* malformed */ }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  }
+  const addCmdRef = useRef<() => void>(null!);
+  addCmdRef.current = addCmd;
+  const stableAddCmd = useCallback(() => addCmdRef.current(), []);
+
+  useEffect(() => {
+    onSetActions([
+      { label: 'New Group',   icon: <Plus size={11} />, onClick: stableAddGroup },
+      { label: 'New Command', icon: <Plus size={11} />, onClick: stableAddCmd },
+    ]);
+    return () => onSetActions([]);
+  }, [onSetActions, stableAddGroup, stableAddCmd]);
 
   // ── Drag & drop ──────────────────────────────────────────────────
 
@@ -1014,28 +1005,6 @@ function TreeView({ onEdit }: { onEdit: (cmdId: string) => void }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Toolbar */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 4,
-        padding: '6px 10px', flexShrink: 0,
-        borderBottom: '1px solid var(--border)',
-      }}>
-        <Button variant="ghost" onClick={addGroup} style={{ gap: 4, fontSize: 11 }}>
-          <Plus size={11} /> New Group
-        </Button>
-        <Button variant="ghost" onClick={addCmd} style={{ gap: 4, fontSize: 11 }}>
-          <Plus size={11} /> New Command
-        </Button>
-        <div style={{ flex: 1 }} />
-        <input ref={fileInputRef} type="file" accept=".ucmd" style={{ display: 'none' }} onChange={importCmds} />
-        <Button variant="ghost" onClick={() => fileInputRef.current?.click()} style={{ gap: 4, fontSize: 11 }}>
-          <Upload size={11} /> Import
-        </Button>
-        <Button variant="ghost" onClick={exportCmds} style={{ gap: 4, fontSize: 11 }}>
-          <Download size={11} /> Export
-        </Button>
-      </div>
-
       {/* Tree */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <DndContext
@@ -1148,12 +1117,57 @@ function TreeView({ onEdit }: { onEdit: (cmdId: string) => void }) {
 
 // ── UserCmdTab ─────────────────────────────────────────────────────
 
-export function UserCmdTab() {
+export function UserCmdTab({ onSetSaveBar, onSetActions }: { onSetSaveBar: (s: SaveBarState) => void; onSetActions: (a: TabAction[]) => void }) {
   const [view, setView] = useState<'tree' | { cmdId: string }>('tree');
+
+  const userCmds  = useAppStore(s => s.userCmds);
+  const config    = useAppStore(s => s.config);
+  const showToast = useAppStore(s => s.showToast);
+
+  const [saving, setSaving] = useState(false);
+  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(userCmds));
+  const dirty = JSON.stringify(userCmds) !== savedSnapshot;
+
+  async function save() {
+    if (!config) return;
+    setSaving(true);
+    try {
+      await api.updateConfig({
+        server_ip:   config.connection.server_ip,
+        server_port: config.connection.server_port,
+        protocol:    config.connection.protocol,
+        timeout_ms:  config.connection.timeout_ms,
+        listen_port: config.server.listen_port,
+        bind_ip:     config.connection.bind_ip   || undefined,
+        source_port: config.connection.source_port || undefined,
+        src_mac:     config.connection.src_mac   || undefined,
+        dst_mac:     config.connection.dst_mac   || undefined,
+        vlan_id:     config.connection.vlan_id   || undefined,
+        endian:      config.endian,
+        events:      config.events,
+        user_cmds:   userCmds,
+      });
+      setSavedSnapshot(JSON.stringify(userCmds));
+      showToast('Commands saved', 'success');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Failed to save', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const saveRef = useRef<() => Promise<void>>(null!);
+  saveRef.current = save;
+  const stableSave = useCallback(() => saveRef.current(), []);
+
+  useEffect(() => {
+    onSetSaveBar({ save: stableSave, dirty, saving });
+    return () => onSetSaveBar(null);
+  }, [onSetSaveBar, stableSave, dirty, saving]);
 
   if (view !== 'tree') {
     return <EditorView key={view.cmdId} cmdId={view.cmdId} onBack={() => setView('tree')} />;
   }
 
-  return <TreeView onEdit={(cmdId) => setView({ cmdId })} />;
+  return <TreeView onEdit={(cmdId) => setView({ cmdId })} onSetActions={onSetActions} />;
 }

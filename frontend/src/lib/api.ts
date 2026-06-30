@@ -74,6 +74,7 @@ export const api = {
     vlan_id?: number;
     events?: EventDef[];
     endian?: string;
+    user_cmds?: import('./types').UserCmdDef[];
   }) => post<{ ok: boolean }>('/api/config', body),
   getNetworkInterfaces: () =>
     get<{ interfaces: NetworkInterface[] }>('/api/network-interfaces'),

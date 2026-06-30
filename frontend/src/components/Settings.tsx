@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Palette, X, Sun, Moon, Monitor, ArrowCounterClockwise, PlugsConnected, ArrowsLeftRight, ArrowsDownUp, Scroll, Timer, Lightning, Plus, Terminal } from '@phosphor-icons/react';
+import { Palette, X, Sun, Moon, Monitor, ArrowCounterClockwise, PlugsConnected, ArrowsLeftRight, ArrowsDownUp, Scroll, Timer, Lightning, Plus, Terminal, Upload, Download } from '@phosphor-icons/react';
 import { UserCmdTab } from './UserCmdTab';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -12,7 +12,7 @@ import { Slider } from './ui/Slider';
 import { Toggle } from './ui/Toggle';
 import { ColorPicker } from './ui/ColorPicker';
 import { useAppStore } from '../stores/app-store';
-import type { AppConfig, EventDef } from '../lib/types';
+import type { AppConfig, EventDef, UserCmdDef, CmdGroup, CmdSubgroup } from '../lib/types';
 import { api } from '../lib/api';
 
 interface Props {
@@ -23,6 +23,18 @@ interface Props {
 // ── Save bar context ──────────────────────────────────────────────
 
 type SaveBarState = { save: () => Promise<void>; dirty: boolean; saving: boolean } | null;
+type TabAction   = { label: string; icon: React.ReactNode; onClick: () => void };
+
+interface ZscFile {
+  version: 1;
+  connection: AppConfig['connection'];
+  server: AppConfig['server'];
+  events: EventDef[];
+  endian?: string;
+  user_cmds: UserCmdDef[];
+  cmd_groups: CmdGroup[];
+  cmd_subgroups: CmdSubgroup[];
+}
 const SaveBarCtx = createContext<(s: SaveBarState) => void>(() => {});
 
 function useSaveBar(save: () => Promise<void>, dirty: boolean, saving: boolean) {
@@ -688,8 +700,79 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
   const [tab, setTab] = useState<Tab>('appearance');
   const [closing, setClosing] = useState(false);
   const [saveBar, setSaveBar] = useState<SaveBarState>(null);
+  const [tabActions, setTabActions] = useState<TabAction[]>([]);
   const contentPanelRef = useRef<HTMLDivElement>(null);
   const [notchClip, setNotchClip] = useState('');
+  const zscImportRef = useRef<HTMLInputElement>(null);
+
+  const config        = useAppStore(s => s.config);
+  const userCmds      = useAppStore(s => s.userCmds);
+  const cmdGroups     = useAppStore(s => s.cmdGroups);
+  const cmdSubgroups  = useAppStore(s => s.cmdSubgroups);
+  const setConfig     = useAppStore(s => s.setConfig);
+  const setCmdData    = useAppStore(s => s.setCmdData);
+  const showToast     = useAppStore(s => s.showToast);
+
+  function exportZsc() {
+    if (!config) return;
+    const payload: ZscFile = {
+      version: 1,
+      connection: config.connection,
+      server: config.server,
+      events: config.events ?? [],
+      endian: config.endian,
+      user_cmds: userCmds,
+      cmd_groups: cmdGroups,
+      cmd_subgroups: cmdSubgroups,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'settings.zsc'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importZsc(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const data = JSON.parse(reader.result as string) as ZscFile;
+        if (data.version !== 1) throw new Error('Unsupported version');
+        await api.updateConfig({
+          server_ip:   data.connection.server_ip,
+          server_port: data.connection.server_port,
+          protocol:    data.connection.protocol,
+          timeout_ms:  data.connection.timeout_ms,
+          listen_port: data.server.listen_port,
+          bind_ip:     data.connection.bind_ip || undefined,
+          source_port: data.connection.source_port || undefined,
+          src_mac:     data.connection.src_mac || undefined,
+          dst_mac:     data.connection.dst_mac || undefined,
+          vlan_id:     data.connection.vlan_id || undefined,
+          endian:      data.endian,
+          events:      data.events ?? [],
+          user_cmds:   data.user_cmds ?? [],
+        });
+        const newConfig: AppConfig = {
+          ...config!,
+          connection: data.connection,
+          server: data.server,
+          events: data.events ?? [],
+          endian: data.endian,
+          user_cmds: data.user_cmds ?? [],
+        };
+        setConfig(newConfig);
+        setCmdData(data.user_cmds ?? [], data.cmd_groups ?? [], data.cmd_subgroups ?? []);
+        showToast('Settings imported', 'success');
+      } catch {
+        showToast('Invalid .zsc file', 'error');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
 
   useEffect(() => {
     const el = contentPanelRef.current;
@@ -785,23 +868,42 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
               {tab === 'connection' && <ConnectionTab />}
               {tab === 'trace'      && <TraceTab />}
               {tab === 'events'     && <EventsTab />}
-              {tab === 'usercmds'   && <UserCmdTab />}
+              {tab === 'usercmds'   && <UserCmdTab onSetSaveBar={setSaveBar} onSetActions={setTabActions} />}
             </div>
-            {saveBar && (
-              <div
-                className="px-6 py-3 flex items-center justify-end shrink-0"
-                style={{
-                  borderTop: '1px solid color-mix(in srgb, var(--border) 60%, transparent)',
-                  background: 'color-mix(in srgb, var(--surface-raised) 80%, transparent)',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
-                }}
-              >
+            <div
+              className="px-4 py-2 flex items-center justify-between shrink-0"
+              style={{
+                borderTop: '1px solid color-mix(in srgb, var(--border) 60%, transparent)',
+                background: 'color-mix(in srgb, var(--surface-raised) 80%, transparent)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+              }}
+            >
+              <div className="flex items-center gap-1">
+                <input ref={zscImportRef} type="file" accept=".zsc" style={{ display: 'none' }} onChange={importZsc} />
+                <Button variant="ghost" onClick={() => zscImportRef.current?.click()} style={{ gap: 4, fontSize: 11 }}>
+                  <Upload size={11} /> Import
+                </Button>
+                <Button variant="ghost" onClick={exportZsc} style={{ gap: 4, fontSize: 11 }}>
+                  <Download size={11} /> Export
+                </Button>
+                {tabActions.length > 0 && (
+                  <>
+                    <div className="xcb-vdiv" style={{ alignSelf: 'stretch', margin: '2px 4px' }} />
+                    {tabActions.map(a => (
+                      <Button key={a.label} variant="ghost" onClick={a.onClick} style={{ gap: 4, fontSize: 11, color: 'var(--accent)' }}>
+                        {a.icon} {a.label}
+                      </Button>
+                    ))}
+                  </>
+                )}
+              </div>
+              {saveBar && (
                 <Button variant="primary" onClick={saveBar.save} disabled={!saveBar.dirty || saveBar.saving}>
                   {saveBar.saving ? 'Applying…' : 'Apply'}
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </SaveBarCtx.Provider>
       </div>
