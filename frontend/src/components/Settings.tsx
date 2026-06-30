@@ -688,6 +688,24 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
   const [tab, setTab] = useState<Tab>('appearance');
   const [closing, setClosing] = useState(false);
   const [saveBar, setSaveBar] = useState<SaveBarState>(null);
+  const contentPanelRef = useRef<HTMLDivElement>(null);
+  const [notchClip, setNotchClip] = useState('');
+
+  useEffect(() => {
+    const el = contentPanelRef.current;
+    if (!el) return;
+    const update = () => {
+      const { width: w, height: h } = el.getBoundingClientRect();
+      const n = 44, r = 12;
+      setNotchClip(
+        `path('M ${r} 0 L ${w-n-r} 0 Q ${w-n} 0 ${w-n} ${r} L ${w-n} ${n-r} Q ${w-n} ${n} ${w-n+r} ${n} L ${w-r} ${n} Q ${w} ${n} ${w} ${n+r} L ${w} ${h-r} Q ${w} ${h} ${w-r} ${h} L ${r} ${h} Q 0 ${h} 0 ${h-r} L 0 ${r} Q 0 0 ${r} 0 Z')`
+      );
+    };
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    update();
+    return () => ro.disconnect();
+  }, []);
 
   function handleClose() {
     setClosing(true);
@@ -754,12 +772,12 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
 
         {/* Content */}
         <SaveBarCtx.Provider value={setSaveBar}>
-          <div className="flex-1 flex flex-col overflow-hidden m-2 rounded-xl" style={{
+          <div ref={contentPanelRef} className="flex-1 flex flex-col overflow-hidden m-2" style={{
             background: 'var(--input-bg)',
             border: '1px solid var(--input-border)',
             borderTopColor: 'var(--input-border-top)',
             boxShadow: 'inset 0 2px 8px var(--shadow-8), inset 0 1px 3px var(--shadow-6)',
-            clipPath: 'polygon(0 0, calc(100% - 44px) 0, calc(100% - 44px) 44px, 100% 44px, 100% 100%, 0 100%)',
+            clipPath: notchClip,
           }}>
             <div key={tab} className={`flex-1 tab-content-anim ${tab === 'usercmds' ? 'overflow-hidden' : 'overflow-y-auto p-6'}`}>
               {tab === 'appearance' && <AppearanceTab />}
