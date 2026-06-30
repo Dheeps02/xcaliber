@@ -710,13 +710,12 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
       >
         {/* Left nav */}
         <nav
-          className="w-52 flex flex-col shrink-0"
+          className="w-52 flex flex-col shrink-0 m-2 rounded-xl"
           style={{
             background: 'color-mix(in srgb, var(--surface-raised) 10%, transparent)',
-            borderRight: '1px solid var(--border)',
           }}
         >
-          <div className="px-5 py-4" style={{ borderBottom: '1px solid color-mix(in srgb, var(--border) 60%, transparent)' }}>
+          <div className="px-5 py-4">
             <span className="text-sm font-semibold text-[var(--text-primary)] tracking-tight">Settings</span>
           </div>
 
@@ -743,7 +742,7 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
             />
           </div>
 
-          <div className="p-2.5" style={{ borderTop: '1px solid color-mix(in srgb, var(--border) 60%, transparent)' }}>
+          <div className="p-2.5">
             <Button variant="ghost" onClick={handleClose} className="w-full justify-start gap-2 px-3">
               <X size={13} /> Close
             </Button>
