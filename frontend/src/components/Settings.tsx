@@ -697,7 +697,7 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
     const update = () => {
       const w = el.offsetWidth;
       const h = el.offsetHeight;
-      const n = 44, r = 12;
+      const n = 24, r = 5;
       setNotchClip(
         `path('M ${r} 0 L ${w-n-r} 0 Q ${w-n} 0 ${w-n} ${r} L ${w-n} ${n-r} Q ${w-n} ${n} ${w-n+r} ${n} L ${w-r} ${n} Q ${w} ${n} ${w} ${n+r} L ${w} ${h-r} Q ${w} ${h} ${w-r} ${h} L ${r} ${h} Q 0 ${h} 0 ${h-r} L 0 ${r} Q 0 0 ${r} 0 Z')`
       );
@@ -731,9 +731,9 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
           variant="ghost"
           onClick={handleClose}
           className="absolute top-3 right-3 z-10"
-          style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 14, height: 14, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          <X size={16} />
+          <X size={8} />
         </Button>
         {/* Left nav */}
         <nav
