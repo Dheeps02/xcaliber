@@ -30,6 +30,7 @@
   "build": {
     "appId": "com.zenscope.app",
     "productName": "ZenScope",
+    "npmRebuild": false,
     "directories": {
       "output": "release"
     },
