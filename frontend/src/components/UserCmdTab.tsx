@@ -148,30 +148,6 @@ function altBg(i: number): string {
   return i % 2 === 1 ? 'color-mix(in srgb, var(--surface-overlay) 18%, transparent)' : 'transparent';
 }
 
-function IconBtn({
-  onClick,
-  title,
-  danger,
-  children,
-}: {
-  onClick: () => void;
-  title?: string;
-  danger?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: '0 3px' }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = danger ? 'var(--status-err)' : 'var(--accent)'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
-    >
-      {children}
-    </button>
-  );
-}
-
 function SectionHeader({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

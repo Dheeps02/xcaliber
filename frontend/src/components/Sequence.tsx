@@ -171,8 +171,6 @@ export function Sequence() {
   const activeSeq = sequences.find((s) => s.id === activeSequenceId) ?? null;
   const runStatus = seqRunResult?.status ?? 'idle';
   const isRunning = runStatus === 'running';
-  const canRun    = !!activeSeq && connected && !isRunning && (activeSeq.steps.length > 0);
-
   const [exportContent,  setExportContent]  = useState<string | null>(null);
   const [runJiggling,    setRunJiggling]    = useState(false);
 

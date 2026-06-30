@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Palette, X, Sun, Moon, Monitor, ArrowCounterClockwise, PlugsConnected, Globe, ArrowsLeftRight, ArrowsDownUp, Network, Scroll, Timer, Clock, Lightning, Plus, Terminal } from '@phosphor-icons/react';
+import { Palette, X, Sun, Moon, Monitor, ArrowCounterClockwise, PlugsConnected, ArrowsLeftRight, ArrowsDownUp, Scroll, Timer, Lightning, Plus, Terminal } from '@phosphor-icons/react';
 import { UserCmdTab } from './UserCmdTab';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -237,7 +237,7 @@ function AppearanceTab() {
               step={0.01}
               value={draftZoom}
               onChange={setDraftZoom}
-              onRelease={setUiZoom}
+              onCommit={setUiZoom}
             />
           </div>
         </div>
@@ -294,7 +294,7 @@ function ConnectionTab() {
   const saved = toDraft(config);
 
   function isDirty(...keys: (keyof ConnDraft)[]) {
-    return keys.some(k => draft[k] !== saved[k]);
+    return keys.some(k => draft![k] !== saved[k]);
   }
 
   const ethernetKeys = new Set<keyof ConnDraft>(['src_mac', 'dst_mac', 'vlan_id']);
@@ -304,6 +304,7 @@ function ConnectionTab() {
   const anyDirty = isDirty(...activeKeys);
 
   async function save() {
+    if (!draft || !config) return;
     setSaving(true);
     try {
       const isEth = draft.protocol === 'raw_ethernet';
@@ -323,6 +324,7 @@ function ConnectionTab() {
       });
       setConfig({
         ...config,
+        events: config.events ?? [],
         connection: {
           ...config.connection,
           server_ip:   draft.server_ip,

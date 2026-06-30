@@ -351,7 +351,6 @@ function DaqToolbar({
     setTimeout(() => { setConfirmOpen(false); setConfirmExiting(false); }, 130);
   }
 
-  const canConfigure = !configuring && daqStatus === 'idle' && connected && lists.some(l => l.odts.some(o => o.entries.length > 0));
   const canStart     = daqStatus === 'configured';
   const canStop      = daqStatus === 'running';
   const canFree      = daqStatus !== 'idle';
