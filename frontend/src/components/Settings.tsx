@@ -852,6 +852,16 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
             />
           </div>
 
+          <div className="p-2 shrink-0 flex flex-col gap-0.5">
+            <input ref={zscImportRef} type="file" accept=".zsc" style={{ display: 'none' }} onChange={importZsc} />
+            <Button variant="ghost" onClick={() => zscImportRef.current?.click()} style={{ gap: 6, fontSize: 11, justifyContent: 'flex-start', width: '100%' }}>
+              <Upload size={12} /> Import
+            </Button>
+            <Button variant="ghost" onClick={exportZsc} style={{ gap: 6, fontSize: 11, justifyContent: 'flex-start', width: '100%' }}>
+              <Download size={12} /> Export
+            </Button>
+          </div>
+
         </nav>
 
         {/* Content */}
@@ -870,40 +880,30 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
               {tab === 'events'     && <EventsTab />}
               {tab === 'usercmds'   && <UserCmdTab onSetSaveBar={setSaveBar} onSetActions={setTabActions} />}
             </div>
-            <div
-              className="px-4 py-2 flex items-center justify-between shrink-0"
-              style={{
-                borderTop: '1px solid color-mix(in srgb, var(--border) 60%, transparent)',
-                background: 'color-mix(in srgb, var(--surface-raised) 80%, transparent)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-              }}
-            >
-              <div className="flex items-center gap-1">
-                <input ref={zscImportRef} type="file" accept=".zsc" style={{ display: 'none' }} onChange={importZsc} />
-                <Button variant="ghost" onClick={() => zscImportRef.current?.click()} style={{ gap: 4, fontSize: 11 }}>
-                  <Upload size={11} /> Import
-                </Button>
-                <Button variant="ghost" onClick={exportZsc} style={{ gap: 4, fontSize: 11 }}>
-                  <Download size={11} /> Export
-                </Button>
-                {tabActions.length > 0 && (
-                  <>
-                    <div className="xcb-vdiv" style={{ alignSelf: 'stretch', margin: '2px 4px' }} />
-                    {tabActions.map(a => (
-                      <Button key={a.label} variant="ghost" onClick={a.onClick} style={{ gap: 4, fontSize: 11, color: 'var(--accent)' }}>
-                        {a.icon} {a.label}
-                      </Button>
-                    ))}
-                  </>
+            {(saveBar || tabActions.length > 0) && (
+              <div
+                className="px-4 py-2 flex items-center justify-between shrink-0"
+                style={{
+                  borderTop: '1px solid color-mix(in srgb, var(--border) 60%, transparent)',
+                  background: 'color-mix(in srgb, var(--surface-raised) 80%, transparent)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                }}
+              >
+                <div className="flex items-center gap-1">
+                  {tabActions.map(a => (
+                    <Button key={a.label} variant="ghost" onClick={a.onClick} style={{ gap: 4, fontSize: 11, color: 'var(--accent)' }}>
+                      {a.icon} {a.label}
+                    </Button>
+                  ))}
+                </div>
+                {saveBar && (
+                  <Button variant="primary" onClick={saveBar.save} disabled={!saveBar.dirty || saveBar.saving}>
+                    {saveBar.saving ? 'Applying…' : 'Apply'}
+                  </Button>
                 )}
               </div>
-              {saveBar && (
-                <Button variant="primary" onClick={saveBar.save} disabled={!saveBar.dirty || saveBar.saving}>
-                  {saveBar.saving ? 'Applying…' : 'Apply'}
-                </Button>
-              )}
-            </div>
+            )}
           </div>
         </SaveBarCtx.Provider>
       </div>
