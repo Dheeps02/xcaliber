@@ -851,7 +851,7 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
           </div>
 
           <div className="p-2.5 shrink-0 flex items-center gap-1.5">
-            <ImportExportButtons onExport={exportZsc} onImport={importZsc} accept=".zsc" />
+            <ImportExportButtons onExport={exportZsc} onImport={importZsc} accept=".zsc" compact={false} />
           </div>
 
         </nav>

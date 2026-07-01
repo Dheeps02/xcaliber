@@ -7,10 +7,13 @@ interface Props {
   onImport: (file: File) => void;
   accept?: string;
   exportDisabled?: boolean;
+  compact?: boolean;
 }
 
-export function ImportExportButtons({ onExport, onImport, accept, exportDisabled }: Props) {
+export function ImportExportButtons({ onExport, onImport, accept, exportDisabled, compact = true }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const cls = compact ? '!px-2 !py-0.5 !text-[10px] !gap-1' : '';
+  const iconSize = compact ? 13 : 14;
 
   return (
     <>
@@ -25,20 +28,11 @@ export function ImportExportButtons({ onExport, onImport, accept, exportDisabled
           e.target.value = '';
         }}
       />
-      <Button
-        variant="default"
-        className="!px-2 !py-0.5 !text-[10px] !gap-1"
-        onClick={onExport}
-        disabled={exportDisabled}
-      >
-        <ArrowSquareOut size={13} />Export
+      <Button variant="default" className={cls} onClick={onExport} disabled={exportDisabled}>
+        <ArrowSquareOut size={iconSize} />Export
       </Button>
-      <Button
-        variant="default"
-        className="!px-2 !py-0.5 !text-[10px] !gap-1"
-        onClick={() => inputRef.current?.click()}
-      >
-        <FolderOpen size={13} />Import
+      <Button variant="default" className={cls} onClick={() => inputRef.current?.click()}>
+        <FolderOpen size={iconSize} />Import
       </Button>
     </>
   );
