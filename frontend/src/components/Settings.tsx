@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Palette, X, Sun, Moon, Monitor, ArrowCounterClockwise, PlugsConnected, ArrowsLeftRight, ArrowsDownUp, Scroll, Timer, Lightning, Plus, Terminal, ArrowSquareOut, FolderOpen } from '@phosphor-icons/react';
+import { Palette, X, Sun, Moon, Monitor, ArrowCounterClockwise, PlugsConnected, ArrowsLeftRight, ArrowsDownUp, Scroll, Timer, Lightning, Plus, Terminal } from '@phosphor-icons/react';
+import { ImportExportButtons } from './ui/ImportExportButtons';
 import { UserCmdTab } from './UserCmdTab';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -703,7 +704,6 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
   const [tabActions, setTabActions] = useState<TabAction[]>([]);
   const contentPanelRef = useRef<HTMLDivElement>(null);
   const [notchClip, setNotchClip] = useState('');
-  const zscImportRef = useRef<HTMLInputElement>(null);
 
   const config        = useAppStore(s => s.config);
   const userCmds      = useAppStore(s => s.userCmds);
@@ -732,9 +732,7 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
     URL.revokeObjectURL(url);
   }
 
-  function importZsc(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function importZsc(file: File) {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
@@ -853,13 +851,7 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
           </div>
 
           <div className="p-2.5 shrink-0 flex items-center gap-1.5">
-            <input ref={zscImportRef} type="file" accept=".zsc" style={{ display: 'none' }} onChange={importZsc} />
-            <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" onClick={exportZsc}>
-              <ArrowSquareOut size={13} />Export
-            </Button>
-            <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" onClick={() => zscImportRef.current?.click()}>
-              <FolderOpen size={13} />Import
-            </Button>
+            <ImportExportButtons onExport={exportZsc} onImport={importZsc} accept=".zsc" />
           </div>
 
         </nav>

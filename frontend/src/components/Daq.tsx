@@ -4,9 +4,10 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Trash, Wrench, ArrowSquareOut, FolderOpen,
+  Trash, Wrench,
   Plus, X, DotsSixVertical, CaretDown,
 } from '@phosphor-icons/react';
+import { ImportExportButtons } from './ui/ImportExportButtons';
 import { useAppStore, SPARK_ZOOM_MIN_MS, SPARK_ZOOM_MAX_MS } from '../stores/app-store';
 import { AnimatedCount } from './AnimatedCount';
 import { api } from '../lib/api';
@@ -314,8 +315,7 @@ function DaqToolbar({
   const showToast     = useAppStore(s => s.showToast);
   const sparkWindowMs = useAppStore(s => s.sparkWindowMs);
   const setSparkWindowMs = useAppStore(s => s.setSparkWindowMs);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const sliderRef    = useRef<HTMLInputElement>(null);
+    const sliderRef    = useRef<HTMLInputElement>(null);
   const [wrenchKey,      setWrenchKey]      = useState(0);
   const [runPending,       setRunPending]       = useState(false);
   const [runJiggling,      setRunJiggling]      = useState(false);
@@ -364,9 +364,6 @@ function DaqToolbar({
       className="xcb-glass flex items-center gap-2 px-3 h-9 shrink-0"
       style={{ borderBottom: '1px solid var(--border)' }}
     >
-      <input ref={fileInputRef} type="file" accept=".daq,.json" className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) { onLoad(f); e.target.value = ''; } }}
-      />
 
       <span className={`w-2 h-2 rounded-full shrink-0 ${ledClass}`} />
       <span className="text-[10px] w-16 shrink-0" style={{ color: stateColor }}>{stateLabel}</span>
@@ -493,12 +490,7 @@ function DaqToolbar({
       </div>
       <div className="xcb-vdiv-fade" />
 
-      <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" title="Export" onClick={onSave}>
-        <ArrowSquareOut size={13} />Export
-      </Button>
-      <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" title="Import" onClick={() => fileInputRef.current?.click()}>
-        <FolderOpen size={13} />Import
-      </Button>
+      <ImportExportButtons onExport={onSave} onImport={onLoad} accept=".daq,.json" />
 
       {confirmOpen && createPortal(
         <div

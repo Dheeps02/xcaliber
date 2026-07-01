@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect, useLayoutEffect } from 'react';
 import {
-  Plus, X, ArrowSquareOut, FolderOpen, ListBullets, Timer,
+  Plus, X, ListBullets, Timer,
 } from '@phosphor-icons/react';
+import { ImportExportButtons } from './ui/ImportExportButtons';
 import {
   CommandIcon, ExpandPanel, HexCells,
   dirBgColor, dirBgHover, dirColor, getCommandName,
@@ -166,8 +167,7 @@ export function Sequence() {
   const setActiveCmd         = useAppStore((s) => s.setActiveCmd);
   const setByteValue         = useAppStore((s) => s.setByteValue);
   const showToast            = useAppStore((s) => s.showToast);
-  const importRef            = useRef<HTMLInputElement>(null);
-
+  
   const activeSeq = sequences.find((s) => s.id === activeSequenceId) ?? null;
   const runStatus = seqRunResult?.status ?? 'idle';
   const isRunning = runStatus === 'running';
@@ -345,8 +345,6 @@ export function Sequence() {
         className="xcb-glass flex items-center gap-2 px-3 h-9 shrink-0"
         style={{ borderBottom: '1px solid var(--border)' }}
       >
-        <input ref={importRef} type="file" accept=".seq,.json" className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }} />
 
         {/* Status */}
         <span className={`w-2 h-2 rounded-full shrink-0 ${ledClass(runStatus)}`} />
@@ -410,12 +408,7 @@ export function Sequence() {
         <div className="flex-1" />
 
         {/* Export / Import */}
-        <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" disabled={!sequences.length} onClick={handleExport}>
-          <ArrowSquareOut size={13} />Export
-        </Button>
-        <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" onClick={() => importRef.current?.click()}>
-          <FolderOpen size={13} />Import
-        </Button>
+        <ImportExportButtons onExport={handleExport} onImport={handleImport} accept=".seq,.json" exportDisabled={!sequences.length} />
       </div>
 
       {/* Steps list */}
