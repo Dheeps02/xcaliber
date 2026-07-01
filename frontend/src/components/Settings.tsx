@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Palette, X, Sun, Moon, Monitor, ArrowCounterClockwise, PlugsConnected, ArrowsLeftRight, ArrowsDownUp, Scroll, Timer, Lightning, Plus, Terminal, Upload, Download } from '@phosphor-icons/react';
+import { Palette, X, Sun, Moon, Monitor, ArrowCounterClockwise, PlugsConnected, ArrowsLeftRight, ArrowsDownUp, Scroll, Timer, Lightning, Plus, Terminal, ArrowSquareOut, FolderOpen } from '@phosphor-icons/react';
 import { UserCmdTab } from './UserCmdTab';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -852,13 +852,13 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
             />
           </div>
 
-          <div className="p-2 shrink-0 flex flex-col gap-0.5">
+          <div className="p-2.5 shrink-0 flex items-center gap-1.5">
             <input ref={zscImportRef} type="file" accept=".zsc" style={{ display: 'none' }} onChange={importZsc} />
-            <Button variant="ghost" onClick={() => zscImportRef.current?.click()} style={{ gap: 6, fontSize: 11, justifyContent: 'flex-start', width: '100%' }}>
-              <Upload size={12} /> Import
+            <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" onClick={exportZsc}>
+              <ArrowSquareOut size={13} />Export
             </Button>
-            <Button variant="ghost" onClick={exportZsc} style={{ gap: 6, fontSize: 11, justifyContent: 'flex-start', width: '100%' }}>
-              <Download size={12} /> Export
+            <Button variant="default" className="!px-2 !py-0.5 !text-[10px] !gap-1" onClick={() => zscImportRef.current?.click()}>
+              <FolderOpen size={13} />Import
             </Button>
           </div>
 
