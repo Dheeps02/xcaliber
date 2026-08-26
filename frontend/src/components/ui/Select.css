@@ -65,7 +65,6 @@
 .xcb-select-panel {
   background: color-mix(in srgb, var(--surface-raised) 45%, transparent);
   backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   box-shadow:

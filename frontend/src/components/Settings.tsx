@@ -769,7 +769,6 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
       }
     };
     reader.readAsText(file);
-    e.target.value = '';
   }
 
   useEffect(() => {

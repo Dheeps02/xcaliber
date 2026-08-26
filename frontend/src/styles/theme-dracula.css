@@ -1,0 +1,17 @@
+[data-xcb-theme="dracula"] {
+  --surface-base:    #282A36;
+  --surface-raised:  #21222C;
+  --surface-overlay: #343746;
+  --surface-hover:   #44475A;
+  --accent:          #BD93F9;
+  --border:          rgba(255,255,255,0.08);
+  --border-strong:   rgba(255,255,255,0.14);
+  --text-primary:    #F8F8F2;
+  --text-secondary:  #BFBFBF;
+  --text-muted:      #6272A4;
+  --status-ok:       #50FA7B;
+  --status-err:      #FF5555;
+  --status-warn:     #F1FA8C;
+  --tx:              #8BE9FD;
+  --rx:              #50FA7B;
+}

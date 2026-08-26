@@ -1,0 +1,17 @@
+[data-xcb-theme="everforest"] {
+  --surface-base:    #2D353B;
+  --surface-raised:  #343F44;
+  --surface-overlay: #3D484D;
+  --surface-hover:   #475258;
+  --accent:          #A7C080;
+  --border:          rgba(255,255,255,0.08);
+  --border-strong:   rgba(255,255,255,0.14);
+  --text-primary:    #D3C6AA;
+  --text-secondary:  #9DA9A0;
+  --text-muted:      #7A8478;
+  --status-ok:       #A7C080;
+  --status-err:      #E67E80;
+  --status-warn:     #DBBC7F;
+  --tx:              #7FBBB3;
+  --rx:              #A7C080;
+}

@@ -5,11 +5,12 @@ import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 
 if (process.platform === 'win32') {
-  // Force GPU compositing so backdrop-filter renders correctly.
-  // Without this, Chromium may fall back to software rendering on some
-  // Windows drivers/policies, silently dropping all blur effects.
-  app.commandLine.appendSwitch('enable-features', 'CSSBackdropFilter');
-  app.commandLine.appendSwitch('force-gpu-compositing');
+  // Chrome 147 uses ANGLE D3D11 successfully on this Intel Iris Xe driver.
+  // Electron 42 (Chromium 134) crashes the GPU process via the default EGL
+  // init path, but explicitly requesting d3d11 + bypassing the blocklist
+  // matches Chrome's working config. Fall back to d3d11on12 if this regresses.
+  app.commandLine.appendSwitch('use-angle', 'd3d11');
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
 }
 
 if (process.platform === 'linux') {
@@ -77,6 +78,14 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
+
+  if (isDev) {
+    mainWindow.webContents.on('before-input-event', (_e, input) => {
+      if (input.key === 'F12' && input.type === 'keyDown') {
+        mainWindow?.webContents.openDevTools({ mode: 'detach' });
+      }
+    });
+  }
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');

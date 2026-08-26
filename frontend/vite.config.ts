@@ -1,28 +1,34 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 const { version } = JSON.parse(
-  readFileSync(resolve(__dirname, '../package.json'), 'utf-8')
+  readFileSync(resolve(__dirname, "../package.json"), "utf-8"),
 ) as { version: string };
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: './',
+  base: "./",
   resolve: {
-    dedupe: ['react', 'react-dom'],
+    dedupe: ["react", "react-dom"],
   },
   define: {
     __APP_VERSION__: JSON.stringify(version),
+  },
+  build: {
+    // LightningCSS (Rolldown default) strips unprefixed backdrop-filter when
+    // -webkit-backdrop-filter is present, leaving computed style as 'none' in
+    // Electron. Disabling CSS minification preserves both declarations.
+    cssMinify: false,
   },
   server: {
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': 'http://localhost:8084',
-      '/events': { target: 'http://localhost:8084', changeOrigin: true },
+      "/api": "http://localhost:8080",
+      "/events": { target: "http://localhost:8080", changeOrigin: true },
     },
   },
-})
+});

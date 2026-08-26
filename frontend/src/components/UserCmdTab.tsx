@@ -810,7 +810,6 @@ function TreeView({ onEdit, onSetActions }: { onEdit: (cmdId: string) => void; o
   const setCmdGroups = useAppStore(s => s.setCmdGroups);
   const cmdSubgroups    = useAppStore(s => s.cmdSubgroups);
   const setCmdSubgroups = useAppStore(s => s.setCmdSubgroups);
-  const setCmdData      = useAppStore(s => s.setCmdData);
 
   const [openGroups, setOpenGroups]       = useState<Set<string>>(() => new Set([]));
   const [openSubgroups, setOpenSubgroups] = useState<Set<string>>(() => new Set([]));
