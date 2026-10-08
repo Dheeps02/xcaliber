@@ -6,8 +6,9 @@ import {
   useSensor,
   useSensors,
   closestCenter,
-  type DragStartEvent,
   type DragEndEvent,
+  type DragStartEvent,
+  type Modifier,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -23,6 +24,9 @@ import {
   ArrowLeft,
   Plus,
   X,
+  CopySimple,
+  PencilSimple,
+  Trash,
 } from '@phosphor-icons/react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -143,7 +147,17 @@ function EditableName({
 
 const JBM = "'JetBrains Mono', 'Fira Code', monospace";
 const ROW_DIV = '1px solid color-mix(in srgb, var(--border) 50%, transparent)';
-const SQ: React.CSSProperties = { width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const SQ: React.CSSProperties = { width: 24, height: 24, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' };
+
+function warnGlow(dirty: boolean): React.CSSProperties {
+  return {
+    borderRadius: 6,
+    boxShadow: dirty
+      ? '0 0 0 2px var(--status-warn), 0 0 10px 2px color-mix(in srgb, var(--status-warn) 30%, transparent)'
+      : 'none',
+    transition: 'box-shadow 350ms ease',
+  };
+}
 
 function altBg(i: number): string {
   return i % 2 === 1 ? 'color-mix(in srgb, var(--surface-overlay) 18%, transparent)' : 'transparent';
@@ -171,22 +185,26 @@ function ConditionRow({
   cond,
   onChange,
   onRemove,
+  requestBytes,
 }: {
   cond: MatchCondition;
   onChange: (c: MatchCondition) => void;
   onRemove: () => void;
+  requestBytes: UserCmdRequestByte[];
 }) {
+  const byteOptions = requestBytes.map((b, i) => ({
+    value: String(i + 1),
+    label: `${b.label || `Byte ${i + 1}`} (0x${(i + 1).toString(16).toUpperCase().padStart(2, '0')})`,
+  }));
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: 12, fontFamily: JBM, color: 'var(--text-muted)' }}>req[</span>
-      <DialInput
-        value={cond.reqByteOffset}
-        onChange={(v) => onChange({ ...cond, reqByteOffset: v })}
-        min={0}
-        max={255}
-        digits={3}
+      <Select<string>
+        value={String(cond.reqByteOffset)}
+        onChange={(v) => onChange({ ...cond, reqByteOffset: parseInt(v, 10) })}
+        options={byteOptions.length ? byteOptions : [{ value: '1', label: 'Command ID (0x01)' }]}
+        style={{ fontFamily: JBM, fontSize: 12, minWidth: 160 }}
       />
-      <span style={{ fontSize: 12, fontFamily: JBM, color: 'var(--text-muted)' }}>]</span>
       <Select<string>
         value={cond.op}
         onChange={(v) => onChange({ ...cond, op: v as MatchCondition['op'] })}
@@ -203,7 +221,7 @@ function ConditionRow({
         style={{ width: 52, fontFamily: JBM, textTransform: 'uppercase' }}
       />
       <Button variant="ghost" intent="danger" onClick={onRemove} style={SQ}>
-        <X size={16} />
+        <X size={14} />
       </Button>
     </div>
   );
@@ -217,12 +235,16 @@ function VariantSection({
   onUpdate,
   onDuplicate,
   onRemove,
+  requestBytes,
+  dirty,
 }: {
   variant: UserCmdResponseVariant;
   index: number;
   onUpdate: (v: UserCmdResponseVariant) => void;
   onDuplicate: () => void;
   onRemove: () => void;
+  requestBytes: UserCmdRequestByte[];
+  dirty: boolean;
 }) {
   const [open, setOpen] = useState(true);
   const isDefault = variant.conditions.length === 0;
@@ -243,8 +265,9 @@ function VariantSection({
     onUpdate({ ...variant, bytes: variant.bytes.filter((_, j) => j !== i) });
   }
   function addByte() {
-    const nextOffset = variant.bytes.length > 0 ? variant.bytes[variant.bytes.length - 1].offset + 1 : 0;
-    onUpdate({ ...variant, bytes: [...variant.bytes, { offset: nextOffset, label: '' }] });
+    const prev = variant.bytes.length > 0 ? variant.bytes[variant.bytes.length - 1] : null;
+    const nextOffset = prev ? prev.offset + (prev.length ?? 1) : 0;
+    onUpdate({ ...variant, bytes: [...variant.bytes, { offset: nextOffset, length: 1, label: '' }] });
   }
 
   const TH: React.CSSProperties = {
@@ -259,13 +282,13 @@ function VariantSection({
         right={
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Button variant="ghost" onClick={onDuplicate} title="Duplicate" style={SQ}>
-              <span style={{ fontSize: 16, lineHeight: 1 }}>⧉</span>
+              <CopySimple size={14} />
             </Button>
             <Button variant="ghost" intent="danger" onClick={onRemove} title="Remove" style={SQ}>
-              <X size={16} />
+              <X size={14} />
             </Button>
             <Button variant="ghost" onClick={() => setOpen(o => !o)} style={SQ}>
-              {open ? <CaretDown size={16} /> : <CaretRight size={16} />}
+              {open ? <CaretDown size={14} /> : <CaretRight size={14} />}
             </Button>
           </div>
         }
@@ -291,7 +314,7 @@ function VariantSection({
                     </span>
                   )}
                   {i === 0 && <span style={{ fontSize: 10, fontFamily: JBM, color: 'var(--text-muted)', width: 32, textAlign: 'right' }}>IF</span>}
-                  <ConditionRow cond={c} onChange={nc => updateCond(i, nc)} onRemove={() => removeCond(i)} />
+                  <ConditionRow cond={c} onChange={nc => updateCond(i, nc)} onRemove={() => removeCond(i)} requestBytes={requestBytes} />
                 </div>
               ))}
             </div>
@@ -304,13 +327,14 @@ function VariantSection({
           </div>
 
           {/* Response bytes */}
-          <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden', ...warnGlow(dirty) }}>
             <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'color-mix(in srgb, var(--surface-overlay) 30%, transparent)' }}>
-                  <th style={{ ...TH, width: 100 }}>OFFSET</th>
+                  <th style={{ ...TH, width: 90 }}>OFFSET</th>
+                  <th style={{ ...TH, width: 70 }}>LENGTH</th>
                   <th style={TH}>LABEL</th>
-                  <th style={{ width: 40 }} />
+                  <th style={{ width: 36 }} />
                 </tr>
               </thead>
               <tbody>
@@ -326,18 +350,27 @@ function VariantSection({
                       />
                     </td>
                     <td style={{ padding: '5px 10px' }}>
+                      <DialInput
+                        value={b.length ?? 1}
+                        onChange={(v) => updateByte(i, { ...b, length: v })}
+                        min={1}
+                        max={8}
+                        digits={1}
+                      />
+                    </td>
+                    <td style={{ padding: '5px 10px' }}>
                       <Input value={b.label} onChange={(v) => updateByte(i, { ...b, label: v })} size="sm" placeholder="label" />
                     </td>
-                    <td style={{ padding: '5px 8px', textAlign: 'center' }}>
+                    <td style={{ padding: '5px 6px', textAlign: 'center' }}>
                       <Button variant="ghost" intent="danger" onClick={() => removeByte(i)} style={SQ}>
-                        <X size={16} />
+                        <X size={14} />
                       </Button>
                     </td>
                   </tr>
                 ))}
                 {variant.bytes.length === 0 && (
                   <tr>
-                    <td colSpan={3} style={{ padding: '10px 12px', fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    <td colSpan={4} style={{ padding: '10px 12px', fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
                       No bytes mapped
                     </td>
                   </tr>
@@ -436,9 +469,9 @@ function RequestBytesTable({
                 <td style={{ padding: '5px 10px' }}>
                   <Input value={b.tip} onChange={(v) => updateParam(i, { ...b, tip: v })} size="sm" placeholder="shown on hover" />
                 </td>
-                <td style={{ padding: '5px 8px', textAlign: 'center' }}>
+                <td style={{ padding: '5px 6px', textAlign: 'center' }}>
                   <Button variant="ghost" intent="danger" onClick={() => removeParam(i)} style={SQ}>
-                    <X size={16} />
+                    <X size={14} />
                   </Button>
                 </td>
               </tr>
@@ -465,6 +498,17 @@ function CommandEditor({
   const [requestBytes, setRequestBytes] = useState(cmd.requestBytes);
   const [responseVariants, setResponseVariants] = useState(cmd.responseVariants);
 
+  const isDirtyRequest = JSON.stringify(requestBytes) !== JSON.stringify(cmd.requestBytes);
+  const isDirtyVariants =
+    responseVariants.length !== cmd.responseVariants.length ||
+    responseVariants.some((v, i) => JSON.stringify(v) !== JSON.stringify(cmd.responseVariants[i]));
+  const isDirty = isDirtyRequest || isDirtyVariants;
+
+  function isVariantDirty(v: UserCmdResponseVariant): boolean {
+    const orig = cmd.responseVariants.find(rv => rv.id === v.id);
+    return !orig || JSON.stringify(v) !== JSON.stringify(orig);
+  }
+
   function updateVariant(i: number, v: UserCmdResponseVariant) {
     setResponseVariants(rv => rv.map((x, j) => j === i ? v : x));
   }
@@ -490,7 +534,7 @@ function CommandEditor({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28, padding: 20 }}>
 
       {/* ── Request frame ── */}
-      <div>
+      <div className="settings-field" style={{ '--field-i': 0 } as React.CSSProperties}>
         <SectionHeader
           right={
             <span style={{ fontSize: 11, fontFamily: JBM, color: 'var(--text-muted)' }}>
@@ -500,7 +544,7 @@ function CommandEditor({
         >
           Request Frame
         </SectionHeader>
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 14, ...warnGlow(isDirtyRequest) }}>
           <RequestBytesTable bytes={requestBytes} onUpdate={setRequestBytes} />
         </div>
       </div>
@@ -514,22 +558,24 @@ function CommandEditor({
           onUpdate={(nv) => updateVariant(i, nv)}
           onDuplicate={() => duplicateVariant(i)}
           onRemove={() => removeVariant(i)}
+          requestBytes={requestBytes}
+          dirty={isVariantDirty(v)}
         />
       ))}
 
       {responseVariants.length === 0 && (
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', margin: 0 }}>
+        <p className="settings-field" style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', margin: 0, '--field-i': 1 } as React.CSSProperties}>
           No response variants defined yet.
         </p>
       )}
 
-      <Button variant="ghost" onClick={addVariant}>
+      <Button variant="ghost" onClick={addVariant} className="settings-field" style={{ '--field-i': responseVariants.length + 1 } as React.CSSProperties}>
         <Plus size={12} /> Add response variant
       </Button>
 
       {/* ── Save ── */}
-      <div style={{ paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-        <Button variant="primary" onClick={() => onSave({ ...cmd, requestBytes, responseVariants })}>
+      <div className="settings-field" style={{ paddingTop: 8, borderTop: '1px solid var(--border)', '--field-i': responseVariants.length + 2 } as React.CSSProperties}>
+        <Button variant="primary" disabled={!isDirty} onClick={() => onSave({ ...cmd, requestBytes, responseVariants })}>
           Save
         </Button>
       </div>
@@ -550,11 +596,12 @@ function EditorView({ cmdId, onBack }: { cmdId: string; onBack: () => void }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{
+      <div className="settings-field" style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '6px 12px', flexShrink: 0,
         borderBottom: '1px solid var(--border)',
-      }}>
+        '--field-i': 0,
+      } as React.CSSProperties}>
         <Button variant="ghost" onClick={onBack} style={{ gap: 5, fontSize: 11, flexShrink: 0 }}>
           <ArrowLeft size={12} /> Commands
         </Button>
@@ -566,7 +613,7 @@ function EditorView({ cmdId, onBack }: { cmdId: string; onBack: () => void }) {
           style={{ fontSize: 12, height: 28, maxWidth: 280 }}
         />
       </div>
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div className="settings-field" style={{ flex: 1, overflowY: 'auto', '--field-i': 1 } as React.CSSProperties}>
         <CommandEditor
           key={cmd.id}
           cmd={{ ...cmd, name: draftName }}
@@ -582,24 +629,34 @@ function EditorView({ cmdId, onBack }: { cmdId: string; onBack: () => void }) {
 
 // ── SortableCmdRow ─────────────────────────────────────────────────
 
-function SortableCmdRow({ cmd, indent, onEdit }: { cmd: UserCmdDef; indent: number; onEdit: () => void }) {
+function SortableCmdRow({ cmd, indent, onEdit, onDelete }: { cmd: UserCmdDef; indent: number; onEdit: () => void; onDelete: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `cmd:${cmd.id}`,
   });
+  const showAlert = useAppStore(s => s.showAlert);
   const { size, variants, ctrlBytes } = computeStats(cmd);
+
+  function handleDelete() {
+    showAlert(`Delete "${cmd.name}"?`, {
+      label: 'Delete',
+      fn: async () => onDelete(),
+    });
+  }
 
   return (
     <div
       ref={setNodeRef}
+      className="group settings-field"
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.35 : 1,
+        opacity: isDragging ? 0 : 1,
         display: 'flex', alignItems: 'center', gap: 6,
         height: 32, paddingLeft: indent, paddingRight: 8,
         borderBottom: '1px solid var(--border)',
         background: 'var(--surface-base)',
-      }}
+        '--field-i': 0,
+      } as React.CSSProperties}
     >
       <span
         {...attributes}
@@ -616,9 +673,14 @@ function SortableCmdRow({ cmd, indent, onEdit }: { cmd: UserCmdDef; indent: numb
         <StatBadge>{variants} {variants === 1 ? 'struct' : 'structs'}</StatBadge>
         {ctrlBytes > 0 && <StatBadge>{ctrlBytes} ctrl</StatBadge>}
       </div>
-      <Button variant="ghost" onClick={onEdit} style={{ fontSize: 11, height: 22, padding: '0 8px', flexShrink: 0 }}>
-        Edit
-      </Button>
+      <div className="opacity-0 group-hover:opacity-100 transition-opacity" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        <Button variant="ghost" onClick={onEdit} style={{ padding: 0, width: 24, height: 24 }} title="Edit">
+          <PencilSimple size={14} />
+        </Button>
+        <Button variant="ghost" intent="danger" onClick={handleDelete} style={{ padding: 0, width: 24, height: 24 }} title="Delete">
+          <Trash size={14} />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -657,18 +719,24 @@ function SortableSubgroupRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `sub:${sub.id}`,
   });
+  const showAlert = useAppStore(s => s.showAlert);
+
+  function handleDelete() {
+    showAlert(`Delete subgroup "${sub.name}"?`, { label: 'Delete', fn: async () => onDelete() });
+  }
 
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0 : 1 }}
     >
-      <div style={{
+      <div className="settings-field" style={{
         display: 'flex', alignItems: 'center', gap: 5,
         height: 30, paddingLeft: 8, paddingRight: 8,
         background: 'color-mix(in srgb, var(--surface-raised) 30%, transparent)',
         borderBottom: '1px solid var(--border)',
-      }}>
+        '--field-i': 0,
+      } as React.CSSProperties}>
         <span
           {...attributes}
           {...listeners}
@@ -676,25 +744,17 @@ function SortableSubgroupRow({
         >
           <DotsSixVertical size={12} />
         </span>
-        <button
-          onClick={onToggle}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 }}
-        >
+        <Button variant="ghost" onClick={onToggle} style={{ padding: 0, width: 18, height: 18, flexShrink: 0 }}>
           {isOpen ? <CaretDown size={10} /> : <CaretRight size={10} />}
-        </button>
+        </Button>
         <EditableName
           value={sub.name}
           onChange={onUpdateName}
           style={{ flex: 1, fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}
         />
-        <button
-          onClick={onDelete}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: '0 2px', flexShrink: 0 }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--status-err)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
-        >
-          <X size={11} />
-        </button>
+        <Button variant="ghost" intent="danger" onClick={handleDelete} style={{ padding: 0, width: 18, height: 18, flexShrink: 0 }}>
+          <Trash size={11} />
+        </Button>
       </div>
       <Collapse open={isOpen}>
         {children}
@@ -725,18 +785,24 @@ function SortableGroupRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `grp:${group.id}`,
   });
+  const showAlert = useAppStore(s => s.showAlert);
+
+  function handleDelete() {
+    showAlert(`Delete group "${group.name}" and all its commands?`, { label: 'Delete', fn: async () => onDelete() });
+  }
 
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0 : 1 }}
     >
-      <div style={{
+      <div className="settings-field" style={{
         display: 'flex', alignItems: 'center', gap: 6,
         height: 34, paddingLeft: 2, paddingRight: 8,
         background: 'color-mix(in srgb, var(--surface-raised) 50%, transparent)',
         borderBottom: '1px solid var(--border)',
-      }}>
+        '--field-i': 0,
+      } as React.CSSProperties}>
         <span
           {...attributes}
           {...listeners}
@@ -744,38 +810,21 @@ function SortableGroupRow({
         >
           <DotsSixVertical size={14} />
         </span>
-        <button
-          onClick={onToggle}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 }}
-        >
+        <Button variant="ghost" onClick={onToggle} style={{ padding: 0, width: 20, height: 20, flexShrink: 0 }}>
           {isOpen ? <CaretDown size={12} /> : <CaretRight size={12} />}
-        </button>
+        </Button>
         <EditableName
           value={group.name}
           onChange={onUpdateName}
           style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}
         />
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          <button
-            onClick={onAddSubgroup}
-            style={{
-              background: 'none', border: '1px solid var(--border)', borderRadius: 4,
-              cursor: 'pointer', fontSize: 10, color: 'var(--text-muted)',
-              display: 'flex', alignItems: 'center', gap: 3, padding: '1px 6px', height: 20,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--accent)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
-          >
+          <Button variant="ghost" onClick={onAddSubgroup} style={{ fontSize: 10, height: 20, padding: '1px 6px' }}>
             <Plus size={9} /> Subgroup
-          </button>
-          <button
-            onClick={onDelete}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', padding: '0 2px' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--status-err)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
-          >
-            <X size={12} />
-          </button>
+          </Button>
+          <Button variant="ghost" intent="danger" onClick={handleDelete} style={{ padding: 0, width: 20, height: 20 }}>
+            <Trash size={12} />
+          </Button>
         </div>
       </div>
       <Collapse open={isOpen}>
@@ -785,17 +834,11 @@ function SortableGroupRow({
   );
 }
 
-// ── Drag overlay ghost ─────────────────────────────────────────────
+// ── DragOverlay helpers ────────────────────────────────────────────
 
 function OverlayGhost({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{
-      background: 'var(--surface-raised)',
-      border: '1px solid var(--accent)',
-      borderRadius: 5, opacity: 0.92,
-      boxShadow: '0 4px 14px var(--shadow-7)',
-      pointerEvents: 'none',
-    }}>
+    <div style={{ boxShadow: '0 6px 20px rgba(0,0,0,0.35)', borderRadius: 4, opacity: 0.92 }}>
       {children}
     </div>
   );
@@ -813,9 +856,66 @@ function TreeView({ onEdit, onSetActions }: { onEdit: (cmdId: string) => void; o
 
   const [openGroups, setOpenGroups]       = useState<Set<string>>(() => new Set([]));
   const [openSubgroups, setOpenSubgroups] = useState<Set<string>>(() => new Set([]));
-  const [activeId, setActiveId]           = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const probeRef = useRef<HTMLDivElement>(null);
+  const correctionModifier = useCallback<Modifier>(({ transform }) => {
+    const r = probeRef.current?.getBoundingClientRect();
+    if (!r) return transform;
+    return { ...transform, x: transform.x - r.left, y: transform.y - r.top };
+  }, []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  function handleDragStart({ active }: DragStartEvent) {
+    setActiveId(String(active.id));
+  }
+
+  function renderOverlay(id: string): React.ReactNode {
+    if (id.startsWith('grp:')) {
+      const group = cmdGroups.find(g => `grp:${g.id}` === id);
+      if (!group) return null;
+      return (
+        <OverlayGhost>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, paddingLeft: 10, paddingRight: 8, background: 'color-mix(in srgb, var(--surface-raised) 50%, transparent)' }}>
+            <DotsSixVertical size={14} color="var(--text-muted)" />
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{group.name}</span>
+          </div>
+        </OverlayGhost>
+      );
+    }
+    if (id.startsWith('sub:')) {
+      const sub = cmdSubgroups.find(s => `sub:${s.id}` === id);
+      if (!sub) return null;
+      return (
+        <OverlayGhost>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30, paddingLeft: 12, paddingRight: 8, background: 'color-mix(in srgb, var(--surface-raised) 30%, transparent)' }}>
+            <DotsSixVertical size={12} color="var(--text-muted)" />
+            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>{sub.name}</span>
+          </div>
+        </OverlayGhost>
+      );
+    }
+    if (id.startsWith('cmd:')) {
+      const cmd = userCmds.find(c => `cmd:${c.id}` === id);
+      if (!cmd) return null;
+      const { size, variants, ctrlBytes } = computeStats(cmd);
+      return (
+        <OverlayGhost>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 32, paddingLeft: 14, paddingRight: 8, background: 'var(--surface-base)' }}>
+            <DotsSixVertical size={14} color="var(--text-muted)" />
+            <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cmd.name}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <StatBadge>{size}B</StatBadge>
+              <StatBadge>{variants} {variants === 1 ? 'struct' : 'structs'}</StatBadge>
+              {ctrlBytes > 0 && <StatBadge>{ctrlBytes} ctrl</StatBadge>}
+            </div>
+          </div>
+        </OverlayGhost>
+      );
+    }
+    return null;
+  }
 
   // ── Group / subgroup management ──────────────────────────────────
 
@@ -858,7 +958,20 @@ function TreeView({ onEdit, onSetActions }: { onEdit: (cmdId: string) => void; o
 
   function addCmd() {
     const cmd = newCmd();
-    setUserCmds([...userCmds, cmd]);
+    if (cmdGroups.length === 0) {
+      setUserCmds([...userCmds, cmd]);
+      return;
+    }
+    const lastGroup = cmdGroups[cmdGroups.length - 1];
+    const lastGroupSubs = cmdSubgroups.filter(s => s.parentGroupId === lastGroup.id);
+    if (lastGroupSubs.length > 0) {
+      const lastSub = lastGroupSubs[lastGroupSubs.length - 1];
+      setUserCmds([...userCmds, { ...cmd, groupId: lastGroup.id, subgroupId: lastSub.id }]);
+      setOpenSubgroups(prev => new Set([...prev, lastSub.id]));
+    } else {
+      setUserCmds([...userCmds, { ...cmd, groupId: lastGroup.id }]);
+    }
+    setOpenGroups(prev => new Set([...prev, lastGroup.id]));
   }
 
   // ── Action registration ───────────────────────────────────────────
@@ -881,12 +994,7 @@ function TreeView({ onEdit, onSetActions }: { onEdit: (cmdId: string) => void; o
 
   // ── Drag & drop ──────────────────────────────────────────────────
 
-  function handleDragStart({ active }: DragStartEvent) {
-    setActiveId(String(active.id));
-  }
-
   function handleDragEnd({ active, over }: DragEndEvent) {
-    setActiveId(null);
     if (!over || active.id === over.id) return;
 
     const aId = String(active.id);
@@ -954,63 +1062,24 @@ function TreeView({ onEdit, onSetActions }: { onEdit: (cmdId: string) => void; o
     }
   }
 
-  // ── Render helpers ───────────────────────────────────────────────
-
-  function renderOverlay(id: string) {
-    if (id.startsWith('cmd:')) {
-      const cmd = userCmds.find(c => `cmd:${c.id}` === id);
-      if (!cmd) return null;
-      const { size, variants, ctrlBytes } = computeStats(cmd);
-      return (
-        <OverlayGhost>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 32, paddingLeft: 8, paddingRight: 8 }}>
-            <DotsSixVertical size={14} style={{ color: 'var(--text-muted)' }} />
-            <span style={{ flex: 1, fontSize: 12, color: 'var(--text-primary)' }}>{cmd.name}</span>
-            <StatBadge>{size}B</StatBadge>
-            <StatBadge>{variants} {variants === 1 ? 'struct' : 'structs'}</StatBadge>
-            {ctrlBytes > 0 && <StatBadge>{ctrlBytes} ctrl</StatBadge>}
-          </div>
-        </OverlayGhost>
-      );
-    }
-    if (id.startsWith('grp:')) {
-      const group = cmdGroups.find(g => `grp:${g.id}` === id);
-      if (!group) return null;
-      return (
-        <OverlayGhost>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, paddingLeft: 8, paddingRight: 8, fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
-            <DotsSixVertical size={14} style={{ color: 'var(--text-muted)' }} />
-            {group.name}
-          </div>
-        </OverlayGhost>
-      );
-    }
-    if (id.startsWith('sub:')) {
-      const sub = cmdSubgroups.find(s => `sub:${s.id}` === id);
-      if (!sub) return null;
-      return (
-        <OverlayGhost>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30, paddingLeft: 8, paddingRight: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
-            <DotsSixVertical size={12} style={{ color: 'var(--text-muted)' }} />
-            {sub.name}
-          </div>
-        </OverlayGhost>
-      );
-    }
-    return null;
-  }
-
   const uncategorized = userCmds.filter(c => !c.groupId);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Probe: measures any transform offset introduced by ancestor CSS containing blocks */}
+      <div ref={probeRef} style={{ position: 'fixed', left: 0, top: 0, width: 0, height: 0, pointerEvents: 'none' }} />
+      {/* Page title */}
+      <div className="settings-field" style={{ padding: '12px 16px', flexShrink: 0, borderBottom: '1px solid var(--border)', '--field-i': 0 } as React.CSSProperties}>
+        <SectionHeader>User Commands</SectionHeader>
+      </div>
       {/* Tree */}
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div className="settings-field" style={{ flex: 1, overflowY: 'auto', '--field-i': 1 } as React.CSSProperties}>
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
+          onDragEnd={(e) => { setActiveId(null); handleDragEnd(e); }}
+          onDragCancel={() => setActiveId(null)}
         >
           {/* Uncategorized */}
           {uncategorized.length > 0 && (
@@ -1025,7 +1094,7 @@ function TreeView({ onEdit, onSetActions }: { onEdit: (cmdId: string) => void; o
               </div>
               <SortableContext items={uncategorized.map(c => `cmd:${c.id}`)} strategy={verticalListSortingStrategy}>
                 {uncategorized.map(cmd => (
-                  <SortableCmdRow key={cmd.id} cmd={cmd} indent={14} onEdit={() => onEdit(cmd.id)} />
+                  <SortableCmdRow key={cmd.id} cmd={cmd} indent={14} onEdit={() => onEdit(cmd.id)} onDelete={() => setUserCmds(userCmds.filter(c => c.id !== cmd.id))} />
                 ))}
               </SortableContext>
             </div>
@@ -1054,8 +1123,18 @@ function TreeView({ onEdit, onSetActions }: { onEdit: (cmdId: string) => void; o
                 >
                   {/* Direct commands in this group */}
                   <SortableContext items={directCmds.map(c => `cmd:${c.id}`)} strategy={verticalListSortingStrategy}>
-                    {directCmds.map(cmd => (
-                      <SortableCmdRow key={cmd.id} cmd={cmd} indent={28} onEdit={() => onEdit(cmd.id)} />
+                    {directCmds.map((cmd, cmdIdx) => (
+                      <div
+                        key={cmd.id}
+                        style={{
+                          opacity: isOpen ? 1 : 0,
+                          transform: isOpen ? 'none' : 'translateY(-3px)',
+                          transition: 'opacity 150ms ease, transform 150ms ease',
+                          transitionDelay: isOpen ? `${cmdIdx * 20}ms` : '0ms',
+                        }}
+                      >
+                        <SortableCmdRow cmd={cmd} indent={28} onEdit={() => onEdit(cmd.id)} onDelete={() => setUserCmds(userCmds.filter(c => c.id !== cmd.id))} />
+                      </div>
                     ))}
                     {directCmds.length === 0 && subs.length === 0 && (
                       <EmptyDropHint indent={28} />
@@ -1064,32 +1143,51 @@ function TreeView({ onEdit, onSetActions }: { onEdit: (cmdId: string) => void; o
 
                   {/* Subgroups */}
                   <SortableContext items={subs.map(s => `sub:${s.id}`)} strategy={verticalListSortingStrategy}>
-                    {subs.map(sub => {
+                    {subs.map((sub, subIdx) => {
                       const subCmds  = userCmds.filter(c => c.subgroupId === sub.id);
                       const isSubOpen = openSubgroups.has(sub.id);
 
                       return (
-                        <SortableSubgroupRow
+                        <div
                           key={sub.id}
-                          sub={sub}
-                          isOpen={isSubOpen}
-                          onToggle={() => setOpenSubgroups(prev => {
-                            const next = new Set(prev);
-                            next.has(sub.id) ? next.delete(sub.id) : next.add(sub.id);
-                            return next;
-                          })}
-                          onDelete={() => deleteSubgroup(sub.id)}
-                          onUpdateName={(name) => updateSubgroupName(sub.id, name)}
+                          style={{
+                            opacity: isOpen ? 1 : 0,
+                            transform: isOpen ? 'none' : 'translateY(-3px)',
+                            transition: 'opacity 150ms ease, transform 150ms ease',
+                            transitionDelay: isOpen ? `${(directCmds.length + subIdx) * 20}ms` : '0ms',
+                          }}
                         >
-                          <SortableContext items={subCmds.map(c => `cmd:${c.id}`)} strategy={verticalListSortingStrategy}>
-                            {subCmds.map(cmd => (
-                              <SortableCmdRow key={cmd.id} cmd={cmd} indent={40} onEdit={() => onEdit(cmd.id)} />
-                            ))}
-                            {subCmds.length === 0 && (
-                              <EmptyDropHint indent={40} />
-                            )}
-                          </SortableContext>
-                        </SortableSubgroupRow>
+                          <SortableSubgroupRow
+                            sub={sub}
+                            isOpen={isSubOpen}
+                            onToggle={() => setOpenSubgroups(prev => {
+                              const next = new Set(prev);
+                              next.has(sub.id) ? next.delete(sub.id) : next.add(sub.id);
+                              return next;
+                            })}
+                            onDelete={() => deleteSubgroup(sub.id)}
+                            onUpdateName={(name) => updateSubgroupName(sub.id, name)}
+                          >
+                            <SortableContext items={subCmds.map(c => `cmd:${c.id}`)} strategy={verticalListSortingStrategy}>
+                              {subCmds.map((cmd, cmdIdx) => (
+                                <div
+                                  key={cmd.id}
+                                  style={{
+                                    opacity: isSubOpen ? 1 : 0,
+                                    transform: isSubOpen ? 'none' : 'translateY(-3px)',
+                                    transition: 'opacity 130ms ease, transform 130ms ease',
+                                    transitionDelay: isSubOpen ? `${cmdIdx * 16}ms` : '0ms',
+                                  }}
+                                >
+                                  <SortableCmdRow cmd={cmd} indent={40} onEdit={() => onEdit(cmd.id)} onDelete={() => setUserCmds(userCmds.filter(c => c.id !== cmd.id))} />
+                                </div>
+                              ))}
+                              {subCmds.length === 0 && (
+                                <EmptyDropHint indent={40} />
+                              )}
+                            </SortableContext>
+                          </SortableSubgroupRow>
+                        </div>
                       );
                     })}
                   </SortableContext>
@@ -1105,7 +1203,7 @@ function TreeView({ onEdit, onSetActions }: { onEdit: (cmdId: string) => void; o
             </div>
           )}
 
-          <DragOverlay>
+          <DragOverlay modifiers={[correctionModifier]}>
             {activeId ? renderOverlay(activeId) : null}
           </DragOverlay>
         </DndContext>
@@ -1119,34 +1217,39 @@ function TreeView({ onEdit, onSetActions }: { onEdit: (cmdId: string) => void; o
 export function UserCmdTab({ onSetSaveBar, onSetActions }: { onSetSaveBar: (s: SaveBarState) => void; onSetActions: (a: TabAction[]) => void }) {
   const [view, setView] = useState<'tree' | { cmdId: string }>('tree');
 
-  const userCmds  = useAppStore(s => s.userCmds);
-  const config    = useAppStore(s => s.config);
-  const showToast = useAppStore(s => s.showToast);
+  const userCmds     = useAppStore(s => s.userCmds);
+  const cmdGroups    = useAppStore(s => s.cmdGroups);
+  const cmdSubgroups = useAppStore(s => s.cmdSubgroups);
+  const config       = useAppStore(s => s.config);
+  const showToast    = useAppStore(s => s.showToast);
 
   const [saving, setSaving] = useState(false);
-  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(userCmds));
-  const dirty = JSON.stringify(userCmds) !== savedSnapshot;
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify({ userCmds, cmdGroups, cmdSubgroups })
+  );
+  const dirty = JSON.stringify({ userCmds, cmdGroups, cmdSubgroups }) !== savedSnapshot;
 
   async function save() {
     if (!config) return;
     setSaving(true);
     try {
       await api.updateConfig({
-        server_ip:   config.connection.server_ip,
-        server_port: config.connection.server_port,
-        protocol:    config.connection.protocol,
-        timeout_ms:  config.connection.timeout_ms,
-        listen_port: config.server.listen_port,
-        bind_ip:     config.connection.bind_ip   || undefined,
-        source_port: config.connection.source_port || undefined,
-        src_mac:     config.connection.src_mac   || undefined,
-        dst_mac:     config.connection.dst_mac   || undefined,
-        vlan_id:     config.connection.vlan_id   || undefined,
-        endian:      config.endian,
-        events:      config.events,
-        user_cmds:   userCmds,
+        server_ip:    config.connection.server_ip,
+        server_port:  config.connection.server_port,
+        protocol:     config.connection.protocol,
+        timeout_ms:   config.connection.timeout_ms,
+        bind_ip:      config.connection.bind_ip    || undefined,
+        source_port:  config.connection.source_port || undefined,
+        src_mac:      config.connection.src_mac    || undefined,
+        dst_mac:      config.connection.dst_mac    || undefined,
+        vlan_id:      config.connection.vlan_id    || undefined,
+        endian:       config.endian,
+        events:       config.events,
+        user_cmds:    userCmds,
+        cmd_groups:   cmdGroups,
+        cmd_subgroups: cmdSubgroups,
       });
-      setSavedSnapshot(JSON.stringify(userCmds));
+      setSavedSnapshot(JSON.stringify({ userCmds, cmdGroups, cmdSubgroups }));
       showToast('Commands saved', 'success');
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Failed to save', 'error');

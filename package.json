@@ -43,21 +43,25 @@
     ],
     "mac": {
       "target": "dmg",
+      "icon": "assets/icons/icon-1024.png",
       "extraResources": [
         { "from": "target/release/zenscope", "to": "." }
       ]
     },
     "win": {
       "target": "nsis",
-      "icon": "icons/icon.ico",
+      "icon": "assets/icons/icon-256.png",
       "extraResources": [
-        { "from": "target/release/zenscope.exe", "to": "." }
+        { "from": "target/release/zenscope.exe", "to": "." },
+        { "from": "assets/icons/icon-256.png", "to": "icon.png" }
       ]
     },
     "linux": {
       "target": "AppImage",
+      "icon": "assets/icons/icon-512.png",
       "extraResources": [
-        { "from": "target/release/zenscope", "to": "." }
+        { "from": "target/release/zenscope", "to": "." },
+        { "from": "assets/icons/icon-256.png", "to": "icon.png" }
       ]
     }
   }

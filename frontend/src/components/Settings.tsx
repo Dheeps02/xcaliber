@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
-import { Palette, X, Sun, Moon, Monitor, ArrowCounterClockwise, PlugsConnected, ArrowsLeftRight, ArrowsDownUp, Scroll, Timer, Lightning, Plus, Terminal } from '@phosphor-icons/react';
+import { Palette, X, Sun, Moon, Sparkle, Desktop, WindowsLogo, AppleLogo, ArrowCounterClockwise, PlugsConnected, ArrowsLeftRight, ArrowsDownUp, Scroll, Timer, Lightning, Plus, Terminal, WifiHigh, HardDrives, SortAscending, SortDescending, ClockUser, ClockCounterClockwise } from '@phosphor-icons/react';
 import { ImportExportButtons } from './ui/ImportExportButtons';
 import { UserCmdTab } from './UserCmdTab';
 import { Button } from './ui/Button';
@@ -139,9 +139,9 @@ function ThemeSwatch({ p }: { p: ThemePreview }) {
 }
 
 const MODE_ITEMS: { value: ThemeMode; label: string; icon: React.ReactNode }[] = [
-  { value: 'light',  label: 'Light',        icon: <Sun     size={14} /> },
-  { value: 'dark',   label: 'Dark',         icon: <Moon    size={14} /> },
-  { value: 'system', label: 'Match System', icon: <Monitor size={14} /> },
+  { value: 'light',  label: 'Light',  icon: <Sun     size={14} /> },
+  { value: 'dark',   label: 'Dark',   icon: <Moon    size={14} /> },
+  { value: 'system', label: 'System', icon: <Sparkle size={14} /> },
 ];
 
 // ── Section header ────────────────────────────────────────────────
@@ -177,6 +177,8 @@ function AppearanceTab() {
   const setAnimationsEnabled = useAppStore(s => s.setAnimationsEnabled);
   const accentColor          = useAppStore(s => s.accentColor);
   const setAccentColor       = useAppStore(s => s.setAccentColor);
+  const windowControlStyle    = useAppStore(s => s.windowControlStyle);
+  const setWindowControlStyle = useAppStore(s => s.setWindowControlStyle);
 
   const [family, setFamily] = useState<ThemeFamily>(() => familyOf(theme as ThemeId));
   const [mode,   setMode]   = useState<ThemeMode>  (() => modeOf(theme as ThemeId));
@@ -207,19 +209,20 @@ function AppearanceTab() {
       <section className="space-y-3">
         <SectionHeader icon={Palette}>Theme</SectionHeader>
         <div className="space-y-2.5">
-          <div className="flex items-center justify-between h-8">
+          <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 0 } as React.CSSProperties}>
             <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">Family</p>
             <Select value={family} onChange={handleFamilyChange} options={familyOptions} style={{ height: 30 }} />
           </div>
-          <div className="flex items-center justify-between h-8">
+          <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 1 } as React.CSSProperties}>
             <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">Mode</p>
             <SegmentControl
               value={mode}
               onChange={handleModeChange}
               items={MODE_ITEMS}
+              variant="icon"
             />
           </div>
-          <div className="flex items-center justify-between h-8">
+          <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 2 } as React.CSSProperties}>
             <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">Accent</p>
             <div className="flex items-center gap-1.5">
               <ColorPicker value={accentColor} onChange={setAccentColor} />
@@ -233,14 +236,26 @@ function AppearanceTab() {
 
       {/* Display */}
       <section className="space-y-3">
-        <SectionHeader icon={Monitor}>Display</SectionHeader>
+        <SectionHeader icon={Desktop}>Display</SectionHeader>
         <div className="space-y-2.5">
-          <div className="flex items-center justify-between h-8">
+          <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 3 } as React.CSSProperties}>
+            <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">Window controls</p>
+            <SegmentControl<'windows' | 'macos'>
+              value={windowControlStyle}
+              onChange={setWindowControlStyle}
+              variant="icon-text"
+              items={[
+                { value: 'windows', label: 'Windows', icon: <WindowsLogo size={13} /> },
+                { value: 'macos',   label: 'macOS',   icon: <AppleLogo   size={13} /> },
+              ]}
+            />
+          </div>
+          <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 4 } as React.CSSProperties}>
             <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">Enable animations</p>
             <Toggle checked={animationsEnabled} onChange={() => setAnimationsEnabled(!animationsEnabled)} />
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+          <div className="space-y-2 settings-field" style={{ '--field-i': 5 } as React.CSSProperties}>
+            <div className="flex items-center justify-between h-8">
               <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">Zoom</p>
               <span className="text-[11px] font-mono text-[var(--text-muted)]">{Math.round(draftZoom * 100)}%</span>
             </div>
@@ -266,7 +281,6 @@ interface ConnDraft {
   server_port: number;
   protocol:    string;
   timeout_ms:  number;
-  listen_port: number;
   bind_ip:     string;
   source_port: number;
   src_mac:     string;
@@ -287,7 +301,6 @@ function ConnectionTab() {
     server_port: c.connection.server_port,
     protocol:    c.connection.protocol === 'ethernet' ? 'raw_ethernet' : c.connection.protocol,
     timeout_ms:  c.connection.timeout_ms,
-    listen_port: c.server.listen_port,
     bind_ip:     c.connection.bind_ip     ?? '',
     source_port: c.connection.source_port ?? 0,
     src_mac:     c.connection.src_mac     ?? '',
@@ -326,7 +339,6 @@ function ConnectionTab() {
         server_port: draft.server_port,
         protocol:    draft.protocol === 'raw_ethernet' ? 'ethernet' : draft.protocol,
         timeout_ms:  draft.timeout_ms,
-        listen_port: draft.listen_port,
         bind_ip:     draft.bind_ip,
         source_port: draft.source_port,
         src_mac:     isEth ? (draft.src_mac  || undefined) : undefined,
@@ -350,7 +362,7 @@ function ConnectionTab() {
           dst_mac:     isEth ? (draft.dst_mac  || undefined) : undefined,
           vlan_id:     isEth ? (draft.vlan_id  || undefined) : undefined,
         },
-        server: { ...config.server, listen_port: draft.listen_port },
+        server: config.server,
         endian: draft.endian,
       });
     } catch (e) {
@@ -433,26 +445,31 @@ function ConnectionTab() {
         <section className="space-y-3">
           <SectionHeader icon={PlugsConnected}>Protocol</SectionHeader>
           <div className="space-y-2.5">
-            <div className="flex items-center justify-between h-8">
+            <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 0 } as React.CSSProperties}>
               <p className={LABEL}>Protocol</p>
               <SegmentControl
                 value={draft.protocol}
                 onChange={v => set('protocol', v)}
+                variant="icon-text"
                 items={[
-                  { value: 'udp',          label: 'UDP' },
-                  { value: 'raw_ethernet', label: 'Raw Ethernet' },
+                  { value: 'udp',          label: 'UDP',          icon: <WifiHigh    size={13} /> },
+                  { value: 'raw_ethernet', label: 'Raw Ethernet', icon: <HardDrives  size={13} /> },
                 ]}
               />
             </div>
-            <div className="flex items-center justify-between h-8">
+            <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 1 } as React.CSSProperties}>
               <p className={LABEL}>Endian</p>
               <SegmentControl
                 value={draft.endian}
                 onChange={v => set('endian', v)}
-                items={[{ value: 'little', label: 'Little Endian' }, { value: 'big', label: 'Big Endian' }]}
+                variant="icon-text"
+                items={[
+                  { value: 'little', label: 'Little Endian', icon: <SortAscending  size={13} /> },
+                  { value: 'big',    label: 'Big Endian',    icon: <SortDescending size={13} /> },
+                ]}
               />
             </div>
-            <div className="flex items-center justify-between h-8">
+            <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 2 } as React.CSSProperties}>
               <p className={LABEL}>Timeout</p>
               <DialInput value={draft.timeout_ms} onChange={v => set('timeout_ms', v)} min={0} max={30000} digits={5} />
             </div>
@@ -463,7 +480,7 @@ function ConnectionTab() {
         <section className="space-y-3">
           <SectionHeader icon={ArrowsDownUp}>Endpoints</SectionHeader>
           <div className="space-y-2.5">
-            <div className="flex items-center justify-between h-8">
+            <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 3 } as React.CSSProperties}>
               <p className={LABEL}>Source</p>
               <div className="flex items-center gap-1.5">
                 <div className="flex items-center gap-1.5" style={glowStyle('bind_ip', 'source_port')}>
@@ -474,7 +491,7 @@ function ConnectionTab() {
                 <ResetBtn keys={['bind_ip', 'source_port']} />
               </div>
             </div>
-            <div className="flex items-center justify-between h-8">
+            <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 4 } as React.CSSProperties}>
               <p className={LABEL}>Destination</p>
               <div className="flex items-center gap-1.5">
                 <div className="flex items-center gap-1.5" style={glowStyle('server_ip', 'server_port')}>
@@ -485,15 +502,6 @@ function ConnectionTab() {
                 <ResetBtn keys={['server_ip', 'server_port']} />
               </div>
             </div>
-            <div className="flex items-center justify-between h-8">
-              <p className={LABEL}>Listen Port</p>
-              <div className="flex items-center gap-1.5">
-                <div style={glowStyle('listen_port')}>
-                  <DialInput value={draft.listen_port} onChange={v => set('listen_port', v)} min={0} max={65535} digits={5} />
-                </div>
-                <ResetBtn keys={['listen_port']} />
-              </div>
-            </div>
           </div>
         </section>
 
@@ -502,7 +510,7 @@ function ConnectionTab() {
           <section className="space-y-3">
             <SectionHeader icon={ArrowsLeftRight}>Ethernet</SectionHeader>
             <div className="space-y-2.5">
-              <div className="flex items-center justify-between h-8">
+              <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 5 } as React.CSSProperties}>
                 <p className={LABEL}>Src MAC</p>
                 <div className="flex items-center gap-1.5">
                   <div style={glowStyle('src_mac')}>
@@ -511,7 +519,7 @@ function ConnectionTab() {
                   <ResetBtn keys={['src_mac']} />
                 </div>
               </div>
-              <div className="flex items-center justify-between h-8">
+              <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 6 } as React.CSSProperties}>
                 <p className={LABEL}>Dst MAC</p>
                 <div className="flex items-center gap-1.5">
                   <div style={glowStyle('dst_mac')}>
@@ -520,7 +528,7 @@ function ConnectionTab() {
                   <ResetBtn keys={['dst_mac']} />
                 </div>
               </div>
-              <div className="flex items-center justify-between h-8">
+              <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 7 } as React.CSSProperties}>
                 <p className={LABEL}>VLAN ID</p>
                 <div className="flex items-center gap-1.5">
                   <div style={glowStyle('vlan_id')}>
@@ -551,8 +559,8 @@ function TraceTab() {
       <section className="space-y-3">
         <SectionHeader icon={Timer}>Display</SectionHeader>
         <div className="space-y-2.5">
-          <div className="flex items-center justify-between h-8">
-            <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">Row Timeout</p>
+          <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 0 } as React.CSSProperties}>
+            <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">Request Timeout</p>
             <DialInput
               value={displayTimeoutMs}
               onChange={setDisplayTimeoutMs}
@@ -561,14 +569,15 @@ function TraceTab() {
               digits={5}
             />
           </div>
-          <div className="flex items-center justify-between h-8">
+          <div className="flex items-center justify-between h-8 settings-field" style={{ '--field-i': 1 } as React.CSSProperties}>
             <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">Timestamp</p>
             <SegmentControl
               value={timestampFormat}
               onChange={setTimestampFormat}
+              variant="icon-text"
               items={[
-                { value: 'absolute', label: 'Absolute' },
-                { value: 'relative', label: 'Relative' },
+                { value: 'absolute', label: 'Absolute', icon: <ClockUser            size={13} /> },
+                { value: 'relative', label: 'Relative', icon: <ClockCounterClockwise size={13} /> },
               ]}
             />
           </div>
@@ -612,7 +621,6 @@ function EventsTab() {
         server_port: config.connection.server_port,
         protocol:    config.connection.protocol,
         timeout_ms:  config.connection.timeout_ms,
-        listen_port: config.server.listen_port,
         bind_ip:     config.connection.bind_ip,
         source_port: config.connection.source_port,
         src_mac:     config.connection.src_mac,
@@ -640,7 +648,7 @@ function EventsTab() {
         <SectionHeader icon={Lightning}>Event Channels</SectionHeader>
 
         {/* Column headers */}
-        <div className="flex items-center gap-2 px-0.5">
+        <div className="flex items-center gap-2 px-0.5 settings-field" style={{ '--field-i': 0 } as React.CSSProperties}>
           <span className={`${LABEL} shrink-0`} style={{ width: 52 }}>ID</span>
           <span className={`${LABEL} flex-1`}>Name</span>
           <div style={{ width: 24 }} />
@@ -649,12 +657,12 @@ function EventsTab() {
         {/* Rows */}
         <div className="space-y-1.5">
           {draft.length === 0 && (
-            <p className="text-[11px] py-1 px-0.5" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[11px] py-1 px-0.5 settings-field" style={{ color: 'var(--text-muted)', '--field-i': 1 } as React.CSSProperties}>
               No events defined.
             </p>
           )}
           {draft.map((ev, i) => (
-            <div key={i} className="flex items-center gap-2">
+            <div key={i} className="flex items-center gap-2 settings-field" style={{ '--field-i': i + 1 } as React.CSSProperties}>
               <DialInput
                 value={ev.id}
                 onChange={v => setField(i, 'id', v)}
@@ -676,7 +684,7 @@ function EventsTab() {
         </div>
 
         {/* Add row */}
-        <Button variant="primary" onClick={addEvent} className="gap-1.5 !text-[11px] !py-1.5">
+        <Button variant="primary" onClick={addEvent} className="gap-1.5 !text-[11px] !py-1.5 settings-field" style={{ '--field-i': draft.length + 1 } as React.CSSProperties}>
           <Plus size={13} /> Add Event
         </Button>
       </section>
@@ -743,7 +751,6 @@ export function Settings({ onClose, initialTab: _initialTab }: Props) {
           server_port: data.connection.server_port,
           protocol:    data.connection.protocol,
           timeout_ms:  data.connection.timeout_ms,
-          listen_port: data.server.listen_port,
           bind_ip:     data.connection.bind_ip || undefined,
           source_port: data.connection.source_port || undefined,
           src_mac:     data.connection.src_mac || undefined,

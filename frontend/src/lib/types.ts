@@ -86,6 +86,8 @@ export interface AppConfig {
   custom_commands?: CustomCommandConfig[];
   events: EventDef[];
   user_cmds?: UserCmdDef[];
+  cmd_groups?: CmdGroup[];
+  cmd_subgroups?: CmdSubgroup[];
   endian?: string;
 }
 
@@ -112,6 +114,7 @@ export interface MatchCondition {
 
 export interface UserCmdResponseByte {
   offset: number;
+  length: number;
   label: string;
 }
 

@@ -189,7 +189,6 @@ export function MemoryBar() {
         <span
           className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.07em] uppercase"
           style={{ color: 'var(--text-secondary)' }}
-          onClick={(e) => e.stopPropagation()}
         >
           <Crosshair size={TOOLBAR_ICON_SIZE} style={{ color: 'var(--text-muted)' }} />
           Probe

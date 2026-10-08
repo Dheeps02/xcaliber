@@ -392,9 +392,7 @@ pub async fn connect(State(state): State<Arc<AppState>>) -> impl IntoResponse {
                         match guard.as_mut() {
                             None => break, // manually disconnected
                             Some(session) => {
-                                let r = session.execute(&XcpCommand::GetStatus).await;
-                                session.undo_ctr_increment();
-                                r
+                                session.execute(&XcpCommand::GetStatus).await
                             }
                         }
                     };
@@ -927,7 +925,6 @@ pub struct UpdateConfigBody {
     pub server_port: u16,
     pub protocol: String,
     pub timeout_ms: u64,
-    pub listen_port: u16,
     pub bind_ip: Option<String>,
     pub source_port: Option<u16>,
     pub src_mac: Option<String>,
@@ -935,6 +932,9 @@ pub struct UpdateConfigBody {
     pub vlan_id: Option<u16>,
     pub events: Option<Vec<crate::config::EventDef>>,
     pub endian: Option<String>,
+    pub user_cmds: Option<serde_json::Value>,
+    pub cmd_groups: Option<serde_json::Value>,
+    pub cmd_subgroups: Option<serde_json::Value>,
 }
 
 pub async fn update_config(
@@ -1016,12 +1016,20 @@ pub async fn update_config(
         cfg.connection.src_mac = body.src_mac.filter(|s| !s.is_empty());
         cfg.connection.dst_mac = body.dst_mac.filter(|s| !s.is_empty());
         cfg.connection.vlan_id = body.vlan_id;
-        cfg.server.listen_port = body.listen_port;
         if let Some(events) = body.events {
             cfg.events = events;
         }
         if let Some(endian) = body.endian {
             cfg.endian = endian;
+        }
+        if let Some(user_cmds) = body.user_cmds {
+            cfg.user_cmds = user_cmds;
+        }
+        if let Some(cmd_groups) = body.cmd_groups {
+            cfg.cmd_groups = cmd_groups;
+        }
+        if let Some(cmd_subgroups) = body.cmd_subgroups {
+            cfg.cmd_subgroups = cmd_subgroups;
         }
     }
     state.save_config();

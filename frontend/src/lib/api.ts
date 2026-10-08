@@ -1,6 +1,6 @@
 import type { ConnectResponse, PacketEntry, AppConfig, NetworkInterface, DaqList, DaqEntry, DaqStatus, EventDef, Sequence } from './types';
 
-const BASE = import.meta.env.DEV ? '' : 'http://localhost:8080';
+const BASE = import.meta.env.DEV ? '' : 'http://localhost:37571';
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
   let res: Response;
@@ -66,7 +66,6 @@ export const api = {
     server_port: number;
     protocol: string;
     timeout_ms: number;
-    listen_port: number;
     bind_ip?: string;
     source_port?: number;
     src_mac?: string;
@@ -75,6 +74,8 @@ export const api = {
     events?: EventDef[];
     endian?: string;
     user_cmds?: import('./types').UserCmdDef[];
+    cmd_groups?: import('./types').CmdGroup[];
+    cmd_subgroups?: import('./types').CmdSubgroup[];
   }) => post<{ ok: boolean }>('/api/config', body),
   getNetworkInterfaces: () =>
     get<{ interfaces: NetworkInterface[] }>('/api/network-interfaces'),

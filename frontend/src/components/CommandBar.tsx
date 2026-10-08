@@ -6,7 +6,7 @@ import { TOOLBAR_ICON_SIZE, INFO_ICON_SIZE } from '../lib/constants';
 import { createPortal } from 'react-dom';
 import {
   PaperPlaneTilt, Plus, CaretLeft, CaretRight,
-  CornersIn, CornersOut, CaretDown, Info, X, Command, MagnifyingGlass,
+  CornersIn, CornersOut, CaretDown, Info, Command, MagnifyingGlass,
   Monitor, UserCircle, BookmarksSimple, ClockCounterClockwise,
   Bookmark, Trash,
 } from '@phosphor-icons/react';
@@ -281,7 +281,9 @@ const [saveJiggling, setSaveJiggling] = useState(false);
   sectionRef.current   = section;
   const allBytesRef    = useRef(allBytes);
   allBytesRef.current  = allBytes;
-  const holdTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animExitTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animIdleTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pickerSlideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pickerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevLabelTextsRef = useRef<string[]>(Array(BASE_CELLS).fill(''));
@@ -363,7 +365,11 @@ const [saveJiggling, setSaveJiggling] = useState(false);
     setTypeKeys(Array(BASE_CELLS).fill(0));
   }, [byteValues]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => () => { if (holdTimerRef.current) clearTimeout(holdTimerRef.current); }, []);
+  useEffect(() => () => {
+    if (holdTimerRef.current)     clearTimeout(holdTimerRef.current);
+    if (animExitTimerRef.current) clearTimeout(animExitTimerRef.current);
+    if (animIdleTimerRef.current) clearTimeout(animIdleTimerRef.current);
+  }, []);
 
   function startHold(action: () => void, delay = 1000) {
     holdTimerRef.current = setTimeout(() => {
@@ -408,23 +414,26 @@ const [saveJiggling, setSaveJiggling] = useState(false);
   }
 
   function animate(newShown: string[], oldShown: string[], fromCell = 0) {
+    if (animExitTimerRef.current) { clearTimeout(animExitTimerRef.current); animExitTimerRef.current = null; }
+    if (animIdleTimerRef.current) { clearTimeout(animIdleTimerRef.current); animIdleTimerRef.current = null; }
     setAnimateFromCell(fromCell);
     const hasOld = oldShown.some((v) => v !== '');
     if (!hasOld) {
       setShownValues(newShown);
       setSpanPhase('enter');
       setPhaseKey((k) => k + 1);
-      setTimeout(() => setSpanPhase('idle'), 350);
+      animIdleTimerRef.current = setTimeout(() => { setSpanPhase('idle'); animIdleTimerRef.current = null; }, 350);
       return;
     }
     setSpanPhase('exit');
     setPhaseKey((k) => k + 1);
     const exitTotal = EXIT_MS + STAGGER_MS * (BASE_CELLS - 1 - fromCell);
-    setTimeout(() => {
+    animExitTimerRef.current = setTimeout(() => {
+      animExitTimerRef.current = null;
       setShownValues(newShown);
       setSpanPhase('enter');
       setPhaseKey((k) => k + 1);
-      setTimeout(() => setSpanPhase('idle'), 350);
+      animIdleTimerRef.current = setTimeout(() => { setSpanPhase('idle'); animIdleTimerRef.current = null; }, 350);
     }, exitTotal);
   }
 
@@ -871,7 +880,7 @@ const [saveJiggling, setSaveJiggling] = useState(false);
           document.body
         )}
 
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2">
           <span
             className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.07em] uppercase"
             style={{ color: 'var(--text-secondary)' }}
@@ -1011,7 +1020,7 @@ const [saveJiggling, setSaveJiggling] = useState(false);
                     )}
                   </div>
 
-                  <div className={`relative group rounded xcb-input${isLocked ? ' opacity-60' : ''}`}>
+                  <div className={`relative group rounded xcb-input overflow-hidden${isLocked ? ' opacity-60' : ''}`}>
                     <span
                       key={`idx-${labelKey}-${i}`}
                       className="absolute top-0.5 left-1 text-[8px] font-mono pointer-events-none label-fade"
@@ -1022,12 +1031,21 @@ const [saveJiggling, setSaveJiggling] = useState(false);
                       maxLength={2}
                       value={cellValue}
                       disabled={isLocked}
+                      tabIndex={0}
                       onChange={(e: ChangeEvent<HTMLInputElement>) => {
                         if (isLocked) return;
                         const v = e.target.value.replace(/[^0-9a-fA-F]/g, '').toUpperCase().slice(0, 2);
                         setCellValue(i, v);
                         setShownValues((prev) => { const n = [...prev]; n[i] = v; return n; });
                         setTypeKeys((prev) => { const n = [...prev]; n[i]++; return n; });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && activeMainTab !== 'sequence') {
+                          e.preventDefault();
+                          setSendFlying(true);
+                          setTimeout(() => setSendFlying(false), 550);
+                          handleSend();
+                        }
                       }}
                       className="w-full px-1 py-1.5 rounded text-xs font-mono text-center focus:outline-none bg-transparent border-0"
                       style={{ color: 'transparent', caretColor: isLocked ? 'transparent' : 'var(--text-secondary)' }}
@@ -1040,13 +1058,18 @@ const [saveJiggling, setSaveJiggling] = useState(false);
                         ...spanStyle,
                       }}
                     >{cellShown || '00'}</span>
-                    <button
-                      className={`absolute top-0.5 right-0.5 w-[13px] h-[13px] flex items-center justify-center rounded z-10 opacity-0 group-hover:opacity-100 transition-opacity ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                      style={{ background: 'var(--surface-overlay)', color: 'var(--text-muted)' }}
-                      onMouseEnter={isLocked ? undefined : (e) => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
-                      onMouseLeave={isLocked ? undefined : (e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
-                      onClick={isLocked ? undefined : () => deleteByteAt(section * BASE_CELLS + i)}
-                    ><X size={9} /></button>
+                    {!isLocked && (
+                      <div
+                        tabIndex={-1}
+                        className="absolute inset-y-0 right-0 flex items-center justify-end translate-x-full group-hover:translate-x-0 transition-transform duration-150 cursor-pointer z-10"
+                        style={{ width: 28, paddingRight: 5, background: 'linear-gradient(to right, transparent, var(--input-bg) 40%)', color: 'var(--text-muted)' }}
+                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--status-err)')}
+                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--text-muted)')}
+                        onClick={() => deleteByteAt(section * BASE_CELLS + i)}
+                      >
+                        <Trash size={11} />
+                      </div>
+                    )}
                   </div>
                   </div>
                 </Fragment>

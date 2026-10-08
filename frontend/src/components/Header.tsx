@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { FileCode, ArrowsClockwise, GearSix, X, FolderOpen } from '@phosphor-icons/react';
+import { FileCode, ArrowsClockwise, GearSix, X, FolderOpen, Minus, Square, ArrowsOut } from '@phosphor-icons/react';
 import { useAppStore } from '../stores/app-store';
 import { api } from '../lib/api';
 import { Settings } from './Settings';
@@ -51,8 +51,9 @@ export function Header() {
   const closeSettings      = useAppStore((s) => s.closeSettings);
   const activeMainTab      = useAppStore((s) => s.activeMainTab);
   const setActiveMainTab   = useAppStore((s) => s.setActiveMainTab);
-  const daqStatus          = useAppStore((s) => s.daqStatus);
-  const seqRunResult       = useAppStore((s) => s.seqRunResult);
+  const daqStatus             = useAppStore((s) => s.daqStatus);
+  const seqRunResult          = useAppStore((s) => s.seqRunResult);
+  const windowControlStyle    = useAppStore((s) => s.windowControlStyle);
 
   const a2lInputRef = useRef<HTMLInputElement>(null);
   const [a2lFileName, setA2lFileName] = useState<string | null>(null);
@@ -168,6 +169,29 @@ export function Header() {
         className="xcb-glass flex items-center h-11 px-3.5 gap-3 shrink-0"
         style={{ borderBottom: '1px solid var(--border)' }}
       >
+        {/* ── macOS window controls (left) ─────────────────────────── */}
+        {windowControlStyle === 'macos' && (
+          <div className="flex items-center gap-2 shrink-0 -ml-1 mr-1">
+            {([
+              { title: 'Close',    color: '#ff5f56', hoverIcon: <X size={8} weight="bold" />,        action: () => window.electron?.windowClose()    },
+              { title: 'Minimize', color: '#ffbd2e', hoverIcon: <Minus size={8} weight="bold" />,    action: () => window.electron?.windowMinimize() },
+              { title: 'Maximize', color: '#27c93f', hoverIcon: <ArrowsOut size={8} weight="bold" />,action: () => window.electron?.windowMaximize() },
+            ]).map(({ title, color, hoverIcon, action }) => (
+              <button
+                key={title}
+                title={title}
+                onClick={action}
+                className="group relative flex items-center justify-center rounded-full transition-opacity"
+                style={{ width: 13, height: 13, background: color, flexShrink: 0 }}
+              >
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'rgba(0,0,0,0.6)', lineHeight: 0 }}>
+                  {hoverIcon}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ── Left: branding + connection ──────────────────────────── */}
         <div className="flex items-center gap-2.5 min-w-0" style={{ minWidth: 200 }}>
           <span
@@ -286,6 +310,37 @@ export function Header() {
               className={gearKey > 0 ? (gearReverse ? 'icon-spin-90-reverse' : 'icon-spin-90') : ''}
             />
           </Button>
+
+          <div className="xcb-vdiv" />
+
+          {/* Window controls — Windows style */}
+          {windowControlStyle === 'windows' && (
+            <div className="flex items-center gap-1 -mr-1.5">
+              {([
+                { title: 'Minimize', icon: <Minus size={12} />,  action: () => window.electron?.windowMinimize(), danger: false },
+                { title: 'Maximize', icon: <Square size={11} />, action: () => window.electron?.windowMaximize(), danger: false },
+                { title: 'Close',    icon: <X size={12} />,      action: () => window.electron?.windowClose(),    danger: true  },
+              ]).map(({ title, icon, action, danger }) => (
+                <button
+                  key={title}
+                  title={title}
+                  onClick={action}
+                  className="flex items-center justify-center rounded-lg transition-colors"
+                  style={{ width: 28, height: 28, color: 'var(--text-muted)', flexShrink: 0 }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = danger ? 'var(--status-err)' : 'var(--surface-hover)';
+                    (e.currentTarget as HTMLElement).style.color = danger ? '#fff' : 'var(--text-primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                    (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)';
+                  }}
+                >
+                  {icon}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 

@@ -61,12 +61,18 @@ function spawnBackend() {
 }
 
 function createWindow() {
+  const iconPath = isDev
+    ? join(__dirname, '../assets/icons/icon-256.png')
+    : join(process.resourcesPath, 'icon.png');
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 860,
     minWidth: 800,
     minHeight: 600,
+    icon: iconPath,
     frame: false,
+    titleBarStyle: 'hidden',
     resizable: true,
     show: false,
     backgroundColor: '#030712',

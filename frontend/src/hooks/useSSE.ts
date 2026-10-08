@@ -16,12 +16,14 @@ export function useSSE() {
   const setSlaveDropped          = useAppStore((s) => s.setSlaveDropped);
   const resetSession             = useAppStore((s) => s.resetSession);
   const showAlert                = useAppStore((s) => s.showAlert);
+  const setBackendReady          = useAppStore((s) => s.setBackendReady);
 
-  const esRef          = useRef<EventSource | null>(null);
-  const dtoCountRef    = useRef({ count: 0, windowStart: Date.now() });
-  const pendingDaqRef  = useRef<Parameters<typeof batchUpdateDaqLiveValues>[0]>([]);
-  const pendingPktsRef = useRef<Parameters<typeof batchAddPackets>[0]>([]);
-  const rafRef         = useRef<number | null>(null);
+  const esRef               = useRef<EventSource | null>(null);
+  const dtoCountRef         = useRef({ count: 0, windowStart: Date.now() });
+  const pendingDaqRef       = useRef<Parameters<typeof batchUpdateDaqLiveValues>[0]>([]);
+  const pendingPktsRef      = useRef<Parameters<typeof batchAddPackets>[0]>([]);
+  const rafRef              = useRef<number | null>(null);
+  const packetsFetchedRef   = useRef(false);
 
   useEffect(() => {
     function scheduleFlush() {
@@ -41,8 +43,26 @@ export function useSSE() {
 
     function connect() {
       esRef.current?.close();
-      const es = new EventSource(import.meta.env.DEV ? '/events' : 'http://localhost:8080/events');
+      const es = new EventSource(import.meta.env.DEV ? '/events' : 'http://localhost:37571/events');
       esRef.current = es;
+
+      es.onopen = () => {
+        setBackendReady(true);
+        api.config().then((c) => setConfig(c)).catch(() => {});
+        api.daqStatus().then((r) => { setDaqStatus(r.state); setDaqLists(r.lists); }).catch(() => {});
+        if (!packetsFetchedRef.current) {
+          packetsFetchedRef.current = true;
+          api.packets()
+            .then((r) => {
+              prependPackets(r.packets);
+              const watermark = r.packets.length > 0
+                ? Math.max(...r.packets.map((p: PacketEntry) => p.id))
+                : -1;
+              setAnimationWatermark(watermark);
+            })
+            .catch(() => { setAnimationWatermark(-1); });
+        }
+      };
 
       es.onmessage = (e: MessageEvent) => {
         const msg = JSON.parse(e.data as string) as {
@@ -133,29 +153,6 @@ export function useSSE() {
     }
 
     connect();
-
-    api.config()
-      .then((c) => setConfig(c))
-      .catch(() => {});
-
-    api.packets()
-      .then((r) => {
-        prependPackets(r.packets);
-        const watermark = r.packets.length > 0
-          ? Math.max(...r.packets.map((p: PacketEntry) => p.id))
-          : -1;
-        setAnimationWatermark(watermark);
-      })
-      .catch(() => {
-        setAnimationWatermark(-1);
-      });
-
-    api.daqStatus()
-      .then((r) => {
-        setDaqStatus(r.state);
-        setDaqLists(r.lists);
-      })
-      .catch(() => {});
 
     const unsubClear = useAppStore.subscribe((state, prev) => {
       if (state.packetsClearedAt !== prev.packetsClearedAt) {

@@ -383,7 +383,7 @@ select {
 
 @keyframes modal-in-anim {
   from { opacity: 0; transform: scale(0.95) translateY(4px); }
-  to   { opacity: 1; transform: scale(1)    translateY(0); }
+  to   { opacity: 1; transform: none; }
 }
 @keyframes modal-out-anim {
   from { opacity: 1; transform: scale(1)    translateY(0); }
@@ -465,6 +465,20 @@ select {
   animation: seq-icon-spin 0.8s linear infinite;
 }
 
+/* ── Backend loading spinner ─────────────────────────────────────── */
+@keyframes backend-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.backend-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent, #10b981) 20%, transparent);
+  border-top-color: var(--accent, #10b981);
+  animation: backend-spin 0.75s linear infinite;
+}
+
 /* ── DAQ animations ─────────────────────────────────────────────── */
 @keyframes daq-enter {
   from { opacity: 0; transform: translateY(-4px); }
@@ -504,6 +518,17 @@ select {
 
 /* ── Sequence result pulse ───────────────────────────────────────── */
 @keyframes result-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── Settings field stagger ──────────────────────────────────────── */
+@keyframes settings-field-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.settings-field {
+  animation: settings-field-in 216ms var(--ease-spring-soft) both;
+  animation-delay: calc(var(--field-i, 0) * 40ms);
+}
+.no-animations .settings-field { animation: none; }
 
 /* ── Reset button accent glow flash ─────────────────────────────── */
 @keyframes reset-glow-flash {

@@ -35,6 +35,10 @@ fn default_endian() -> String {
     "little".into()
 }
 
+fn default_json_array() -> serde_json::Value {
+    serde_json::Value::Array(vec![])
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
     pub connection: ConnectionConfig,
@@ -45,6 +49,12 @@ pub struct Config {
     pub events: Vec<EventDef>,
     #[serde(default = "default_endian")]
     pub endian: String,
+    #[serde(default = "default_json_array")]
+    pub user_cmds: serde_json::Value,
+    #[serde(default = "default_json_array")]
+    pub cmd_groups: serde_json::Value,
+    #[serde(default = "default_json_array")]
+    pub cmd_subgroups: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -128,10 +138,13 @@ impl Default for Config {
                 dst_mac: None,
                 vlan_id: None,
             },
-            server: ServerConfig { listen_port: 8080 },
+            server: ServerConfig { listen_port: 37571 },
             custom_commands: vec![],
             events: default_events(),
             endian: default_endian(),
+            user_cmds: serde_json::Value::Array(vec![]),
+            cmd_groups: serde_json::Value::Array(vec![]),
+            cmd_subgroups: serde_json::Value::Array(vec![]),
         }
     }
 }

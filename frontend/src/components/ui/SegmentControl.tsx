@@ -1,4 +1,5 @@
 import { useRef, useLayoutEffect, type ReactNode } from 'react';
+import { useTooltip } from '../../context/TooltipContext';
 
 type SegVariant   = 'text' | 'icon' | 'icon-text';
 type SegDirection = 'horizontal' | 'vertical';
@@ -34,6 +35,7 @@ export function SegmentControl<T extends string>({
   const btnRefs  = useRef<(HTMLButtonElement | null)[]>([]);
   const thumbRef = useRef<HTMLDivElement>(null);
   const ready    = useRef(false);
+  const { showTip, hideTip } = useTooltip();
 
   useLayoutEffect(() => {
     const idx = items.findIndex((i) => i.value === value);
@@ -116,7 +118,8 @@ export function SegmentControl<T extends string>({
           ref={(el) => { btnRefs.current[i] = el; }}
           className={`xcb-seg-btn${value === item.value ? ' active' : ''}`}
           style={{ position: 'relative', zIndex: 1 }}
-          title={variant === 'icon' ? item.label : undefined}
+          onMouseEnter={variant === 'icon' ? (e) => showTip(e.currentTarget, item.label) : undefined}
+          onMouseLeave={variant === 'icon' ? () => hideTip() : undefined}
           onClick={() => onChange(item.value)}
         >
           {variant !== 'text' && item.icon}

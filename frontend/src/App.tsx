@@ -13,6 +13,7 @@ import { useAppStore } from './stores/app-store';
 
 function AppInner() {
   useSSE();
+  const backendReady      = useAppStore((s) => s.backendReady);
   const theme             = useAppStore((s) => s.theme);
   const uiZoom            = useAppStore((s) => s.uiZoom);
   const animationsEnabled = useAppStore((s) => s.animationsEnabled);
@@ -62,6 +63,28 @@ function AppInner() {
     requestAnimationFrame(tick);
     return () => { cancelled = true; };
   }, [uiZoom]);
+
+  if (!backendReady) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: '#030712',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '14px',
+        }}
+      >
+        <div className="backend-spinner" />
+        <span style={{ color: 'var(--text-secondary, #96b0a8)', fontSize: '13px', letterSpacing: '0.01em' }}>
+          Starting backend…
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div

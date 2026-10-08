@@ -55,7 +55,7 @@ export function AlertModal() {
                 disabled={pending}
                 className="px-4 py-1.5 rounded text-xs font-medium bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white transition-colors active:scale-95 flex items-center gap-1.5"
               >
-                <ArrowsClockwise size={12} className={pending ? 'animate-spin' : ''} />
+                {pending && <ArrowsClockwise size={12} className="animate-spin" />}
                 {alertAction.label}
               </button>
             </>

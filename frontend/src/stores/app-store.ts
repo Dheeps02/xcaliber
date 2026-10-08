@@ -45,6 +45,8 @@ export interface Toast {
 let toastSeq = 0;
 
 interface AppStore {
+  backendReady: boolean;
+  setBackendReady: (v: boolean) => void;
   connected: boolean;
   slaveInfo: ConnectResponse | null;
   config: AppConfig | null;
@@ -66,6 +68,7 @@ interface AppStore {
   timestampFormat: 'absolute' | 'relative';
   animationsEnabled: boolean;
   accentColor: string;
+  windowControlStyle: 'windows' | 'macos';
   toasts: Toast[];
   animationWatermark: number | null;
 
@@ -87,6 +90,7 @@ interface AppStore {
   setTimestampFormat: (f: 'absolute' | 'relative') => void;
   setAnimationsEnabled: (v: boolean) => void;
   setAccentColor: (color: string) => void;
+  setWindowControlStyle: (style: 'windows' | 'macos') => void;
   showToast: (message: string, type?: Toast['type'], detail?: string) => void;
   dismissToast: (id: number) => void;
   setAnimationWatermark: (v: number) => void;
@@ -211,6 +215,8 @@ function buildCustomCmdDefs(config: AppConfig): Record<string, CmdDef> {
 }
 
 export const useAppStore = create<AppStore>((set) => ({
+  backendReady: false,
+  setBackendReady: (v) => set({ backendReady: v }),
   connected: false,
   slaveInfo: null,
   config: null,
@@ -232,6 +238,7 @@ export const useAppStore = create<AppStore>((set) => ({
   timestampFormat: (localStorage.getItem('timestampFormat') as 'absolute' | 'relative') ?? 'absolute',
   animationsEnabled: true,
   accentColor: localStorage.getItem('accentColor') ?? '',
+  windowControlStyle: (localStorage.getItem('windowControlStyle') as 'windows' | 'macos') ?? 'windows',
   toasts: [],
   animationWatermark: null,
   activeMainTab: 'trace',
@@ -260,8 +267,10 @@ export const useAppStore = create<AppStore>((set) => ({
     })),
 
   setConfig: (config) => {
-    const userCmds = config.user_cmds ?? [];
-    set((s) => ({ config, customCmdDefs: buildCustomCmdDefs(config), events: config.events ?? [], userCmds, userCmdDefs: buildUserCmdDefs(userCmds, s.cmdGroups, s.cmdSubgroups) }));
+    const userCmds     = config.user_cmds     ?? [];
+    const cmdGroups    = config.cmd_groups    ?? [];
+    const cmdSubgroups = config.cmd_subgroups ?? [];
+    set(() => ({ config, customCmdDefs: buildCustomCmdDefs(config), events: config.events ?? [], userCmds, cmdGroups, cmdSubgroups, userCmdDefs: buildUserCmdDefs(userCmds, cmdGroups, cmdSubgroups) }));
   },
 
   setEvents: (events) => set({ events }),
@@ -339,6 +348,7 @@ export const useAppStore = create<AppStore>((set) => ({
   setTimestampFormat: (timestampFormat) => { localStorage.setItem('timestampFormat', timestampFormat); set({ timestampFormat }); },
   setAnimationsEnabled: (animationsEnabled) => set({ animationsEnabled }),
   setAccentColor: (accentColor) => { localStorage.setItem('accentColor', accentColor); set({ accentColor }); },
+  setWindowControlStyle: (windowControlStyle) => { localStorage.setItem('windowControlStyle', windowControlStyle); set({ windowControlStyle }); },
   showToast: (message, type = 'info', detail) =>
     set((s) => {
       const next = [...s.toasts, { id: ++toastSeq, message, type, detail }];
